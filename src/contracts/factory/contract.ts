@@ -43,13 +43,19 @@ import {
     OP_NET,
     encodeSelector,
     Selector,
+    NetEvent,
 } from '@btc-vision/btc-runtime/runtime';
 import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
 
-// Storage pointers - hardcoded to avoid module initialization gas
 const OWNER_POINTER: u16 = 10;
 const POOL_TEMPLATE_POINTER: u16 = 11;
 const POOLS_POINTER: u16 = 12;
+
+class PoolCreatedEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('PoolCreated', data);
+    }
+}
 
 @final
 export class OptionsFactory extends OP_NET {
@@ -172,6 +178,13 @@ export class OptionsFactory extends OP_NET {
 
         const poolU256 = u256.fromBytes<Address>(poolAddress, true);
         this._pools.get(underlying).set(premiumToken, poolU256);
+
+        // Emit event
+        const eventData = new BytesWriter(96);
+        eventData.writeAddress(poolAddress);
+        eventData.writeAddress(underlying);
+        eventData.writeAddress(premiumToken);
+        Blockchain.emit(new PoolCreatedEvent(eventData));
 
         const writer = new BytesWriter(32);
         writer.writeAddress(poolAddress);

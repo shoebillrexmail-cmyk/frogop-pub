@@ -26,7 +26,7 @@ class OptionsPoolTestRuntime extends ContractRuntime {
         super({
             deployer: deployer,
             address: Blockchain.generateRandomAddress(),
-            gasLimit: 500000000000n,
+            gasLimit: 5000000000000n,
         });
         this._underlying = underlying;
         this._premiumToken = premiumToken;

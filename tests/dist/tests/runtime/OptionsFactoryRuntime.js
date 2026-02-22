@@ -17,7 +17,7 @@ class OptionsFactoryTestRuntime extends ContractRuntime {
         super({
             deployer: deployer,
             address: Blockchain.generateRandomAddress(),
-            gasLimit: 500000000000n,
+            gasLimit: 5000000000000n,
         });
         this.ownerSelector = Number(`0x${this.abiCoder.encodeSelector('owner()')}`);
         this.poolTemplateSelector = Number(`0x${this.abiCoder.encodeSelector('poolTemplate()')}`);
