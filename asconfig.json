@@ -2,7 +2,7 @@
   "targets": {
     "factory": {
       "outFile": "build/OptionsFactory.wasm",
-      "use": ["abort=src/options-factory/index/abort"],
+      "textFile": "build/OptionsFactory.wat",
       "sourceMap": false,
       "optimizeLevel": 3,
       "shrinkLevel": 1,
@@ -11,7 +11,22 @@
     },
     "pool": {
       "outFile": "build/OptionsPool.wasm",
-      "use": ["abort=src/options-pool/index/abort"],
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 1,
+      "converge": true,
+      "noAssert": false
+    },
+    "three-field": {
+      "outFile": "build/ThreeFieldContract.wasm",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 1,
+      "converge": true,
+      "noAssert": false
+    },
+    "four-field": {
+      "outFile": "build/FourFieldContract.wasm",
       "sourceMap": false,
       "optimizeLevel": 3,
       "shrinkLevel": 1,
@@ -22,6 +37,15 @@
       "outFile": "build/debug/frogop.wasm",
       "textFile": "build/debug/frogop.wat",
       "sourceMap": true
+    },
+    "release": {
+      "outFile": "build/release/frogop.wasm",
+      "textFile": "build/release/frogop.wat",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 1,
+      "converge": true,
+      "noAssert": false
     }
   },
   "options": {
@@ -42,7 +66,8 @@
     ],
     "runtime": "stub",
     "memoryBase": 0,
-    "initialMemory": 1,
+    "initialMemory": 10,
+    "maximumMemory": 100,
     "exportStart": "start"
   }
 }

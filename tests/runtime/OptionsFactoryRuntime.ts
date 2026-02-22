@@ -6,7 +6,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const WASM_PATH = path.join(__dirname, '../../build/release/frogop.wasm');
+const WASM_PATH = path.join(__dirname, '../../build/OptionsFactory.wasm');
+const POOL_WASM_PATH = path.join(__dirname, '../../build/OptionsPool.wasm');
 
 class OptionsFactoryTestRuntime extends ContractRuntime {
     private readonly ownerSelector: number;
@@ -33,6 +34,14 @@ class OptionsFactoryTestRuntime extends ContractRuntime {
     
     defineRequiredBytecodes(): void {
         BytecodeManager.loadBytecode(WASM_PATH, this.address);
+    }
+    
+    /**
+     * Load pool bytecode at a specific address (for template)
+     * Must be called before setting pool template
+     */
+    loadPoolBytecodeAt(address: Address): void {
+        BytecodeManager.loadBytecode(POOL_WASM_PATH, address);
     }
     
     async getOwner(): Promise<Address> {

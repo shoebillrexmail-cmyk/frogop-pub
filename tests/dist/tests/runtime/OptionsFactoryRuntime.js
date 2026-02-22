@@ -4,7 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const WASM_PATH = path.join(__dirname, '../../build/release/frogop.wasm');
+const WASM_PATH = path.join(__dirname, '../../build/OptionsFactory.wasm');
+const POOL_WASM_PATH = path.join(__dirname, '../../build/OptionsPool.wasm');
 class OptionsFactoryTestRuntime extends ContractRuntime {
     ownerSelector;
     poolTemplateSelector;
@@ -16,7 +17,7 @@ class OptionsFactoryTestRuntime extends ContractRuntime {
         super({
             deployer: deployer,
             address: Blockchain.generateRandomAddress(),
-            gasLimit: 10000000000000n,
+            gasLimit: 500000000000n,
         });
         this.ownerSelector = Number(`0x${this.abiCoder.encodeSelector('owner()')}`);
         this.poolTemplateSelector = Number(`0x${this.abiCoder.encodeSelector('poolTemplate()')}`);
@@ -27,6 +28,13 @@ class OptionsFactoryTestRuntime extends ContractRuntime {
     }
     defineRequiredBytecodes() {
         BytecodeManager.loadBytecode(WASM_PATH, this.address);
+    }
+    /**
+     * Load pool bytecode at a specific address (for template)
+     * Must be called before setting pool template
+     */
+    loadPoolBytecodeAt(address) {
+        BytecodeManager.loadBytecode(POOL_WASM_PATH, address);
     }
     async getOwner() {
         const writer = new BinaryWriter();

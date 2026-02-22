@@ -1,9 +1,9 @@
 import { Blockchain } from '@btc-vision/btc-runtime/runtime';
 import { revertOnError } from '@btc-vision/btc-runtime/runtime/abort/abort';
-import { OptionsFactory } from './OptionsFactory';
+import { OptionsPool } from './contract';
 
 Blockchain.contract = () => {
-    return new OptionsFactory();
+    return new OptionsPool();
 };
 
 export * from '@btc-vision/btc-runtime/runtime/exports';
@@ -12,4 +12,4 @@ export function abort(message: string, fileName: string, line: u32, column: u32)
     revertOnError(message, fileName, line, column);
 }
 
-export { OptionsFactory };
+export { OptionsPool };

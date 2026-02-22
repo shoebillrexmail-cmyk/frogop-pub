@@ -10,6 +10,11 @@ declare class OptionsFactoryTestRuntime extends ContractRuntime {
     private readonly getPoolSelector;
     constructor(deployer: Address);
     defineRequiredBytecodes(): void;
+    /**
+     * Load pool bytecode at a specific address (for template)
+     * Must be called before setting pool template
+     */
+    loadPoolBytecodeAt(address: Address): void;
     getOwner(): Promise<Address>;
     getPoolTemplate(): Promise<Address>;
     setPoolTemplate(template: Address): Promise<boolean>;

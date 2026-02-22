@@ -1,0 +1,55 @@
+import { ContractRuntime } from '@btc-vision/unit-test-framework';
+import { Address } from '@btc-vision/transaction';
+declare const POOL_WASM_PATH: string;
+declare class OptionsPoolTestRuntime extends ContractRuntime {
+    private readonly underlyingSelector;
+    private readonly premiumTokenSelector;
+    private readonly writeOptionSelector;
+    private readonly cancelOptionSelector;
+    private readonly buyOptionSelector;
+    private readonly exerciseSelector;
+    private readonly settleSelector;
+    private readonly getOptionSelector;
+    private readonly optionCountSelector;
+    private readonly accumulatedFeesSelector;
+    private readonly gracePeriodBlocksSelector;
+    private readonly maxExpiryBlocksSelector;
+    private readonly cancelFeeBpsSelector;
+    private readonly calculateCollateralSelector;
+    private readonly _underlying;
+    private readonly _premiumToken;
+    constructor(deployer: Address, underlying: Address, premiumToken: Address);
+    defineRequiredBytecodes(): void;
+    getUnderlying(): Promise<Address>;
+    getPremiumToken(): Promise<Address>;
+    optionCount(): Promise<bigint>;
+    accumulatedFees(): Promise<bigint>;
+    gracePeriodBlocks(): Promise<bigint>;
+    maxExpiryBlocks(): Promise<bigint>;
+    cancelFeeBps(): Promise<bigint>;
+    calculateCollateral(optionType: number, strikePrice: bigint, underlyingAmount: bigint): Promise<bigint>;
+    writeOption(optionType: number, strikePrice: bigint, expiryBlock: bigint, underlyingAmount: bigint, premium: bigint): Promise<bigint>;
+    cancelOption(optionId: bigint): Promise<boolean>;
+    buyOption(optionId: bigint): Promise<boolean>;
+    exercise(optionId: bigint): Promise<boolean>;
+    settle(optionId: bigint): Promise<boolean>;
+    getOption(optionId: bigint): Promise<{
+        id: bigint;
+        writer: Address;
+        buyer: Address;
+        optionType: number;
+        strikePrice: bigint;
+        underlyingAmount: bigint;
+        premium: bigint;
+        expiryBlock: bigint;
+        status: number;
+    }>;
+    getPoolUnderlying(): Address;
+    getPoolPremiumToken(): Address;
+    writeOptionExpectRevert(optionType: number, strikePrice: bigint, expiryBlock: bigint, underlyingAmount: bigint, premium: bigint): Promise<Error>;
+    buyOptionExpectRevert(optionId: bigint): Promise<Error>;
+    cancelOptionExpectRevert(optionId: bigint): Promise<Error>;
+    getOptionExpectRevert(optionId: bigint): Promise<Error>;
+}
+export { OptionsPoolTestRuntime, POOL_WASM_PATH };
+//# sourceMappingURL=OptionsPoolRuntime.d.ts.map

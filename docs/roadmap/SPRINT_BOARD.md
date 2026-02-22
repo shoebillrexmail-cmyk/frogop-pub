@@ -54,7 +54,33 @@
 
 ---
 
-## Sprint 5: Frontend MVP (Week 5)
+## Sprint 4.5: Gas Optimization (INSERT WEEK - HIGH PRIORITY) 🔴
+
+### Rationale
+Analysis revealed OptionsPool uses 9 SHA256 operations per option read, causing excessive gas costs.
+Must optimize before frontend work to ensure mainnet viability.
+
+### To Do
+| # | Story | Tasks | Est. | Priority |
+|---|-------|-------|------|----------|
+| 6.1 | Gas Baseline | Measure current gas, create comparison script | 4h | Must |
+| 6.2 | Redesign OptionStorage | Remove SHA256, use direct pointers, pack fields | 12h | Must |
+| 6.3 | Use ReentrancyGuard | Replace manual lock with @nonReentrant | 2h | Must |
+| 6.4 | Add @method Decorators | Proper ABI declarations on all methods | 3h | Should |
+| 6.5 | Add Missing Events | PoolCreated event, verify sizes | 2h | Should |
+
+**Sprint Goal**: Reduce gas by 50%+, no behavior changes
+
+**Success Criteria**:
+- [ ] getOption gas reduced by >50%
+- [ ] All tests pass
+- [ ] No behavior changes
+
+**See**: [GAS_OPTIMIZATION_REFACTOR.md](./GAS_OPTIMIZATION_REFACTOR.md)
+
+---
+
+## Sprint 5: Frontend MVP (Week 5) - DELAYED
 
 ### To Do
 | # | Story | Tasks | Est. |
@@ -87,13 +113,23 @@
 | 2 | 1.3, 1.4 | 13 | 33h | ✅ Done |
 | 3 | 1.5, 1.6, 1.7 | 18 | 40h | ✅ Done |
 | 4 | 2.1-2.3, 1.8 | 14 | 27h | ✅ Done |
-| 5 | 4.1-4.5 | 26 | 43h | 🔄 Next |
+| **4.5** | **6.1-6.5** | **18** | **23h** | **🔴 BLOCKING** |
+| 5 | 4.1-4.5 | 26 | 43h | ⏸️ Delayed |
 | 6 | 4.6, 4.7, 5.1, 5.2 | 18 | 32h | - |
-| **Total** | **20 stories** | **113** | **221h** | **51% Complete** |
+| **Total** | **25 stories** | **131** | **244h** | **54% Complete** |
 
 ---
 
-## Quick Reference
+## Gas Optimization Epic (Epic 6)
+
+### Contract Stories (Epic 6) - NEW
+- 6.1: Gas Baseline Measurement ⬜
+- 6.2: Redesign OptionStorage ⬜
+- 6.3: Use ReentrancyGuard ⬜
+- 6.4: Add @method Decorators ⬜
+- 6.5: Add Missing Events ⬜
+
+### Quick Reference
 
 ### Contract Stories (Epic 1)
 - 1.1: Project Setup ✅

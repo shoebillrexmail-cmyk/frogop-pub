@@ -365,6 +365,133 @@
 
 ---
 
+---
+
+## Epic 6: Gas Optimization (CRITICAL - INSERT BEFORE FRONTEND)
+
+### Background
+
+Analysis of contracts against OPNet best practices revealed significant gas inefficiencies:
+
+| Issue | Impact | Location |
+|-------|--------|----------|
+| SHA256 per field access | 9× hash = ~180M gas per option read | OptionStorage.getKey() |
+| Manual reentrancy guard | Error-prone, forgot reset in error paths | All state-changing methods |
+| No @method decorators | Poor ABI, callers hand-roll calldata | All public methods |
+| Missing PoolCreated event | No event indexing for pools | OptionsFactory |
+
+**Recommendation**: Complete Epic 6 before Epic 4 (Frontend) to ensure mainnet viability.
+
+### Story 6.1: Create Gas Baseline
+
+**As a** developer  
+**I want** to measure current gas usage  
+**So that** I can verify optimization improvements
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 6.1.1 | Add gas measurement to tests | 2h | Tests output gas used |
+| 6.1.2 | Record baseline for all methods | 1h | Document with gas numbers |
+| 6.1.3 | Create gas comparison script | 1h | Script compares before/after |
+
+**Definition of Done**:
+- [ ] Gas measurements recorded for all methods
+- [ ] Baseline document created
+
+---
+
+### Story 6.2: Redesign OptionStorage
+
+**As a** developer  
+**I want** an efficient OptionStorage class  
+**So that** option reads/writes use minimal gas
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 6.2.1 | Design new pointer layout | 1h | Document pointer ranges |
+| 6.2.2 | Implement PackedOptionStorage | 4h | Direct pointer access, no SHA256 |
+| 6.2.3 | Implement pack/unpack helpers | 2h | Pack u64s into u128, u8s into u16 |
+| 6.2.4 | Update all get/set methods | 3h | Use new storage class |
+| 6.2.5 | Run tests, verify behavior | 2h | All tests pass |
+| 6.2.6 | Measure gas improvement | 1h | Document savings |
+
+**Definition of Done**:
+- [ ] New storage class implemented
+- [ ] All tests pass
+- [ ] Gas reduced by >50% for getOption
+- [ ] No behavior changes
+
+---
+
+### Story 6.3: Use ReentrancyGuard
+
+**As a** security auditor  
+**I want** proper ReentrancyGuard usage  
+**So that** reentrancy protection is reliable
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 6.3.1 | Import ReentrancyGuard from OP_NET | 0.5h | Import added |
+| 6.3.2 | Remove manual locked flag | 0.5h | Code removed |
+| 6.3.3 | Apply @nonReentrant to methods | 0.5h | All 5 methods decorated |
+| 6.3.4 | Update tests | 1h | Tests verify reentrancy blocked |
+
+**Definition of Done**:
+- [ ] Manual lock removed
+- [ ] @nonReentrant on all state-changing methods
+- [ ] Tests pass
+
+---
+
+### Story 6.4: Add @method Decorators
+
+**As a** frontend developer  
+**I want** proper ABI declarations  
+**So that** contract calls are type-safe
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 6.4.1 | Add @method to OptionsFactory | 1h | All methods decorated |
+| 6.4.2 | Add @method to OptionsPool | 2h | All methods decorated |
+| 6.4.3 | Add @view to view methods | 0.5h | View methods marked |
+| 6.4.4 | Verify ABI generation | 0.5h | ABIs match methods |
+
+**Definition of Done**:
+- [ ] All methods have @method decorators
+- [ ] View methods have @view decorators
+- [ ] ABIs generated correctly
+
+---
+
+### Story 6.5: Add Missing Events
+
+**As a** frontend developer  
+**I want** events for all state changes  
+**So that** UI can react to blockchain events
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 6.5.1 | Add PoolCreated event to factory | 1h | Event emitted on createPool |
+| 6.5.2 | Verify all pool events present | 0.5h | 5 events exist |
+| 6.5.3 | Check event size limits | 0.5h | All events < 352 bytes |
+
+**Definition of Done**:
+- [ ] PoolCreated event emitted
+- [ ] All events under size limit
+- [ ] Tests verify events
+
+---
+
 ## Epic 4: Frontend MVP
 
 ### Story 4.1: Project Setup
@@ -631,7 +758,23 @@
 
 **Sprint Goal**: Contracts secure and tested
 
-### Sprint 5 (Week 5): Frontend MVP
+### Sprint 4.5 (INSERT): Gas Optimization 🔴 BLOCKING
+
+| Story | Points | Priority |
+|-------|--------|----------|
+| 6.1 Gas Baseline | 3 | Must |
+| 6.2 Redesign OptionStorage | 8 | Must |
+| 6.3 Use ReentrancyGuard | 2 | Must |
+| 6.4 Add @method Decorators | 3 | Should |
+| 6.5 Add Missing Events | 2 | Should |
+
+**Sprint Goal**: Reduce gas by 50%+, no behavior changes
+
+**Rationale**: Analysis revealed OptionsPool uses 9 SHA256 operations per option read.
+Must optimize before frontend to ensure mainnet viability.
+See [GAS_OPTIMIZATION_REFACTOR.md](./GAS_OPTIMIZATION_REFACTOR.md) for details.
+
+### Sprint 5 (Week 5): Frontend MVP - DELAYED until Sprint 4.5 complete
 
 | Story | Points | Priority |
 |-------|--------|----------|
@@ -678,9 +821,25 @@ Story Dependencies:
                                                           │
 2.x (Security) depends on 1.x contracts                  │
 3.x (Testing) depends on 1.x contracts                   │
-4.x (Frontend) depends on 1.8 (View Methods) ◄───────────┘
-5.x (Deploy) depends on all above
+
+6.x (Gas Optimization) depends on 1.x, 2.x contracts ◄── CRITICAL PATH
+        │
+        ▼
+4.x (Frontend) depends on 6.x (optimized contracts) ◄───┘
+        │
+        ▼
+5.x (Deploy) depends on 4.x
 ```
+
+### Critical Path Update
+
+**Before**: 1.x → 2.x → 3.x → 4.x → 5.x
+**After**: 1.x → 2.x → **6.x** → 4.x → 5.x
+
+Epic 6 (Gas Optimization) is now on the critical path because:
+1. Frontend depends on stable contract ABIs (Story 6.4)
+2. Mainnet deployment requires acceptable gas costs (Story 6.2)
+3. Event indexing needed for frontend (Story 6.5)
 
 ---
 
@@ -702,13 +861,51 @@ Story Dependencies:
 | OPNet API changes | Medium | High | Pin versions, monitor changelog |
 | Testing framework issues | Low | Medium | Early spike in Sprint 1 |
 | Frontend wallet integration | Medium | Medium | Use documented patterns |
-| Gas optimization late | Low | Medium | Profile early, optimize in Sprint 4 |
+| **Gas optimization introduces bugs** | **Medium** | **High** | **Comprehensive tests, incremental changes** |
+| **Storage migration needed** | **Low** | **High** | **Design for upgradability, test on regtest** |
+| ~~Gas optimization late~~ | ~~Low~~ | ~~Medium~~ | **MOVED to Sprint 4.5 (blocking)** |
+
+---
+
+## Gas Optimization Summary
+
+### Problem
+OptionsPool uses SHA256 for every field access:
+- 9 SHA256 operations per `getOption()` call
+- Estimated ~180M gas per option read
+- Unusable on mainnet at current costs
+
+### Solution
+Redesign OptionStorage to use direct pointer arithmetic:
+- No SHA256, just `basePointer + optionId * stride + offset`
+- Pack small fields (u64 + u64 → u128, u8 + u8 → u16)
+- Target: 50%+ gas reduction
+
+### Impact on Timeline
+- Sprint 4.5 (new): Gas Optimization (~23 hours)
+- Sprint 5-6 delayed by 1 week
+- Total project: 7 weeks instead of 6
+
+### Success Criteria
+- [ ] getOption gas reduced by >50%
+- [ ] All tests pass with no behavior changes
+- [ ] @method decorators on all public methods
+- [ ] PoolCreated event emitted
 
 ---
 
 ## Next Steps
 
-1. Set up project (Story 1.1)
-2. Begin Sprint 1
-3. Daily standups (if team)
-4. Sprint review at end of each week
+1. **IMMEDIATE**: Review [GAS_OPTIMIZATION_REFACTOR.md](./GAS_OPTIMIZATION_REFACTOR.md)
+2. **APPROVE**: Sprint 4.5 insertion into roadmap
+3. **EXECUTE**: Story 6.1 (Gas Baseline) to measure current state
+4. **THEN**: Proceed with stories 6.2-6.5
+5. **RESUME**: Sprint 5 (Frontend) after optimization complete
+
+---
+
+## Document References
+
+- [Gas Optimization Refactor Plan](./GAS_OPTIMIZATION_REFACTOR.md) - Detailed analysis and plan
+- [OPNet Complexity Best Practices](../contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md) - Reference guide
+- [Sprint Board](./SPRINT_BOARD.md) - Current sprint status

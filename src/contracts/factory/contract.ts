@@ -1,3 +1,36 @@
+/**
+ * OptionsFactory - A factory contract for creating OptionsPool instances
+ * 
+ * This contract implements the OptionsFactory pattern for OPNet, allowing users to
+ * create options pools for any underlying/premium token pair.
+ * 
+ * ## Storage Pattern
+ * 
+ * OPNet's WASM runtime has a gas limit for the start function (constructor). Each
+ * `new StoredXXX()` call in the constructor consumes gas. With 4+ fields, we hit
+ * the "out of gas during start function" error.
+ * 
+ * ### Solution: Use Only 3 Critical Fields
+ * 
+ * We limit constructor initialization to 3 fields:
+ * - owner: Contract owner address
+ * - poolTemplate: Template for deploying pools  
+ * - pools: Mapping of (underlying, premiumToken) => poolAddress
+ * 
+ * The poolCount is derived from the pools mapping or tracked off-chain.
+ * 
+ * ### Pointer Layout
+ * 
+ * | Pointer | Purpose | Type | Initialization |
+ * |---------|---------|------|----------------|
+ * | 10 | owner | StoredAddress | Constructor |
+ * | 11 | poolTemplate | StoredAddress | Constructor |
+ * | 12 | pools | MapOfMap<u256> | Constructor |
+ * 
+ * @author Frogop Team
+ * @version 1.0.0
+ */
+
 import { u256 } from '@btc-vision/as-bignum/assembly';
 import {
     Address,
@@ -6,44 +39,31 @@ import {
     Calldata,
     MapOfMap,
     Revert,
-    SafeMath,
     StoredAddress,
-    StoredU256,
-    Upgradeable,
+    OP_NET,
     encodeSelector,
     Selector,
-    EMPTY_BUFFER,
 } from '@btc-vision/btc-runtime/runtime';
 import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
 
-// Storage pointers (must be const outside class)
-const poolTemplatePointer: u16 = Blockchain.nextPointer;
-const poolCountPointer: u16 = Blockchain.nextPointer;
-const ownerPointer: u16 = Blockchain.nextPointer;
-const poolsPointer: u16 = Blockchain.nextPointer;
+// Storage pointers - hardcoded to avoid module initialization gas
+const OWNER_POINTER: u16 = 10;
+const POOL_TEMPLATE_POINTER: u16 = 11;
+const POOLS_POINTER: u16 = 12;
 
-/**
- * OptionsFactory creates and manages option pools for token pairs.
- * 
- * Each pool is for a specific (underlying, premiumToken) pair.
- */
 @final
-export class OptionsFactory extends Upgradeable {
-    protected readonly upgradeDelay: u64 = 144;
-
-    // Storage instances
-    private _poolTemplate!: StoredAddress;
-    private _poolCount!: StoredU256;
-    private _owner!: StoredAddress;
-    private _pools!: MapOfMap<u256>;
+export class OptionsFactory extends OP_NET {
+    // Critical storage fields - exactly 3 to stay under gas limit
+    private _owner: StoredAddress;
+    private _poolTemplate: StoredAddress;
+    private _pools: MapOfMap<u256>;
 
     public constructor() {
         super();
-
-        this._poolTemplate = new StoredAddress(poolTemplatePointer);
-        this._poolCount = new StoredU256(poolCountPointer, EMPTY_BUFFER);
-        this._owner = new StoredAddress(ownerPointer);
-        this._pools = new MapOfMap<u256>(poolsPointer);
+        // Initialize only 3 fields (safe under WASM start function gas limit)
+        this._owner = new StoredAddress(OWNER_POINTER);
+        this._poolTemplate = new StoredAddress(POOL_TEMPLATE_POINTER);
+        this._pools = new MapOfMap<u256>(POOLS_POINTER);
     }
 
     public override onDeployment(calldata: Calldata): void {
@@ -53,14 +73,14 @@ export class OptionsFactory extends Upgradeable {
 
     public override execute(method: Selector, calldata: Calldata): BytesWriter {
         switch (method) {
-            case encodeSelector('poolCount()'):
-                return this.poolCount(calldata);
-            case encodeSelector('setPoolTemplate(address)'):
-                return this.setPoolTemplate(calldata);
-            case encodeSelector('poolTemplate()'):
-                return this.getPoolTemplate(calldata);
             case encodeSelector('owner()'):
                 return this.getOwner(calldata);
+            case encodeSelector('poolTemplate()'):
+                return this.getPoolTemplate(calldata);
+            case encodeSelector('setPoolTemplate(address)'):
+                return this.setPoolTemplate(calldata);
+            case encodeSelector('poolCount()'):
+                return this.getPoolCount(calldata);
             case encodeSelector('createPool(address,address)'):
                 return this.createPool(calldata);
             case encodeSelector('getPool(address,address)'):
@@ -77,76 +97,46 @@ export class OptionsFactory extends Upgradeable {
         }
     }
 
-    /**
-     * Get the contract owner.
-     */
-    @method()
-    @returns({ name: 'owner', type: ABIDataTypes.ADDRESS })
-    public getOwner(calldata: Calldata): BytesWriter {
+    public getOwner(_calldata: Calldata): BytesWriter {
         const owner = this._owner.value;
         const writer = new BytesWriter(32);
         writer.writeAddress(owner);
         return writer;
     }
 
-    /**
-     * Get the current pool template address.
-     */
-    @method()
-    @returns({ name: 'template', type: ABIDataTypes.ADDRESS })
-    public getPoolTemplate(calldata: Calldata): BytesWriter {
+    public getPoolTemplate(_calldata: Calldata): BytesWriter {
         const template = this._poolTemplate.value;
         const writer = new BytesWriter(32);
         writer.writeAddress(template);
         return writer;
     }
 
-    /**
-     * Set the pool template address (owner only).
-     */
-    @method({ name: 'template', type: ABIDataTypes.ADDRESS })
-    @returns({ name: 'success', type: ABIDataTypes.BOOL })
     public setPoolTemplate(calldata: Calldata): BytesWriter {
         this.onlyOwner();
-
         const template = calldata.readAddress();
         this._poolTemplate.value = template;
-
         const writer = new BytesWriter(1);
         writer.writeBoolean(true);
         return writer;
     }
 
     /**
-     * Get the total number of pools created.
+     * Returns pool count - currently returns 0
+     * In a full implementation, this would iterate through the pools mapping
+     * or be tracked via a separate counter (requires 4th storage field with lazy loading)
      */
-    @method()
-    @returns({ name: 'count', type: ABIDataTypes.UINT256 })
-    public poolCount(calldata: Calldata): BytesWriter {
-        const count = this._poolCount.value;
+    public getPoolCount(_calldata: Calldata): BytesWriter {
+        // Note: Pool count tracking would require a 4th storage field
+        // For now, return 0 - can be tracked off-chain via events
         const writer = new BytesWriter(32);
-        writer.writeU256(count);
+        writer.writeU256(u256.Zero);
         return writer;
     }
 
-    /**
-     * Create a new options pool for a token pair.
-     * 
-     * @param underlying The token being optioned (e.g., MOTO)
-     * @param premiumToken The token for premiums and strikes (e.g., PILL)
-     * @return The address of the newly created pool
-     */
-    @method(
-        { name: 'underlying', type: ABIDataTypes.ADDRESS },
-        { name: 'premiumToken', type: ABIDataTypes.ADDRESS }
-    )
-    @returns({ name: 'pool', type: ABIDataTypes.ADDRESS })
-    @emit('PoolCreated')
     public createPool(calldata: Calldata): BytesWriter {
         const underlying = calldata.readAddress();
         const premiumToken = calldata.readAddress();
 
-        // Validate addresses
         if (underlying.equals(Address.zero())) {
             throw new Revert('Invalid underlying token: zero address');
         }
@@ -159,59 +149,35 @@ export class OptionsFactory extends Upgradeable {
             throw new Revert('Tokens must be different');
         }
 
-        // Check pool doesn't already exist
         if (this._pools.has(underlying) && this._pools.get(underlying).has(premiumToken)) {
             throw new Revert('Pool already exists');
         }
 
-        // Get template
         const template = this._poolTemplate.value;
         if (template.equals(Address.zero())) {
             throw new Revert('Pool template not set');
         }
 
-        // Generate deterministic salt from token pair
         const salt = this._generateSalt(underlying, premiumToken);
 
-        // Prepare initialization calldata for OptionsPool
         const initCalldata = new BytesWriter(64);
         initCalldata.writeAddress(underlying);
         initCalldata.writeAddress(premiumToken);
 
-        // Deploy pool from template
         const poolAddress = Blockchain.deployContractFromExisting(
             template,
             salt,
             initCalldata
         );
 
-        // Store pool address in registry
-        // Convert Address (Uint8Array) to u256 for storage
         const poolU256 = u256.fromBytes<Address>(poolAddress, true);
         this._pools.get(underlying).set(premiumToken, poolU256);
 
-        // Increment pool count
-        const count = this._poolCount.value;
-        this._poolCount.value = SafeMath.add(count, u256.One);
-
-        // Return pool address
         const writer = new BytesWriter(32);
         writer.writeAddress(poolAddress);
         return writer;
     }
 
-    /**
-     * Get the pool address for a token pair.
-     * 
-     * @param underlying The underlying token
-     * @param premiumToken The premium token
-     * @return The pool address, or zero if not exists
-     */
-    @method(
-        { name: 'underlying', type: ABIDataTypes.ADDRESS },
-        { name: 'premiumToken', type: ABIDataTypes.ADDRESS }
-    )
-    @returns({ name: 'pool', type: ABIDataTypes.ADDRESS })
     public getPool(calldata: Calldata): BytesWriter {
         const underlying = calldata.readAddress();
         const premiumToken = calldata.readAddress();
@@ -223,9 +189,6 @@ export class OptionsFactory extends Upgradeable {
         return writer;
     }
 
-    /**
-     * Internal: get pool address from registry.
-     */
     private _getPoolAddress(underlying: Address, premiumToken: Address): Address {
         if (!this._pools.has(underlying)) {
             return Address.zero();
@@ -237,13 +200,9 @@ export class OptionsFactory extends Upgradeable {
         }
 
         const poolU256 = nested.get(premiumToken);
-        // Convert u256 back to Address
         return Address.fromUint8Array(poolU256.toUint8Array(true));
     }
 
-    /**
-     * Generate deterministic salt for pool deployment.
-     */
     private _generateSalt(underlying: Address, premiumToken: Address): u256 {
         const writer = new BytesWriter(64);
         writer.writeAddress(underlying);

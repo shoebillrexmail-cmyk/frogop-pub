@@ -83,6 +83,9 @@ await opnet('OptionsFactory Tests', async (vm: OPNetUnit) => {
         const underlying = Blockchain.generateRandomAddress();
         const premiumToken = Blockchain.generateRandomAddress();
         
+        // Load pool bytecode at template address (required for deployContractFromExisting)
+        factory.loadPoolBytecodeAt(template);
+        
         // Set template first
         Blockchain.msgSender = deployer;
         Blockchain.txOrigin = deployer;
@@ -104,6 +107,9 @@ await opnet('OptionsFactory Tests', async (vm: OPNetUnit) => {
         const template = Blockchain.generateRandomAddress();
         const underlying = Blockchain.generateRandomAddress();
         const premiumToken = Blockchain.generateRandomAddress();
+        
+        // Load pool bytecode at template address
+        factory.loadPoolBytecodeAt(template);
         
         // Set template and create pool
         Blockchain.msgSender = deployer;
@@ -132,6 +138,9 @@ await opnet('OptionsFactory Tests', async (vm: OPNetUnit) => {
         const template = Blockchain.generateRandomAddress();
         const underlying = Blockchain.generateRandomAddress();
         const premiumToken = Blockchain.generateRandomAddress();
+        
+        // Load pool bytecode at template address
+        factory.loadPoolBytecodeAt(template);
         
         // Set template
         Blockchain.msgSender = deployer;
@@ -164,6 +173,9 @@ await opnet('OptionsFactory Tests', async (vm: OPNetUnit) => {
     await vm.it('should reject pool with same tokens', async () => {
         const template = Blockchain.generateRandomAddress();
         const token = Blockchain.generateRandomAddress();
+        
+        // Load pool bytecode at template address
+        factory.loadPoolBytecodeAt(template);
         
         Blockchain.msgSender = deployer;
         Blockchain.txOrigin = deployer;
