@@ -59,14 +59,12 @@ class PoolCreatedEvent extends NetEvent {
 
 @final
 export class OptionsFactory extends OP_NET {
-    // Critical storage fields - exactly 3 to stay under gas limit
     private _owner: StoredAddress;
     private _poolTemplate: StoredAddress;
     private _pools: MapOfMap<u256>;
 
     public constructor() {
         super();
-        // Initialize only 3 fields (safe under WASM start function gas limit)
         this._owner = new StoredAddress(OWNER_POINTER);
         this._poolTemplate = new StoredAddress(POOL_TEMPLATE_POINTER);
         this._pools = new MapOfMap<u256>(POOLS_POINTER);
@@ -77,25 +75,6 @@ export class OptionsFactory extends OP_NET {
         this._owner.value = Blockchain.tx.origin;
     }
 
-    public override execute(method: Selector, calldata: Calldata): BytesWriter {
-        switch (method) {
-            case encodeSelector('owner()'):
-                return this.getOwner(calldata);
-            case encodeSelector('poolTemplate()'):
-                return this.getPoolTemplate(calldata);
-            case encodeSelector('setPoolTemplate(address)'):
-                return this.setPoolTemplate(calldata);
-            case encodeSelector('poolCount()'):
-                return this.getPoolCount(calldata);
-            case encodeSelector('createPool(address,address)'):
-                return this.createPool(calldata);
-            case encodeSelector('getPool(address,address)'):
-                return this.getPool(calldata);
-            default:
-                return super.execute(method, calldata);
-        }
-    }
-
     private onlyOwner(): void {
         const owner = this._owner.value;
         if (!Blockchain.tx.sender.equals(owner)) {
@@ -103,6 +82,9 @@ export class OptionsFactory extends OP_NET {
         }
     }
 
+    @view
+    @method()
+    @returns({ name: 'owner', type: ABIDataTypes.ADDRESS })
     public getOwner(_calldata: Calldata): BytesWriter {
         const owner = this._owner.value;
         const writer = new BytesWriter(32);
@@ -110,6 +92,9 @@ export class OptionsFactory extends OP_NET {
         return writer;
     }
 
+    @view
+    @method()
+    @returns({ name: 'template', type: ABIDataTypes.ADDRESS })
     public getPoolTemplate(_calldata: Calldata): BytesWriter {
         const template = this._poolTemplate.value;
         const writer = new BytesWriter(32);
@@ -117,6 +102,8 @@ export class OptionsFactory extends OP_NET {
         return writer;
     }
 
+    @method({ name: 'template', type: ABIDataTypes.ADDRESS })
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
     public setPoolTemplate(calldata: Calldata): BytesWriter {
         this.onlyOwner();
         const template = calldata.readAddress();
@@ -126,22 +113,28 @@ export class OptionsFactory extends OP_NET {
         return writer;
     }
 
-    /**
-     * Returns pool count - currently returns 0
-     * In a full implementation, this would iterate through the pools mapping
-     * or be tracked via a separate counter (requires 4th storage field with lazy loading)
-     */
+    @view
+    @method()
+    @returns({ name: 'count', type: ABIDataTypes.UINT256 })
     public getPoolCount(_calldata: Calldata): BytesWriter {
-        // Note: Pool count tracking would require a 4th storage field
-        // For now, return 0 - can be tracked off-chain via events
         const writer = new BytesWriter(32);
         writer.writeU256(u256.Zero);
         return writer;
     }
 
+    @method(
+        { name: 'underlying', type: ABIDataTypes.ADDRESS },
+        { name: 'premiumToken', type: ABIDataTypes.ADDRESS },
+        { name: 'underlyingDecimals', type: ABIDataTypes.UINT8 },
+        { name: 'premiumDecimals', type: ABIDataTypes.UINT8 }
+    )
+    @returns({ name: 'poolAddress', type: ABIDataTypes.ADDRESS })
+    @emit('PoolCreated')
     public createPool(calldata: Calldata): BytesWriter {
         const underlying = calldata.readAddress();
         const premiumToken = calldata.readAddress();
+        const underlyingDecimals = calldata.readU8();
+        const premiumDecimals = calldata.readU8();
 
         if (underlying.equals(Address.zero())) {
             throw new Revert('Invalid underlying token: zero address');
@@ -166,9 +159,11 @@ export class OptionsFactory extends OP_NET {
 
         const salt = this._generateSalt(underlying, premiumToken);
 
-        const initCalldata = new BytesWriter(64);
+        const initCalldata = new BytesWriter(66);
         initCalldata.writeAddress(underlying);
         initCalldata.writeAddress(premiumToken);
+        initCalldata.writeU8(underlyingDecimals);
+        initCalldata.writeU8(premiumDecimals);
 
         const poolAddress = Blockchain.deployContractFromExisting(
             template,
@@ -179,7 +174,6 @@ export class OptionsFactory extends OP_NET {
         const poolU256 = u256.fromBytes<Address>(poolAddress, true);
         this._pools.get(underlying).set(premiumToken, poolU256);
 
-        // Emit event
         const eventData = new BytesWriter(96);
         eventData.writeAddress(poolAddress);
         eventData.writeAddress(underlying);
@@ -191,6 +185,12 @@ export class OptionsFactory extends OP_NET {
         return writer;
     }
 
+    @view
+    @method(
+        { name: 'underlying', type: ABIDataTypes.ADDRESS },
+        { name: 'premiumToken', type: ABIDataTypes.ADDRESS }
+    )
+    @returns({ name: 'poolAddress', type: ABIDataTypes.ADDRESS })
     public getPool(calldata: Calldata): BytesWriter {
         const underlying = calldata.readAddress();
         const premiumToken = calldata.readAddress();

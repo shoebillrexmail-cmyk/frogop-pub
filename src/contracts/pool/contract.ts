@@ -57,6 +57,8 @@ import {
     Selector,
     EMPTY_BUFFER,
     NetEvent,
+    ReentrancyGuard,
+    ReentrancyLevel,
 } from '@btc-vision/btc-runtime/runtime';
 import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
 // =============================================================================
@@ -94,32 +96,17 @@ const MAX_EXPIRY_BLOCKS: u64 = 52560;
 const CANCEL_FEE_BPS: u64 = 100;
 
 // =============================================================================
-// STORAGE POINTER DEFINITIONS
+// STORAGE POINTER DEFINITIONS - Using Blockchain.nextPointer
 // =============================================================================
 
-const UNDERLYING_POINTER: u16 = 10;
-const PREMIUM_TOKEN_POINTER: u16 = 11;
-const NEXT_ID_POINTER: u16 = 12;
-const ACCUMULATED_FEES_POINTER: u16 = 101;
+// ReentrancyGuard uses first 2 pointers internally (statusPointer, depthPointer)
+// Our pointers start after ReentrancyGuard's
+const UNDERLYING_POINTER: u16 = Blockchain.nextPointer;
+const PREMIUM_TOKEN_POINTER: u16 = Blockchain.nextPointer;
+const NEXT_ID_POINTER: u16 = Blockchain.nextPointer;
+const ACCUMULATED_FEES_POINTER: u16 = Blockchain.nextPointer;
 
-/**
- * Optimized Option Storage Pointers
- * 
- * Uses direct pointer arithmetic instead of SHA256 hashing.
- * Each option occupies 7 contiguous storage slots.
- * 
- * Layout for optionId:
- *   [base + id*7 + 0] = writer (Address)
- *   [base + id*7 + 1] = buyer (Address)
- *   [base + id*7 + 2] = strikePrice (u256)
- *   [base + id*7 + 3] = underlyingAmount (u256)
- *   [base + id*7 + 4] = premium (u256)
- *   [base + id*7 + 5] = expiryBlock | createdBlock (packed u64|u64)
- *   [base + id*7 + 6] = optionType | status (packed u8|u8)
- */
-const OPTIONS_BASE_POINTER: u16 = 200;
-
-const LOCKED_POINTER: u16 = 300;
+const OPTIONS_BASE_POINTER: u16 = Blockchain.nextPointer;
 
 // =============================================================================
 // EVENTS
@@ -348,68 +335,23 @@ class OptionStorage {
 // =============================================================================
 
 @final
-export class OptionsPool extends OP_NET {
-    // -------------------------------------------------------------------------
-    // CRITICAL STORAGE FIELDS (Initialized in Constructor)
-    // -------------------------------------------------------------------------
+export class OptionsPool extends ReentrancyGuard {
+    protected readonly reentrancyLevel: ReentrancyLevel = ReentrancyLevel.STANDARD;
 
-    /** Underlying token address - set at deployment */
     private _underlying: StoredAddress;
-
-    /** Premium token address - set at deployment */
     private _premiumToken: StoredAddress;
-
-    /** Next option ID counter - auto-incremented */
     private _nextId: StoredU256;
 
-    // -------------------------------------------------------------------------
-    // LAZY-LOADED STORAGE FIELDS
-    // -------------------------------------------------------------------------
-
-    /** Reentrancy guard - initialized on first access */
-    private _locked: StoredBoolean | null = null;
-
-    /** Accumulated protocol fees - initialized on first access */
     private _accumulatedFees: StoredU256 | null = null;
-
-    /** Option storage - initialized on first access */
     private _options: OptionStorage | null = null;
 
-    /**
-     * Constructor - Runs on EVERY contract interaction
-     *
-     * Initializes only 3 critical fields to avoid WASM start function gas limit.
-     * Other fields are lazy-loaded on first access.
-     */
     public constructor() {
         super();
-        // Critical fields (3 fields = safe under gas limit)
         this._underlying = new StoredAddress(UNDERLYING_POINTER);
         this._premiumToken = new StoredAddress(PREMIUM_TOKEN_POINTER);
-        // nextId starts at 0 by default
         this._nextId = new StoredU256(NEXT_ID_POINTER, EMPTY_BUFFER);
-        // NOTE: locked, accumulatedFees, options are lazy-loaded
     }
 
-    // -------------------------------------------------------------------------
-    // LAZY GETTERS
-    // -------------------------------------------------------------------------
-
-    /**
-     * Lazy getter for locked (reentrancy guard)
-     * @returns StoredBoolean for reentrancy protection
-     */
-    private get locked(): StoredBoolean {
-        if (!this._locked) {
-            this._locked = new StoredBoolean(LOCKED_POINTER, false);
-        }
-        return this._locked!;
-    }
-
-    /**
-     * Lazy getter for accumulatedFees
-     * @returns StoredU256 for fee tracking
-     */
     private get accumulatedFees(): StoredU256 {
         if (!this._accumulatedFees) {
             this._accumulatedFees = new StoredU256(ACCUMULATED_FEES_POINTER, EMPTY_BUFFER);
@@ -417,10 +359,6 @@ export class OptionsPool extends OP_NET {
         return this._accumulatedFees!;
     }
 
-    /**
-     * Lazy getter for options storage
-     * @returns OptionStorage for option data
-     */
     private get options(): OptionStorage {
         if (!this._options) {
             this._options = new OptionStorage(OPTIONS_BASE_POINTER);
@@ -428,15 +366,6 @@ export class OptionsPool extends OP_NET {
         return this._options!;
     }
 
-    // -------------------------------------------------------------------------
-    // LIFECYCLE HOOKS
-    // -------------------------------------------------------------------------
-    
-    /**
-     * onDeployment - Runs exactly ONCE when contract is deployed
-     * 
-     * @param calldata - Contains underlying and premiumToken addresses
-     */
     public override onDeployment(calldata: Calldata): void {
         super.onDeployment(calldata);
         
@@ -577,12 +506,6 @@ export class OptionsPool extends OP_NET {
     // -------------------------------------------------------------------------
 
     public writeOption(calldata: Calldata): BytesWriter {
-        // Reentrancy guard
-        if (this.locked.value) {
-            throw new Revert('ReentrancyGuard: LOCKED');
-        }
-        this.locked.value = true;
-
         const optionType = calldata.readU8();
         const strikePrice = calldata.readU256();
         const expiryBlock = calldata.readU64();
@@ -590,27 +513,21 @@ export class OptionsPool extends OP_NET {
         const premium = calldata.readU256();
         const writer = Blockchain.tx.sender;
 
-        // Validation
         if (optionType > 1) {
-            this.locked.value = false;
             throw new Revert('Invalid option type');
         }
         if (strikePrice == u256.Zero || underlyingAmount == u256.Zero || premium == u256.Zero) {
-            this.locked.value = false;
             throw new Revert('Values must be > 0');
         }
 
         const currentBlock = Blockchain.block.number;
         if (expiryBlock <= currentBlock) {
-            this.locked.value = false;
             throw new Revert('Expiry in past');
         }
         if (expiryBlock > currentBlock + MAX_EXPIRY_BLOCKS) {
-            this.locked.value = false;
             throw new Revert('Expiry too far');
         }
 
-        // Calculate and lock collateral
         let collateralToken: Address;
         let collateralAmount: u256;
 
@@ -622,11 +539,9 @@ export class OptionsPool extends OP_NET {
             collateralAmount = SafeMath.mul(strikePrice, underlyingAmount);
         }
 
-        // Generate option ID
         const optionId = this._nextId.value;
         this._nextId.value = SafeMath.add(optionId, u256.One);
 
-        // Create option
         const option = new Option();
         option.id = optionId;
         option.writer = writer;
@@ -641,10 +556,8 @@ export class OptionsPool extends OP_NET {
 
         this.options.set(optionId, option);
 
-        // Lock collateral
         this._transferFrom(collateralToken, writer, Blockchain.contractAddress, collateralAmount);
 
-        // Emit event
         const event = new BytesWriter(200);
         event.writeU256(optionId);
         event.writeAddress(writer);
@@ -657,22 +570,13 @@ export class OptionsPool extends OP_NET {
 
         const result = new BytesWriter(32);
         result.writeU256(optionId);
-
-        this.locked.value = false;
         return result;
     }
 
     public cancelOption(calldata: Calldata): BytesWriter {
-        // Reentrancy guard
-        if (this.locked.value) {
-            throw new Revert('ReentrancyGuard: LOCKED');
-        }
-        this.locked.value = true;
-
         const optionId = calldata.readU256();
 
         if (!this.options.exists(optionId)) {
-            this.locked.value = false;
             throw new Revert('Option not found');
         }
 
@@ -680,15 +584,12 @@ export class OptionsPool extends OP_NET {
         const caller = Blockchain.tx.sender;
 
         if (!caller.equals(option.writer)) {
-            this.locked.value = false;
             throw new Revert('Not writer');
         }
         if (option.status != OPEN) {
-            this.locked.value = false;
             throw new Revert('Not open');
         }
 
-        // Calculate collateral and fee
         let collateralToken: Address;
         let collateralAmount: u256;
 
@@ -706,18 +607,14 @@ export class OptionsPool extends OP_NET {
         );
         const returnAmount = SafeMath.sub(collateralAmount, fee);
 
-        // Update state
         option.status = CANCELLED;
         this.options.setStatus(optionId, CANCELLED);
 
-        // Return collateral minus fee
         this._transfer(collateralToken, option.writer, returnAmount);
 
-        // Accumulate fee
         const currentFees = this.accumulatedFees.value;
         this.accumulatedFees.value = SafeMath.add(currentFees, fee);
 
-        // Emit event
         const event = new BytesWriter(100);
         event.writeU256(optionId);
         event.writeAddress(option.writer);
@@ -727,22 +624,13 @@ export class OptionsPool extends OP_NET {
 
         const result = new BytesWriter(1);
         result.writeBoolean(true);
-
-        this.locked.value = false;
         return result;
     }
 
     public buyOption(calldata: Calldata): BytesWriter {
-        // Reentrancy guard
-        if (this.locked.value) {
-            throw new Revert('ReentrancyGuard: LOCKED');
-        }
-        this.locked.value = true;
-
         const optionId = calldata.readU256();
 
         if (!this.options.exists(optionId)) {
-            this.locked.value = false;
             throw new Revert('Option not found');
         }
 
@@ -750,29 +638,23 @@ export class OptionsPool extends OP_NET {
         const buyer = Blockchain.tx.sender;
 
         if (option.status != OPEN) {
-            this.locked.value = false;
             throw new Revert('Not open');
         }
 
         const currentBlock = Blockchain.block.number;
         if (currentBlock >= option.expiryBlock) {
-            this.locked.value = false;
             throw new Revert('Already expired');
         }
 
         if (buyer.equals(option.writer)) {
-            this.locked.value = false;
             throw new Revert('Writer cannot buy own option');
         }
 
-        // Update option
         this.options.setBuyer(optionId, buyer);
         this.options.setStatus(optionId, PURCHASED);
 
-        // Transfer premium
         this._transferFrom(this._premiumToken.value, buyer, option.writer, option.premium);
 
-        // Emit event
         const event = new BytesWriter(100);
         event.writeU256(optionId);
         event.writeAddress(buyer);
@@ -783,22 +665,13 @@ export class OptionsPool extends OP_NET {
 
         const result = new BytesWriter(1);
         result.writeBoolean(true);
-
-        this.locked.value = false;
         return result;
     }
 
     public exercise(calldata: Calldata): BytesWriter {
-        // Reentrancy guard
-        if (this.locked.value) {
-            throw new Revert('ReentrancyGuard: LOCKED');
-        }
-        this.locked.value = true;
-
         const optionId = calldata.readU256();
 
         if (!this.options.exists(optionId)) {
-            this.locked.value = false;
             throw new Revert('Option not found');
         }
 
@@ -806,24 +679,20 @@ export class OptionsPool extends OP_NET {
         const caller = Blockchain.tx.sender;
 
         if (option.status != PURCHASED) {
-            this.locked.value = false;
             throw new Revert('Not purchased');
         }
 
         if (!caller.equals(option.buyer)) {
-            this.locked.value = false;
             throw new Revert('Not buyer');
         }
 
         const currentBlock = Blockchain.block.number;
         if (currentBlock < option.expiryBlock) {
-            this.locked.value = false;
             throw new Revert('Not yet expired');
         }
 
         const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
         if (currentBlock >= graceEnd) {
-            this.locked.value = false;
             throw new Revert('Grace period ended');
         }
 
@@ -839,7 +708,6 @@ export class OptionsPool extends OP_NET {
             this._transfer(this._premiumToken.value, caller, strikeValue);
         }
 
-        // Emit event
         const event = new BytesWriter(100);
         event.writeU256(optionId);
         event.writeAddress(option.buyer);
@@ -851,36 +719,25 @@ export class OptionsPool extends OP_NET {
 
         const result = new BytesWriter(1);
         result.writeBoolean(true);
-
-        this.locked.value = false;
         return result;
     }
 
     public settle(calldata: Calldata): BytesWriter {
-        // Reentrancy guard
-        if (this.locked.value) {
-            throw new Revert('ReentrancyGuard: LOCKED');
-        }
-        this.locked.value = true;
-
         const optionId = calldata.readU256();
 
         if (!this.options.exists(optionId)) {
-            this.locked.value = false;
             throw new Revert('Option not found');
         }
 
         const option = this.options.get(optionId);
 
         if (option.status != PURCHASED) {
-            this.locked.value = false;
             throw new Revert('Not purchased');
         }
 
         const currentBlock = Blockchain.block.number;
         const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
         if (currentBlock < graceEnd) {
-            this.locked.value = false;
             throw new Revert('Grace period not ended');
         }
 
@@ -899,7 +756,6 @@ export class OptionsPool extends OP_NET {
 
         this._transfer(collateralToken, option.writer, collateralAmount);
 
-        // Emit event
         const event = new BytesWriter(100);
         event.writeU256(optionId);
         event.writeAddress(option.writer);
@@ -908,8 +764,6 @@ export class OptionsPool extends OP_NET {
 
         const result = new BytesWriter(1);
         result.writeBoolean(true);
-
-        this.locked.value = false;
         return result;
     }
     

@@ -26,10 +26,18 @@ class OptionsPoolTestRuntime extends ContractRuntime {
     private readonly _underlying: Address;
     private readonly _premiumToken: Address;
 
-    constructor(deployer: Address, underlying: Address, premiumToken: Address) {
+    constructor(
+        deployer: Address,
+        underlying: Address,
+        premiumToken: Address,
+        underlyingDecimals: number = 18,
+        premiumDecimals: number = 18
+    ) {
         const deploymentCalldata = new BinaryWriter();
         deploymentCalldata.writeAddress(underlying);
         deploymentCalldata.writeAddress(premiumToken);
+        deploymentCalldata.writeU8(underlyingDecimals);
+        deploymentCalldata.writeU8(premiumDecimals);
 
         super({
             deployer: deployer,

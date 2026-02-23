@@ -665,30 +665,38 @@ Analysis of contracts against OPNet best practices revealed significant gas inef
 
 ---
 
-## Epic 5: Deployment
+## Epic 5: Integration Testing & Deployment (BLOCKING)
 
-### Story 5.1: Regtest Deployment
+**PREREQUISITE: Complete before Epic 4 (Frontend)**
+
+### Story 5.1: Regtest Setup & Integration Testing
 
 **As a** developer  
-**I want** contracts deployed to regtest  
-**So that** users can test the protocol
+**I want** integration tests on OPNet regtest  
+**So that** I can verify token transfers work before frontend development
 
 #### Tasks
 
 | # | Task | Est. | Acceptance Criteria |
 |---|------|------|---------------------|
-| 5.1.1 | Create deployment scripts | 2h | Scripts deploy all contracts |
-| 5.1.2 | Deploy OP20 test tokens | 1h | MOTO, PILL deployed |
-| 5.1.3 | Deploy OptionsFactory | 1h | Factory deployed |
-| 5.1.4 | Deploy test pool | 1h | MOTO/PILL pool created |
-| 5.1.5 | Fund test accounts | 1h | Test users have tokens |
-| 5.1.6 | Verify deployment | 2h | All contracts callable |
+| 5.1.1 | Setup regtest wallet | 1h | Mnemonic in .env, test BTC balance |
+| 5.1.2 | Deploy custom OP20 tokens | 2h | FROG-U (MOTO), FROG-P (PILL) |
+| 5.1.3 | Deploy OptionsFactory | 1h | Factory with template configured |
+| 5.1.4 | Deploy Pool Template | 1h | Reusable template for pools |
+| 5.1.5 | Create Pool | 1h | MOTO/PILL pool created |
+| 5.1.6 | Write Option Test | 2h | Collateral locked, option created |
+| 5.1.7 | Buy Option Test | 2h | Premium transferred, status updated |
+| 5.1.8 | Exercise/Test Settle | 2h | Full lifecycle verified |
+| 5.1.9 | Gas Validation | 1h | On-chain gas within expected range |
+| 5.1.10 | Documentation | 2h | Integration test guide updated |
 
 **Definition of Done**:
-- [ ] All contracts deployed
-- [ ] Test tokens funded
-- [ ] Pool created
-- [ ] End-to-end flow works
+- [ ] Integration tests pass on regtest
+- [ ] All write methods tested (write, buy, cancel, exercise, settle)
+- [ ] Token transfers work correctly
+- [ ] Gas usage within 20% of baseline
+- [ ] Custom test tokens deployed (FROG-U, FROG-P)
+- [ ] Documentation updated in `docs/tests/`
 
 ---
 
@@ -774,7 +782,19 @@ Analysis of contracts against OPNet best practices revealed significant gas inef
 Must optimize before frontend to ensure mainnet viability.
 See [GAS_OPTIMIZATION_REFACTOR.md](./GAS_OPTIMIZATION_REFACTOR.md) for details.
 
-### Sprint 5 (Week 5): Frontend MVP - DELAYED until Sprint 4.5 complete
+### Sprint 5 (Week 5): Integration Testing & Deployment 🔴 BLOCKING
+
+| Story | Points | Priority |
+|-------|--------|----------|
+| 5.1 Regtest Setup & Integration Testing | 13 | Must |
+| 5.2 Frontend Deployment | 3 | Should |
+
+**Sprint Goal**: Full option lifecycle tested on regtest with real OP20 tokens
+
+**BLOCKING**: Frontend cannot start until integration tests pass on regtest.
+This sprint replaces Sprint 6 from original plan.
+
+### Sprint 6 (Week 6): Frontend MVP
 
 | Story | Points | Priority |
 |-------|--------|----------|
@@ -785,17 +805,6 @@ See [GAS_OPTIMIZATION_REFACTOR.md](./GAS_OPTIMIZATION_REFACTOR.md) for details.
 | 4.5 Buy Flow | 5 | Must |
 
 **Sprint Goal**: Users can write and buy options via UI
-
-### Sprint 6 (Week 6): Portfolio & Deploy
-
-| Story | Points | Priority |
-|-------|--------|----------|
-| 4.6 Portfolio | 5 | Must |
-| 4.7 Exercise Flow | 5 | Must |
-| 5.1 Regtest Deploy | 5 | Must |
-| 5.2 Frontend Deploy | 3 | Should |
-
-**Sprint Goal**: Full MVP live on regtest
 
 ---
 
@@ -834,12 +843,18 @@ Story Dependencies:
 ### Critical Path Update
 
 **Before**: 1.x → 2.x → 3.x → 4.x → 5.x
-**After**: 1.x → 2.x → **6.x** → 4.x → 5.x
+**After**: 1.x → 2.x → **6.x** → **5.x** → 4.x → 5.x
 
-Epic 6 (Gas Optimization) is now on the critical path because:
+**Epic 6 (Gas Optimization)**: On critical path - must complete before frontend
 1. Frontend depends on stable contract ABIs (Story 6.4)
 2. Mainnet deployment requires acceptable gas costs (Story 6.2)
 3. Event indexing needed for frontend (Story 6.5)
+
+**Epic 5 (Integration Testing)**: NEW - BLOCKING before frontend
+1. Unit tests cannot test token transfers (Blockchain.call() limitation)
+2. Frontend needs verified contract behavior on real network
+3. Must test full option lifecycle with real OP20 tokens
+4. Regtest deployment required before frontend development
 
 ---
 

@@ -29,7 +29,7 @@ export type OptionExpiredEvent = {
  */
 export type GetUnderlying = CallResult<
     {
-        token: Address;
+        underlying: Address;
     },
     OPNetEvent<never>[]
 >;
@@ -39,7 +39,7 @@ export type GetUnderlying = CallResult<
  */
 export type GetPremiumToken = CallResult<
     {
-        token: Address;
+        premiumToken: Address;
     },
     OPNetEvent<never>[]
 >;
@@ -47,12 +47,7 @@ export type GetPremiumToken = CallResult<
 /**
  * @description Represents the result of the getOption function call.
  */
-export type GetOption = CallResult<
-    {
-        option: unknown;
-    },
-    OPNetEvent<never>[]
->;
+export type GetOption = CallResult<{}, OPNetEvent<never>[]>;
 
 /**
  * @description Represents the result of the optionCount function call.
@@ -65,9 +60,9 @@ export type OptionCount = CallResult<
 >;
 
 /**
- * @description Represents the result of the accumulatedFees function call.
+ * @description Represents the result of the accumulatedFeesMethod function call.
  */
-export type AccumulatedFees = CallResult<
+export type AccumulatedFeesMethod = CallResult<
     {
         fees: bigint;
     },
@@ -109,7 +104,27 @@ export type CancelFeeBps = CallResult<
  */
 export type CalculateCollateral = CallResult<
     {
-        amount: bigint;
+        collateral: bigint;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
+ * @description Represents the result of the getUnderlyingDecimals function call.
+ */
+export type GetUnderlyingDecimals = CallResult<
+    {
+        decimals: number;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
+ * @description Represents the result of the getPremiumDecimals function call.
+ */
+export type GetPremiumDecimals = CallResult<
+    {
+        decimals: number;
     },
     OPNetEvent<never>[]
 >;
@@ -172,7 +187,7 @@ export interface IOptionsPool extends IOP_NETContract {
     getPremiumToken(): Promise<GetPremiumToken>;
     getOption(optionId: bigint): Promise<GetOption>;
     optionCount(): Promise<OptionCount>;
-    accumulatedFees(): Promise<AccumulatedFees>;
+    accumulatedFeesMethod(): Promise<AccumulatedFeesMethod>;
     gracePeriodBlocks(): Promise<GracePeriodBlocks>;
     maxExpiryBlocks(): Promise<MaxExpiryBlocks>;
     cancelFeeBps(): Promise<CancelFeeBps>;
@@ -181,6 +196,8 @@ export interface IOptionsPool extends IOP_NETContract {
         strikePrice: bigint,
         underlyingAmount: bigint,
     ): Promise<CalculateCollateral>;
+    getUnderlyingDecimals(): Promise<GetUnderlyingDecimals>;
+    getPremiumDecimals(): Promise<GetPremiumDecimals>;
     writeOption(
         optionType: number,
         strikePrice: bigint,

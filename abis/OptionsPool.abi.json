@@ -2,33 +2,33 @@
     "functions": [
         {
             "name": "getUnderlying",
-            "type": "Function",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [],
             "outputs": [
                 {
-                    "name": "token",
+                    "name": "underlying",
                     "type": "ADDRESS"
                 }
             ]
         },
         {
             "name": "getPremiumToken",
-            "type": "Function",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [],
             "outputs": [
                 {
-                    "name": "token",
+                    "name": "premiumToken",
                     "type": "ADDRESS"
                 }
             ]
         },
         {
             "name": "getOption",
-            "type": "Function",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [
@@ -37,16 +37,11 @@
                     "type": "UINT256"
                 }
             ],
-            "outputs": [
-                {
-                    "name": "option",
-                    "type": "TUPLE"
-                }
-            ]
+            "outputs": []
         },
         {
             "name": "optionCount",
-            "type": "Function",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [],
@@ -58,8 +53,8 @@
             ]
         },
         {
-            "name": "accumulatedFees",
-            "type": "Function",
+            "name": "accumulatedFeesMethod",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [],
@@ -72,7 +67,7 @@
         },
         {
             "name": "gracePeriodBlocks",
-            "type": "Function",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [],
@@ -85,7 +80,7 @@
         },
         {
             "name": "maxExpiryBlocks",
-            "type": "Function",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [],
@@ -98,7 +93,7 @@
         },
         {
             "name": "cancelFeeBps",
-            "type": "Function",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [],
@@ -111,7 +106,7 @@
         },
         {
             "name": "calculateCollateral",
-            "type": "Function",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [
@@ -130,8 +125,34 @@
             ],
             "outputs": [
                 {
-                    "name": "amount",
+                    "name": "collateral",
                     "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "getUnderlyingDecimals",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "decimals",
+                    "type": "UINT8"
+                }
+            ]
+        },
+        {
+            "name": "getPremiumDecimals",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "decimals",
+                    "type": "UINT8"
                 }
             ]
         },

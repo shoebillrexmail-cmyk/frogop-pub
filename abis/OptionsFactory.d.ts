@@ -4,6 +4,9 @@ import { CallResult, OPNetEvent, IOP_NETContract } from 'opnet';
 // ------------------------------------------------------------------
 // Event Definitions
 // ------------------------------------------------------------------
+export type PoolCreatedEvent = {
+    readonly data: string;
+};
 
 // ------------------------------------------------------------------
 // Call Results
@@ -30,11 +33,41 @@ export type GetPoolTemplate = CallResult<
 >;
 
 /**
- * @description Represents the result of the poolCount function call.
+ * @description Represents the result of the setPoolTemplate function call.
  */
-export type PoolCount = CallResult<
+export type SetPoolTemplate = CallResult<
+    {
+        success: boolean;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
+ * @description Represents the result of the getPoolCount function call.
+ */
+export type GetPoolCount = CallResult<
     {
         count: bigint;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
+ * @description Represents the result of the createPool function call.
+ */
+export type CreatePool = CallResult<
+    {
+        poolAddress: Address;
+    },
+    OPNetEvent<PoolCreatedEvent>[]
+>;
+
+/**
+ * @description Represents the result of the getPool function call.
+ */
+export type GetPool = CallResult<
+    {
+        poolAddress: Address;
     },
     OPNetEvent<never>[]
 >;
@@ -45,5 +78,13 @@ export type PoolCount = CallResult<
 export interface IOptionsFactory extends IOP_NETContract {
     getOwner(): Promise<GetOwner>;
     getPoolTemplate(): Promise<GetPoolTemplate>;
-    poolCount(): Promise<PoolCount>;
+    setPoolTemplate(template: Address): Promise<SetPoolTemplate>;
+    getPoolCount(): Promise<GetPoolCount>;
+    createPool(
+        underlying: Address,
+        premiumToken: Address,
+        underlyingDecimals: number,
+        premiumDecimals: number,
+    ): Promise<CreatePool>;
+    getPool(underlying: Address, premiumToken: Address): Promise<GetPool>;
 }

@@ -251,22 +251,30 @@ After completing work:
 | Epic 1 | Smart Contracts | ✅ Done |
 | Epic 2 | Security | ✅ Done |
 | Epic 3 | Testing | 🔄 Partial |
-| **Epic 6** | **Gas Optimization** | **🔴 BLOCKING** |
-| Epic 4 | Frontend MVP | ⏸️ Blocked by Epic 6 |
-| Epic 5 | Deployment | - |
+| **Epic 6** | **Gas Optimization** | **✅ Done** |
+| **Epic 5** | **Integration Testing** | **🔴 BLOCKING - MUST COMPLETE** |
+| Epic 4 | Frontend MVP | ⏸️ Blocked by Epic 5 |
 
-### CRITICAL: Epic 6 (Gas Optimization)
+### CRITICAL: Epic 5 (Integration Testing)
 
-**Current blocker**: OptionsPool uses excessive gas due to SHA256 operations.
+**Current blocker**: Unit tests cannot test token transfers (Blockchain.call() limitation).
 
-Before any frontend work, complete Epic 6:
-1. Story 6.1: Gas Baseline
-2. Story 6.2: Redesign OptionStorage (most important)
-3. Story 6.3: Use ReentrancyGuard
-4. Story 6.4: Add @method Decorators
-5. Story 6.5: Add Missing Events
+Before frontend work (Epic 4), complete Epic 5:
+1. **Story 5.1**: Regtest Setup - Wallet, mnemonic, .env, test BTC
+2. **Story 5.2**: Deploy Test OP20 Tokens - Custom tokens (FROG-U, FROG-P)
+3. **Story 5.3**: Deploy OptionsFactory - With template configuration
+4. **Story 5.4**: Deploy Pool Template - For pool creation
+5. **Story 5.5**: Create Integration Tests - Full option lifecycle on regtest
+6. **Story 5.6**: Test Token Transfers - writeOption, buyOption, exercise
+7. **Story 5.7**: Gas Validation - Verify gas usage on-chain
 
-See `docs/roadmap/GAS_OPTIMIZATION_REFACTOR.md` for technical details.
+**Why before frontend?**
+- Unit tests cannot test actual token transfers
+- Frontend needs verified contract behavior
+- Must test full option lifecycle with real OP20 tokens
+- Regtest deployment required before frontend development
+
+**See**: `docs/tests/INTEGRATION_TEST_TECHNICAL.md` for technical details.
 
 ---
 

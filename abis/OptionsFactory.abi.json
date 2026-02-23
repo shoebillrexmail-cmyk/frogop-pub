@@ -2,7 +2,7 @@
     "functions": [
         {
             "name": "getOwner",
-            "type": "Function",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [],
@@ -15,7 +15,7 @@
         },
         {
             "name": "getPoolTemplate",
-            "type": "Function",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [],
@@ -27,8 +27,26 @@
             ]
         },
         {
-            "name": "poolCount",
+            "name": "setPoolTemplate",
             "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "template",
+                    "type": "ADDRESS"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "getPoolCount",
+            "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [],
@@ -38,7 +56,70 @@
                     "type": "UINT256"
                 }
             ]
+        },
+        {
+            "name": "createPool",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "underlying",
+                    "type": "ADDRESS"
+                },
+                {
+                    "name": "premiumToken",
+                    "type": "ADDRESS"
+                },
+                {
+                    "name": "underlyingDecimals",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "premiumDecimals",
+                    "type": "UINT8"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "poolAddress",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "getPool",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "underlying",
+                    "type": "ADDRESS"
+                },
+                {
+                    "name": "premiumToken",
+                    "type": "ADDRESS"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "poolAddress",
+                    "type": "ADDRESS"
+                }
+            ]
         }
     ],
-    "events": []
+    "events": [
+        {
+            "name": "PoolCreated",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        }
+    ]
 }
