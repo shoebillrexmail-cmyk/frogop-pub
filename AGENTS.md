@@ -274,10 +274,10 @@ See `docs/roadmap/GAS_OPTIMIZATION_REFACTOR.md` for technical details.
 
 ### Must Read
 
-1. **[docs/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md](docs/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md)** - OPNet complexity and gas optimization
-2. **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
-3. **[docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md)** - Security considerations
-4. **[docs/roadmap/IMPLEMENTATION_PLAN.md](docs/roadmap/IMPLEMENTATION_PLAN.md)** - Full implementation plan
+1. **[docs/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md](docs/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md)** - Optimization lessons learned (READ THIS FIRST)
+2. **[docs/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md](docs/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md)** - OPNet complexity and gas optimization
+3. **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
+4. **[docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md)** - Security considerations
 5. **[docs/roadmap/SPRINT_BOARD.md](docs/roadmap/SPRINT_BOARD.md)** - Current sprint status
 
 ### Reference

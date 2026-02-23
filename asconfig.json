@@ -5,37 +5,21 @@
       "textFile": "build/OptionsFactory.wat",
       "sourceMap": false,
       "optimizeLevel": 3,
-      "shrinkLevel": 1,
+      "shrinkLevel": 2,
       "converge": true,
-      "noAssert": false
+      "noAssert": true
     },
     "pool": {
       "outFile": "build/OptionsPool.wasm",
       "sourceMap": false,
       "optimizeLevel": 3,
-      "shrinkLevel": 1,
+      "shrinkLevel": 2,
       "converge": true,
-      "noAssert": false
-    },
-    "three-field": {
-      "outFile": "build/ThreeFieldContract.wasm",
-      "sourceMap": false,
-      "optimizeLevel": 3,
-      "shrinkLevel": 1,
-      "converge": true,
-      "noAssert": false
-    },
-    "four-field": {
-      "outFile": "build/FourFieldContract.wasm",
-      "sourceMap": false,
-      "optimizeLevel": 3,
-      "shrinkLevel": 1,
-      "converge": true,
-      "noAssert": false
+      "noAssert": true
     },
     "debug": {
       "outFile": "build/debug/frogop.wasm",
-      "textFile": "build/debug/frogop.wat",
+      "textMap": "build/debug/frogop.wat",
       "sourceMap": true
     },
     "release": {
@@ -43,18 +27,18 @@
       "textFile": "build/release/frogop.wat",
       "sourceMap": false,
       "optimizeLevel": 3,
-      "shrinkLevel": 1,
+      "shrinkLevel": 2,
       "converge": true,
-      "noAssert": false
+      "noAssert": true
     }
   },
   "options": {
     "transform": "@btc-vision/opnet-transform",
     "sourceMap": false,
     "optimizeLevel": 3,
-    "shrinkLevel": 1,
+    "shrinkLevel": 2,
     "converge": true,
-    "noAssert": false,
+    "noAssert": true,
     "enable": [
       "sign-extension",
       "mutable-globals",

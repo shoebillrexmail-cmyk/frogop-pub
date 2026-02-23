@@ -189,22 +189,30 @@ See [docs/tests/UNIT_TESTS_STATUS.md](docs/tests/UNIT_TESTS_STATUS.md) for detai
 
 - **[docs/tests/REGTEST_TEST_PLAN.md](docs/tests/REGTEST_TEST_PLAN.md)** - Regtest testing plan
 - **[docs/roadmap/PHASE_1_TECHNICAL_SPEC.md](docs/roadmap/PHASE_1_TECHNICAL_SPEC.md)** - Technical specifications
+- **[docs/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md](docs/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md)** - Optimization lessons learned
 
 ## Gas Optimization
 
-The contracts use a hybrid storage pattern to avoid WASM start function gas limits:
+The contracts are optimized for gas efficiency. Key patterns include:
+
+- **Hybrid storage**: Critical fields in constructor, others lazy-loaded
+- **WASM optimization**: `shrinkLevel: 2` and `noAssert: true` in asconfig.json
+- **SHA256 storage keys**: Unlimited option capacity without pointer overflow
 
 ```typescript
-// Critical fields (initialized in constructor - max 3)
-private _owner: StoredAddress;
-private _poolTemplate: StoredAddress;
-private _pools: MapOfMap<u256>;
-
-// Optional fields (lazy-loaded on first access)
-private _poolCount: StoredU256 | null = null;
+// asconfig.json - Critical for passing unit tests
+{
+  "shrinkLevel": 2,    // Aggressive binary reduction
+  "noAssert": true     // Strip runtime assertions
+}
 ```
 
-See contract source code for detailed inline documentation.
+See **[docs/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md](docs/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md)** for detailed optimization guide including:
+- WASM binary optimization
+- Constructor patterns
+- Storage design
+- Test runtime setup
+- Common pitfalls
 
 ## Technology Stack
 

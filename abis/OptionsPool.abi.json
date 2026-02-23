@@ -1,0 +1,297 @@
+{
+    "functions": [
+        {
+            "name": "getUnderlying",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "token",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "getPremiumToken",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "token",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "getOption",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "option",
+                    "type": "TUPLE"
+                }
+            ]
+        },
+        {
+            "name": "optionCount",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "count",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "accumulatedFees",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "fees",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "gracePeriodBlocks",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "blocks",
+                    "type": "UINT64"
+                }
+            ]
+        },
+        {
+            "name": "maxExpiryBlocks",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "blocks",
+                    "type": "UINT64"
+                }
+            ]
+        },
+        {
+            "name": "cancelFeeBps",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "bps",
+                    "type": "UINT64"
+                }
+            ]
+        },
+        {
+            "name": "calculateCollateral",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionType",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "strikePrice",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "underlyingAmount",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "amount",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "writeOption",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionType",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "strikePrice",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "expiryBlock",
+                    "type": "UINT64"
+                },
+                {
+                    "name": "underlyingAmount",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "premium",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "cancelOption",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "buyOption",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "exercise",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "settle",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        }
+    ],
+    "events": [
+        {
+            "name": "OptionWritten",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionCancelled",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionPurchased",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionExercised",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionExpired",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        }
+    ]
+}

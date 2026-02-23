@@ -58,6 +58,7 @@ import {
     EMPTY_BUFFER,
     NetEvent,
 } from '@btc-vision/btc-runtime/runtime';
+import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
 // =============================================================================
 // CONSTANTS
 // =============================================================================
@@ -117,7 +118,6 @@ const ACCUMULATED_FEES_POINTER: u16 = 101;
  *   [base + id*7 + 6] = optionType | status (packed u8|u8)
  */
 const OPTIONS_BASE_POINTER: u16 = 200;
-const SLOTS_PER_OPTION: u8 = 7;
 
 const LOCKED_POINTER: u16 = 300;
 
@@ -180,8 +180,8 @@ class Option {
 /**
  * Optimized Option Storage
  * 
- * Uses direct pointer arithmetic for O(1) access without SHA256 overhead.
- * Gas savings: ~90% reduction in option read/write operations.
+ * Uses SHA256-based storage keys for UNLIMITED options.
+ * Storage pattern: StorageKey = SHA256(basePointer || optionId || slot)
  * 
  * Storage Layout (7 slots per option):
  *   0: writer (Address)
@@ -199,53 +199,52 @@ class OptionStorage {
         this.basePointer = pointer;
     }
     
-    private getSlotPointer(optionId: u256, slot: u8): Uint8Array {
-        const idU64 = optionId.toU64();
-        const ptr = this.basePointer + u16(idU64 * u64(SLOTS_PER_OPTION)) + u16(slot);
-        const key = new Uint8Array(32);
-        key[30] = u8((ptr >> 8) & 0xFF);
-        key[31] = u8(ptr & 0xFF);
-        return key;
+    private getKey(optionId: u256, slot: u8): Uint8Array {
+        const writer = new BytesWriter(35);
+        writer.writeU16(this.basePointer);
+        writer.writeU256(optionId);
+        writer.writeU8(slot);
+        return sha256(writer.getBuffer());
     }
     
     setWriter(optionId: u256, writer: Address): void {
-        Blockchain.setStorageAt(this.getSlotPointer(optionId, 0), writer);
+        Blockchain.setStorageAt(this.getKey(optionId, 0), writer);
     }
     
     getWriter(optionId: u256): Address {
-        return Address.fromUint8Array(Blockchain.getStorageAt(this.getSlotPointer(optionId, 0)));
+        return Address.fromUint8Array(Blockchain.getStorageAt(this.getKey(optionId, 0)));
     }
     
     setBuyer(optionId: u256, buyer: Address): void {
-        Blockchain.setStorageAt(this.getSlotPointer(optionId, 1), buyer);
+        Blockchain.setStorageAt(this.getKey(optionId, 1), buyer);
     }
     
     getBuyer(optionId: u256): Address {
-        return Address.fromUint8Array(Blockchain.getStorageAt(this.getSlotPointer(optionId, 1)));
+        return Address.fromUint8Array(Blockchain.getStorageAt(this.getKey(optionId, 1)));
     }
     
     setStrikePrice(optionId: u256, price: u256): void {
-        Blockchain.setStorageAt(this.getSlotPointer(optionId, 2), price.toUint8Array(true));
+        Blockchain.setStorageAt(this.getKey(optionId, 2), price.toUint8Array(true));
     }
     
     getStrikePrice(optionId: u256): u256 {
-        return u256.fromUint8ArrayBE(Blockchain.getStorageAt(this.getSlotPointer(optionId, 2)));
+        return u256.fromUint8ArrayBE(Blockchain.getStorageAt(this.getKey(optionId, 2)));
     }
     
     setUnderlyingAmount(optionId: u256, amount: u256): void {
-        Blockchain.setStorageAt(this.getSlotPointer(optionId, 3), amount.toUint8Array(true));
+        Blockchain.setStorageAt(this.getKey(optionId, 3), amount.toUint8Array(true));
     }
     
     getUnderlyingAmount(optionId: u256): u256 {
-        return u256.fromUint8ArrayBE(Blockchain.getStorageAt(this.getSlotPointer(optionId, 3)));
+        return u256.fromUint8ArrayBE(Blockchain.getStorageAt(this.getKey(optionId, 3)));
     }
     
     setPremium(optionId: u256, premium: u256): void {
-        Blockchain.setStorageAt(this.getSlotPointer(optionId, 4), premium.toUint8Array(true));
+        Blockchain.setStorageAt(this.getKey(optionId, 4), premium.toUint8Array(true));
     }
     
     getPremium(optionId: u256): u256 {
-        return u256.fromUint8ArrayBE(Blockchain.getStorageAt(this.getSlotPointer(optionId, 4)));
+        return u256.fromUint8ArrayBE(Blockchain.getStorageAt(this.getKey(optionId, 4)));
     }
     
     private packBlocks(expiryBlock: u64, createdBlock: u64): Uint8Array {
@@ -258,11 +257,11 @@ class OptionStorage {
     }
     
     setExpiryAndCreatedBlock(optionId: u256, expiryBlock: u64, createdBlock: u64): void {
-        Blockchain.setStorageAt(this.getSlotPointer(optionId, 5), this.packBlocks(expiryBlock, createdBlock));
+        Blockchain.setStorageAt(this.getKey(optionId, 5), this.packBlocks(expiryBlock, createdBlock));
     }
     
     getExpiryBlock(optionId: u256): u64 {
-        const data = Blockchain.getStorageAt(this.getSlotPointer(optionId, 5));
+        const data = Blockchain.getStorageAt(this.getKey(optionId, 5));
         let result: u64 = 0;
         for (let i = 0; i < 8; i++) {
             result = (result << 8) | u64(data[16 + i]);
@@ -271,7 +270,7 @@ class OptionStorage {
     }
     
     getCreatedBlock(optionId: u256): u64 {
-        const data = Blockchain.getStorageAt(this.getSlotPointer(optionId, 5));
+        const data = Blockchain.getStorageAt(this.getKey(optionId, 5));
         let result: u64 = 0;
         for (let i = 0; i < 8; i++) {
             result = (result << 8) | u64(data[24 + i]);
@@ -281,12 +280,12 @@ class OptionStorage {
     
     setExpiryBlock(optionId: u256, blockNum: u64): void {
         const createdBlock = this.getCreatedBlock(optionId);
-        Blockchain.setStorageAt(this.getSlotPointer(optionId, 5), this.packBlocks(blockNum, createdBlock));
+        Blockchain.setStorageAt(this.getKey(optionId, 5), this.packBlocks(blockNum, createdBlock));
     }
     
     setCreatedBlock(optionId: u256, blockNum: u64): void {
         const expiryBlock = this.getExpiryBlock(optionId);
-        Blockchain.setStorageAt(this.getSlotPointer(optionId, 5), this.packBlocks(expiryBlock, blockNum));
+        Blockchain.setStorageAt(this.getKey(optionId, 5), this.packBlocks(expiryBlock, blockNum));
     }
     
     private packTypeAndStatus(optionType: u8, status: u8): Uint8Array {
@@ -298,24 +297,24 @@ class OptionStorage {
     
     setOptionType(optionId: u256, optionType: u8): void {
         const status = this.getStatus(optionId);
-        Blockchain.setStorageAt(this.getSlotPointer(optionId, 6), this.packTypeAndStatus(optionType, status));
+        Blockchain.setStorageAt(this.getKey(optionId, 6), this.packTypeAndStatus(optionType, status));
     }
     
     getOptionType(optionId: u256): u8 {
-        return Blockchain.getStorageAt(this.getSlotPointer(optionId, 6))[30];
+        return Blockchain.getStorageAt(this.getKey(optionId, 6))[30];
     }
     
     setStatus(optionId: u256, status: u8): void {
         const optionType = this.getOptionType(optionId);
-        Blockchain.setStorageAt(this.getSlotPointer(optionId, 6), this.packTypeAndStatus(optionType, status));
+        Blockchain.setStorageAt(this.getKey(optionId, 6), this.packTypeAndStatus(optionType, status));
     }
     
     getStatus(optionId: u256): u8 {
-        return Blockchain.getStorageAt(this.getSlotPointer(optionId, 6))[31];
+        return Blockchain.getStorageAt(this.getKey(optionId, 6))[31];
     }
     
     exists(optionId: u256): boolean {
-        return Blockchain.hasStorageAt(this.getSlotPointer(optionId, 0));
+        return Blockchain.hasStorageAt(this.getKey(optionId, 0));
     }
     
     get(optionId: u256): Option {
@@ -340,7 +339,7 @@ class OptionStorage {
         this.setUnderlyingAmount(optionId, option.underlyingAmount);
         this.setPremium(optionId, option.premium);
         this.setExpiryAndCreatedBlock(optionId, option.expiryBlock, option.createdBlock);
-        Blockchain.setStorageAt(this.getSlotPointer(optionId, 6), this.packTypeAndStatus(option.optionType, option.status));
+        Blockchain.setStorageAt(this.getKey(optionId, 6), this.packTypeAndStatus(option.optionType, option.status));
     }
 }
 

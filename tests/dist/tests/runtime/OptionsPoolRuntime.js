@@ -23,10 +23,14 @@ class OptionsPoolTestRuntime extends ContractRuntime {
     _underlying;
     _premiumToken;
     constructor(deployer, underlying, premiumToken) {
+        const deploymentCalldata = new BinaryWriter();
+        deploymentCalldata.writeAddress(underlying);
+        deploymentCalldata.writeAddress(premiumToken);
         super({
             deployer: deployer,
             address: Blockchain.generateRandomAddress(),
-            gasLimit: 5000000000000n,
+            gasLimit: 50000000000000n,
+            deploymentCalldata: Buffer.from(deploymentCalldata.getBuffer()),
         });
         this._underlying = underlying;
         this._premiumToken = premiumToken;

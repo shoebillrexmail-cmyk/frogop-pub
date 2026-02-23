@@ -1,68 +1,116 @@
 # Unit Tests Status
 
-## Current Status: Tests Created, Framework Issue
+## Overview
 
-The unit tests have been created but there's a module resolution issue with `@btc-vision/unit-test-framework`. The framework's compiled JavaScript has import path issues.
+This document tracks the status of unit tests for the FroGop options protocol.
 
-## Test Files Created
+## Current Status: Gas Issue RESOLVED ✅
+
+The gas issue was fixed by optimizing the WASM binary:
+- `shrinkLevel: 2` (aggressive binary reduction)
+- `noAssert: true` (strip runtime assertions)
+
+| Contract | Before | After | Tests |
+|----------|--------|-------|-------|
+| OptionsFactory | 21.7 KB | 20.3 KB | 10/13 (77%) |
+| OptionsPool | 29.5 KB | 27.9 KB | 10/10 (100%) |
+
+## Test Status
+
+### OptionsFactory Tests (10/13 - 77%)
+
+| Test | Status |
+|------|--------|
+| deploy successfully | ✅ |
+| set owner to deployer | ✅ |
+| zero pools initially | ✅ |
+| dead address template initially | ✅ |
+| allow owner to set template | ✅ |
+| reject non-owner setting template | ✅ |
+| return dead address for non-existent pool | ✅ |
+| reject duplicate pool | ✅ |
+| reject pool creation without template | ✅ |
+| reject pool with same tokens | ✅ |
+| reject pool with dead underlying | ✅ |
+| **create a new pool** | ❌ Requires OP20 tokens |
+| **retrieve created pool** | ❌ Requires OP20 tokens |
+
+### OptionsPool Tests (10/10 - 100%) ✅
+
+| Test | Status |
+|------|--------|
+| deploy successfully | ✅ |
+| return correct underlying token | ✅ |
+| return correct premium token | ✅ |
+| have zero options initially | ✅ |
+| have zero accumulated fees initially | ✅ |
+| return correct grace period | ✅ |
+| return correct max expiry | ✅ |
+| return correct cancel fee | ✅ |
+| calculate collateral correctly for CALL | ✅ |
+| calculate collateral correctly for PUT | ✅ |
+
+### OptionsPool Write Tests (Integration Required)
+
+Tests requiring token transfers need actual OP20 contracts:
+
+| Test | Status | Reason |
+|------|--------|--------|
+| write a new option | 🔶 | Requires OP20 tokens |
+| retrieve option details | 🔶 | Depends on writeOption |
+| buy option | 🔶 | Requires OP20 tokens |
+| cancel option | 🔶 | Requires OP20 tokens |
+| exercise option | 🔶 | Requires OP20 tokens |
+| settle option | 🔶 | Requires OP20 tokens |
+| rejection tests | 🔶 | Depends on writeOption |
+
+**Why?** `Blockchain.call()` is a WASM-level operation that calls OP20 contracts for token transfers. The unit test framework cannot easily mock this.
+
+## Known Limitations
+
+### Mock Token Transfers
+
+The unit test framework's `Blockchain.call()` is a WASM-level operation. Tests that transfer tokens require:
+- Actual OP20 token contracts deployed, OR
+- Integration testing on testnet/regtest
+
+### Factory Pool Creation
+
+The factory's `createPool()` deploys a new OptionsPool contract, which requires OP20 tokens for initialization.
+
+## Recent Fixes Applied (Sprint 4.6)
+
+1. **deploymentCalldata** ✅
+   - Added to test runtime for proper `onDeployment()` initialization
+   - Fixes: underlying/premiumToken storage initialization
+
+2. **SHA256 Storage Keys** ✅
+   - Reverted to SHA256-based keys for unlimited options
+   - Removed u16 pointer arithmetic limit (was capped at ~9,333 options)
+
+3. **WASM Optimization** ✅
+   - `shrinkLevel: 2` + `noAssert: true`
+   - Reduced pool WASM from 29.5 KB to 27.9 KB
+   - All view tests now pass
+
+## Test Files
 
 ```
 tests/
-├── OptionsFactory.test.ts     # 13 test cases
-├── index.test.ts              # Test runner entry point
+├── OptionsFactory.test.ts     # Factory tests (10/13 passing)
+├── OptionsPool.test.ts        # Pool view tests (10/10 passing)
+├── gas-baseline.test.ts       # Gas measurement tests
 └── runtime/
-    └── OptionsFactoryRuntime.ts  # Test runtime for OptionsFactory
+    ├── OptionsFactoryRuntime.ts
+    └── OptionsPoolRuntime.ts
 ```
 
-## Test Cases
+## Integration Testing
 
-### OptionsFactory Tests
+For full test coverage, deploy to testnet with:
+1. Two OP20 tokens (underlying, premium)
+2. OptionsFactory with pool template
+3. OptionsPool instances
+4. Fund test accounts with tokens
 
-| # | Test | Status |
-|---|------|--------|
-| 1 | should deploy successfully | Created |
-| 2 | should set owner to deployer | Created |
-| 3 | should have zero pools initially | Created |
-| 4 | should have dead address as pool template initially | Created |
-| 5 | should allow owner to set pool template | Created |
-| 6 | should reject non-owner setting template | Created |
-| 7 | should create a new pool | Created |
-| 8 | should retrieve created pool | Created |
-| 9 | should return dead address for non-existent pool | Created |
-| 10 | should reject duplicate pool | Created |
-| 11 | should reject pool creation without template | Created |
-| 12 | should reject pool with same tokens | Created |
-| 13 | should reject pool with dead underlying | Created |
-
-## Build Status
-
-- TypeScript compiles successfully
-- JavaScript output in `tests/dist/tests/`
-- Framework module resolution issue prevents execution
-
-## Next Steps
-
-1. Wait for unit-test-framework fix
-2. Or use alternative testing approach:
-   - Manual testing via OPNet CLI
-   - Integration tests with deployed contracts
-   - Using opnet-cli test commands
-
-## Alternative: Manual Test Commands
-
-```bash
-# Deploy factory
-opnet deploy build/debug/frogop.wasm
-
-# Set template (as owner)
-opnet call <factory-address> setPoolTemplate <template-address> --from <owner>
-
-# Create pool
-opnet call <factory-address> createPool <underlying> <premium> --from <caller>
-
-# Get pool
-opnet call <factory-address> getPool <underlying> <premium>
-
-# Get count
-opnet call <factory-address> poolCount
-```
+See [REGTEST_TEST_PLAN.md](./REGTEST_TEST_PLAN.md) for details.

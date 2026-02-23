@@ -1,0 +1,44 @@
+{
+    "functions": [
+        {
+            "name": "getOwner",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "owner",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "getPoolTemplate",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "template",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "poolCount",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "count",
+                    "type": "UINT256"
+                }
+            ]
+        }
+    ],
+    "events": []
+}
