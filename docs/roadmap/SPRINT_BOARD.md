@@ -412,20 +412,47 @@ For full test coverage of token transfers:
 
 ---
 
-## Sprint 5: Integration Testing & Deployment (BLOCKING) 🔴
+## Sprint 5: Integration Testing & Deployment (BLOCKING) 🔄
 
 **PREREQUISITE: Complete before Sprint 6 (Frontend)**
+
+**Status**: Scripts ready, requires wallet with rBTC to run
 
 ### To Do
 | # | Story | Tasks | Est. | Status |
 |---|-------|-------|------|--------|
-| 5.1 | Regtest Setup | Wallet, mnemonic, .env, test BTC | 2h | - |
-| 5.2 | Deploy Test OP20 Tokens | Custom tokens (FROG-U, FROG-P) | 2h | - |
-| 5.3 | Deploy OptionsFactory | With template configuration | 1h | - |
-| 5.4 | Deploy Pool Template | For pool creation | 1h | - |
-| 5.5 | Create Integration Tests | Full option lifecycle on regtest | 8h | - |
+| 5.1 | Regtest Setup | Wallet, mnemonic, .env, test BTC | 2h | ✅ Scripts ready |
+| 5.2 | Deploy Test OP20 Tokens | Custom tokens (FROG-U, FROG-P) | 2h | ✅ Scripts ready |
+| 5.3 | Deploy OptionsFactory | With template configuration | 1h | ✅ Scripts ready |
+| 5.4 | Deploy Pool Template | For pool creation | 1h | ✅ Scripts ready |
+| 5.5 | Create Integration Tests | Full option lifecycle on regtest | 8h | ✅ Scripts ready |
 | 5.6 | Test Token Transfers | writeOption, buyOption, exercise | 4h | - |
 | 5.7 | Gas Validation | Verify gas usage on-chain | 2h | - |
+
+### Files Created
+- `tests/integration/config.ts` - Configuration and wallet setup
+- `tests/integration/deployment.ts` - Deployment helper class
+- `tests/integration/01-deploy-tokens.ts` - Deploy FROG-U and FROG-P tokens
+- `tests/integration/02-deploy-factory.ts` - Deploy Factory and Pool template
+- `tests/integration/03-option-lifecycle.ts` - Integration tests
+- `tests/integration/run-integration-tests.ts` - Full test runner
+- `.env.example` - Environment template
+- `.gitignore` - Exclude .env from git
+
+### How to Run
+```bash
+# 1. Copy and configure .env
+cp .env.example .env
+# Edit .env with your mnemonic
+
+# 2. Run all integration tests
+npm run test:integration
+
+# Or run individual scripts:
+npm run test:integration:deploy      # Deploy tokens
+npm run test:integration:factory     # Deploy factory
+npm run test:integration:lifecycle   # Run tests
+```
 
 ### Acceptance Criteria
 - [ ] Integration tests pass on regtest
@@ -437,16 +464,61 @@ For full test coverage of token transfers:
 
 ---
 
-## Sprint 6: Frontend MVP (Week 5)
+## Sprint 6: Frontend MVP (Week 5) - PLANNING COMPLETE
+
+**Implementation Plan**: See `docs/frontend/FRONTEND_IMPLEMENTATION_PLAN.md`
+
+### Project Structure
+```
+frogop/
+├── contracts/          # Current smart contracts
+├── frontend/           # NEW - Separate frontend application
+└── docs/               # Shared documentation
+```
 
 ### To Do
-| # | Story | Tasks | Est. |
-|---|-------|-------|------|
-| 6.1 | Frontend Setup | Vite, React, opwallet, opnet | 6h |
-| 6.2 | Pool Discovery | Pool list, create button | 6h |
-| 6.3 | Option Browse | Option list, filters, details | 9h |
-| 6.4 | Write Flow | Form, validation, approval, submit | 14h |
-| 6.5 | Buy Flow | Modal, approval, purchase | 8h |
+| # | Story | Tasks | Est. | Phase |
+|---|-------|-------|------|-------|
+| 6.1 | Project Setup | Vite, React, TypeScript, Tailwind | 8h | A |
+| 6.2 | Wallet Connection | OPWallet, Unisat integration | 4h | A |
+| 6.3 | Landing Page | Hero, What is FroGop, Roadmap | 8h | B |
+| 6.4 | Pool Discovery | Pool list, create button, filters | 8h | B |
+| 6.5 | Pool Detail | Options list, filters, write button | 6h | B |
+| 6.6 | Write Option | Form, validation, approval, submit | 12h | C |
+| 6.7 | Buy Option | Modal, approval, purchase | 6h | C |
+| 6.8 | Portfolio | Written/purchased tabs, actions | 10h | C |
+| 6.9 | Exercise/Cancel | Exercise, cancel, settle modals | 8h | C |
+| 6.10 | Polish | Loading, errors, mobile | 8h | D |
+| 6.11 | Testing | Component, integration tests | 8h | E |
+
+### Total Estimate: ~86 hours (11 days)
+
+### Technology Stack
+- **Framework**: React 18 + TypeScript
+- **Build**: Vite
+- **Styling**: Tailwind CSS
+- **State**: Zustand
+- **Wallet**: @btc-vision/opwallet
+- **Contracts**: opnet + @btc-vision/transaction
+
+### Key Features
+- Pool browser with creation
+- Option writing (CALL/PUT)
+- Option buying
+- Portfolio management
+- Exercise/Settle flows
+- Mobile responsive
+
+### Documentation Created
+- `docs/frontend/FRONTEND_IMPLEMENTATION_PLAN.md` - Full implementation guide
+
+### Project Phases Reference
+
+| Phase | Description | Status | Document |
+|-------|-------------|--------|----------|
+| **Phase 1** | MVP - Core Options (OP20 tokens only) | 🔄 In Progress | [PHASE_1_MVP.md](./PHASE_1_MVP.md) |
+| **Phase 2** | NativeSwap Integration (BTC premiums) | 📋 Planned | [PHASE_2_NATIVE.md](./PHASE_2_NATIVE.md) |
+| **Phase 3** | AMM Liquidity Pools | 📋 Future | [PHASE_3_AMM.md](./PHASE_3_AMM.md) |
 
 ---
 

@@ -4,6 +4,31 @@
 
 This document provides technical details for integration testing FroGop on OPNet regtest. It covers wallet setup, contract deployment, and integration test execution.
 
+## Quick Start
+
+```bash
+# 1. Copy environment template
+cp .env.example .env
+
+# 2. Edit .env with your mnemonic
+# OPNET_MNEMONIC="your 24 word seed phrase"
+# OPNET_NETWORK="regtest"
+
+# 3. Run integration tests
+npm run test:integration
+```
+
+## Files Created
+
+| File | Purpose |
+|------|---------|
+| `tests/integration/config.ts` | Configuration, wallet setup, logging |
+| `tests/integration/deployment.ts` | Deployment helper class |
+| `tests/integration/01-deploy-tokens.ts` | Deploy FROG-U and FROG-P |
+| `tests/integration/02-deploy-factory.ts` | Deploy Factory and Pool template |
+| `tests/integration/03-option-lifecycle.ts` | Integration tests |
+| `tests/integration/run-integration-tests.ts` | Test runner |
+
 ## Prerequisites
 
 ### 1. Wallet Setup
