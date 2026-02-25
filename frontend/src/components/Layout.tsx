@@ -68,12 +68,12 @@ export function Layout() {
             {/* Hamburger — mobile only */}
             <button
               onClick={() => setMenuOpen((o) => !o)}
-              className="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-1.5"
+              className="md:hidden flex flex-col justify-center items-center w-9 h-9 gap-1.5 border border-[#444] rounded-lg"
               aria-label="Toggle menu"
             >
-              <span className={`block w-5 h-0.5 bg-terminal-text-secondary transition-transform duration-200 ${menuOpen ? 'translate-y-2 rotate-45' : ''}`} />
-              <span className={`block w-5 h-0.5 bg-terminal-text-secondary transition-opacity duration-200 ${menuOpen ? 'opacity-0' : ''}`} />
-              <span className={`block w-5 h-0.5 bg-terminal-text-secondary transition-transform duration-200 ${menuOpen ? '-translate-y-2 -rotate-45' : ''}`} />
+              <span className={`block w-5 h-0.5 bg-[#e5e5e5] transition-transform duration-200 ${menuOpen ? 'translate-y-2 rotate-45' : ''}`} />
+              <span className={`block w-5 h-0.5 bg-[#e5e5e5] transition-opacity duration-200 ${menuOpen ? 'opacity-0' : ''}`} />
+              <span className={`block w-5 h-0.5 bg-[#e5e5e5] transition-transform duration-200 ${menuOpen ? '-translate-y-2 -rotate-45' : ''}`} />
             </button>
           </div>
         </div>
