@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useWalletStore } from '../stores/walletStore';
 import { formatAddress } from '../config';
@@ -5,6 +6,7 @@ import { formatAddress } from '../config';
 export function Layout() {
   const location = useLocation();
   const { connected, address, connecting, connect, disconnect } = useWalletStore();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const navLinks = [
     { path: '/', label: 'Home' },
@@ -22,6 +24,7 @@ export function Layout() {
             <span className="text-xl font-bold neon-orange font-mono">FroGop</span>
           </Link>
 
+          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-6">
             {navLinks.map((link) => (
               <Link
@@ -38,10 +41,11 @@ export function Layout() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {/* Wallet button */}
             {connected && address ? (
               <div className="flex items-center gap-2">
-                <span className="text-sm text-terminal-text-muted font-mono">
+                <span className="hidden sm:block text-sm text-terminal-text-muted font-mono">
                   {formatAddress(address)}
                 </span>
                 <button
@@ -60,8 +64,39 @@ export function Layout() {
                 {connecting ? 'Connecting...' : 'Connect Wallet'}
               </button>
             )}
+
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setMenuOpen((o) => !o)}
+              className="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-1.5"
+              aria-label="Toggle menu"
+            >
+              <span className={`block w-5 h-0.5 bg-terminal-text-secondary transition-transform duration-200 ${menuOpen ? 'translate-y-2 rotate-45' : ''}`} />
+              <span className={`block w-5 h-0.5 bg-terminal-text-secondary transition-opacity duration-200 ${menuOpen ? 'opacity-0' : ''}`} />
+              <span className={`block w-5 h-0.5 bg-terminal-text-secondary transition-transform duration-200 ${menuOpen ? '-translate-y-2 -rotate-45' : ''}`} />
+            </button>
           </div>
         </div>
+
+        {/* Mobile menu */}
+        {menuOpen && (
+          <nav className="md:hidden border-t border-terminal-border-subtle px-4 py-3 flex flex-col gap-1">
+            {navLinks.map((link) => (
+              <Link
+                key={link.path}
+                to={link.path}
+                onClick={() => setMenuOpen(false)}
+                className={`py-2 text-sm font-medium font-mono transition-colors ${
+                  location.pathname === link.path
+                    ? 'text-accent'
+                    : 'text-[#a0a0a0] hover:text-accent'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        )}
       </header>
 
       <main className="flex-1">
