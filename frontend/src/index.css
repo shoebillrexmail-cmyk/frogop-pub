@@ -1,0 +1,203 @@
+@import "tailwindcss";
+
+:root {
+  --terminal-bg-primary: #080808;
+  --terminal-bg-secondary: #0a0a0a;
+  --terminal-bg-tertiary: #0f0f0f;
+  --terminal-text-primary: #e5e5e5;
+  --terminal-text-secondary: #b0b0b0;
+  --terminal-border: #333;
+  --accent: #F7931A;
+  --accent-hover: #E8830C;
+  --accent-glow: #F7931A30;
+  --call-green: #22c55e;
+  --put-red: #f43f5e;
+}
+
+body {
+  background: #080808;
+  color: #e5e5e5;
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+
+/* Custom utilities */
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.matrix-text {
+  color: #22c55e;
+  font-family: 'JetBrains Mono', monospace;
+  text-shadow: 0 0 5px #22c55e30;
+}
+
+/* Neon glow utilities */
+.neon-orange {
+  color: #F7931A;
+  text-shadow: 0 0 10px #F7931A40, 0 0 30px #F7931A20;
+}
+
+.neon-green {
+  color: #22c55e;
+  text-shadow: 0 0 10px #22c55e40, 0 0 30px #22c55e20;
+}
+
+.neon-red {
+  color: #f43f5e;
+  text-shadow: 0 0 10px #f43f5e40, 0 0 30px #f43f5e20;
+}
+
+/* Animated typing cursor */
+.cursor-blink::after {
+  content: '|';
+  animation: blink 1s infinite;
+  color: #F7931A;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Card hover effects */
+.terminal-card {
+  background: #0f0f0f;
+  border: 1px solid #333;
+  transition: border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.terminal-card:hover {
+  border-color: #444;
+  background: #111;
+  box-shadow: 0 0 20px #F7931A08;
+}
+
+/* Glow card variants */
+.glow-card-green {
+  background: #0f0f0f;
+  border: 1px solid #333;
+  transition: border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.glow-card-green:hover {
+  border-color: #22c55e50;
+  background: #111;
+  box-shadow: 0 0 25px #22c55e10, inset 0 0 25px #22c55e05;
+}
+
+.glow-card-red {
+  background: #0f0f0f;
+  border: 1px solid #333;
+  transition: border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.glow-card-red:hover {
+  border-color: #f43f5e50;
+  background: #111;
+  box-shadow: 0 0 25px #f43f5e10, inset 0 0 25px #f43f5e05;
+}
+
+/* Button styles */
+.btn-primary {
+  background: #F7931A;
+  color: #080808;
+  font-weight: 600;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: #E8830C;
+  box-shadow: 0 0 20px #F7931A25;
+}
+
+.btn-secondary {
+  background: #111;
+  border: 1px solid #333;
+  color: #e5e5e5;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.btn-secondary:hover {
+  border-color: #444;
+  background: #1a1a1a;
+}
+
+/* Status badge styles */
+.status-positive {
+  color: #22c55e;
+  background: #22c55e1a;
+}
+
+.status-negative {
+  color: #f43f5e;
+  background: #f43f5e1a;
+}
+
+.status-warning {
+  color: #F7931A;
+  background: #F7931A1a;
+}
+
+.status-muted {
+  color: #94a3b8;
+  background: #94a3b81a;
+}
+
+/* Input styles */
+.input-terminal {
+  background: #0a0a0a;
+  border: 1px solid #333;
+  color: #e5e5e5;
+}
+
+.input-terminal:focus {
+  border-color: #F7931A;
+  outline: none;
+  box-shadow: 0 0 10px #F7931A15;
+}
+
+/* Link styles — only apply to prose/content links, not nav or buttons */
+a:where(:not([class])) {
+  color: #22d3ee;
+  text-decoration: none;
+}
+
+a:where(:not([class])):hover {
+  color: #60a5fa;
+}
+
+/* Neon divider */
+.neon-divider-green {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #22c55e40, transparent);
+}
+
+.neon-divider-red {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #f43f5e40, transparent);
+}
+
+.neon-divider-orange {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #F7931A40, transparent);
+}

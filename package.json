@@ -19,6 +19,9 @@
     "test:integration:deploy": "npx tsx tests/integration/01-deploy-tokens.ts",
     "test:integration:factory": "npx tsx tests/integration/02-deploy-factory.ts",
     "test:integration:lifecycle": "npx tsx tests/integration/03-option-lifecycle.ts",
+    "test:integration:operations": "npx tsx tests/integration/04-option-operations.ts",
+    "test:integration:pool": "npx tsx tests/integration/05-pool-creation.ts",
+    "test:integration:full": "npx tsx tests/integration/06-full-lifecycle.ts",
     "lint": "eslint src/**/*.ts tests/**/*.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf build tests/dist"

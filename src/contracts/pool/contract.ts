@@ -369,6 +369,9 @@ export class OptionsPool extends ReentrancyGuard {
     public override onDeployment(calldata: Calldata): void {
         super.onDeployment(calldata);
         
+        // Template deployment: allow empty calldata for pool template
+        // When deployed from factory via deployContractFromExisting, calldata will have addresses
+        // For template deployment, calldata will be empty
         const underlying = calldata.readAddress();
         const premiumToken = calldata.readAddress();
         

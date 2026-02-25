@@ -665,6 +665,56 @@ Analysis of contracts against OPNet best practices revealed significant gas inef
 
 ---
 
+### Story 4.8: Frontend Content Completeness & Accuracy
+
+**As a** user
+**I want** the frontend to fully and accurately describe the FroGop protocol
+**So that** I understand how it works, what it costs, and what risks are involved before trading
+
+#### Background
+
+Gap analysis revealed the frontend is incomplete and missing critical user-facing information:
+- No FAQ/Q&A section
+- Fees (1% cancellation) barely mentioned, buried in one sentence
+- No risk disclosure for writers or buyers
+- No concrete P&L examples with numbers
+- No glossary of options terminology
+- Exercise mechanics unclear (when, how, what you need)
+- Grace period / max duration not explained in human terms
+- "What is OPNet?" never explained
+- Security described in developer terms ("ReentrancyGuard") instead of user terms
+- Phase 2/3 roadmap items are bullet points without user context
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 4.8.1 | Expand About page: "What is FroGop?" + "What is OPNet?" sections | 1h | User-friendly language, no developer jargon |
+| 4.8.2 | Expand About page: detailed option lifecycle with P&L examples | 2h | Concrete number examples for CALL and PUT |
+| 4.8.3 | Add dedicated Fees & Costs section | 1h | 1% cancel fee with example, future fees (Phase 3: 0.3% trading, 2-3% premium, 0.1% exercise), gas note |
+| 4.8.4 | Add Safety & Security section in user language | 1h | 100% collateralization, no oracle, block-height expiry, self-custodial — no developer terms |
+| 4.8.5 | Add Key Parameters reference table | 0.5h | Grace period (144 blocks / ~24h), max duration (~1 year), cancel fee (1%), collateral (100%) |
+| 4.8.6 | Add Glossary section | 1h | Define: strike price, premium, collateral, ITM/OTM, expiry, grace period, underlying, writer, buyer, exercise, settlement |
+| 4.8.7 | Add FAQ/Q&A section (14+ questions) | 2h | Covers: max loss, exercise timing, cancellation, fees, wallet, token support, risks |
+| 4.8.8 | Add risk disclosure to About and Landing pages | 0.5h | Buyers: max loss = premium. Writers: assignment risk. Brief but honest |
+| 4.8.9 | Improve Landing page: add "Why FroGop?" section with user benefits | 1h | Value proposition for writers (yield) and buyers (leverage/hedging) |
+| 4.8.10 | Improve Landing page: add concrete example scenario | 1h | "Alice writes a covered call..." walkthrough with numbers |
+| 4.8.11 | Add user context to Phase 2/3 roadmap items | 0.5h | Each bullet explains what it means for the user |
+| 4.8.12 | Translate all block references to human time | 0.5h | Every "144 blocks" also shows "(~24 hours)", every "52,560 blocks" shows "(~1 year)" |
+
+**Definition of Done**:
+- [ ] All protocol facts on frontend match contract source code
+- [ ] Fees section exists and lists all current + planned fees
+- [ ] FAQ covers 14+ user questions
+- [ ] Glossary defines all options terminology
+- [ ] At least 2 concrete P&L examples with numbers
+- [ ] Risk disclosure present on About page
+- [ ] All block-height references include human-readable time equivalent
+- [ ] No developer jargon in user-facing content
+- [ ] OPNet explained for users who don't know what it is
+
+---
+
 ## Epic 5: Integration Testing & Deployment (BLOCKING)
 
 **PREREQUISITE: Complete before Epic 4 (Frontend)**
@@ -702,8 +752,8 @@ Analysis of contracts against OPNet best practices revealed significant gas inef
 
 ### Story 5.2: Frontend Deployment
 
-**As a** developer  
-**I want** the frontend deployed  
+**As a** developer
+**I want** the frontend deployed
 **So that** users can access the protocol
 
 #### Tasks
@@ -720,6 +770,344 @@ Analysis of contracts against OPNet best practices revealed significant gas inef
 - [ ] IPFS deployment works
 - [ ] Contract addresses correct
 - [ ] All features functional
+
+---
+
+### Story 5.3: Docker Dev Container
+
+**As a** developer
+**I want** a reproducible Docker-based development environment
+**So that** any developer can run the frontend locally without installing Node manually
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 5.3.1 | Create `frontend/Dockerfile.dev` (node:22-alpine, Vite dev server, `--host 0.0.0.0`) | 1h | Container starts and serves hot-reload on port 5173 |
+| 5.3.2 | Create `docker-compose.dev.yml` at project root | 1h | `docker compose -f docker-compose.dev.yml up` works |
+| 5.3.3 | Bind-mount source code and isolate node_modules (anonymous volume) | 0.5h | Code changes reflect instantly without rebuild |
+| 5.3.4 | Document dev workflow in README | 0.5h | Developers can onboard without reading source |
+
+**Design**:
+- Source code mounted as volume — hot reload works natively
+- `node_modules` as anonymous volume — container modules don't conflict with host
+- `.env` file loaded from project root via `env_file` in compose
+- Network default: `VITE_OPNET_NETWORK=regtest`
+
+**Definition of Done**:
+- [ ] `docker compose -f docker-compose.dev.yml up` starts Vite dev server
+- [ ] Hot reload works on source file changes
+- [ ] `.env` vars passed through correctly
+- [ ] No node_modules conflict between host and container
+
+---
+
+### Story 5.4: Docker Prod Container (Nginx + Multi-Stage Build)
+
+**As a** DevOps
+**I want** a production-optimized Docker container
+**So that** the frontend is served securely and efficiently via nginx
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 5.4.1 | Create `frontend/Dockerfile.prod` — Stage 1: node:22-alpine builder | 1h | Vite build runs cleanly, outputs `dist/` |
+| 5.4.2 | Stage 2: nginx:1.27-alpine — copy `dist/` from builder | 0.5h | nginx serves static files |
+| 5.4.3 | Create `frontend/nginx/nginx.conf` — SPA routing, gzip, cache headers | 2h | All routes resolve to `index.html`; assets cached immutably |
+| 5.4.4 | Add SSL config in nginx.conf (Cloudflare Origin Cert, TLS 1.2/1.3) | 1h | HTTPS on port 443 with Origin Cert |
+| 5.4.5 | Add security headers (HSTS, CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy) | 1h | Headers present in responses |
+| 5.4.6 | Add Cloudflare real-IP passthrough (`set_real_ip_from` for CF IP ranges) | 0.5h | Logs show visitor IPs, not Cloudflare proxy IPs |
+| 5.4.7 | Create `docker-compose.prod.yml` at project root | 1h | `docker compose -f docker-compose.prod.yml up -d --build` works |
+| 5.4.8 | Mount `./frontend/nginx/ssl/` as read-only volume for certs | 0.5h | Certs never baked into image |
+| 5.4.9 | HTTP (port 80) → HTTPS (port 443) redirect in nginx | 0.5h | All HTTP requests redirect to HTTPS |
+| 5.4.10 | Add `frontend/nginx/ssl/.gitignore` to exclude cert files | 0.5h | `origin.crt` and `origin.key` never committed |
+
+**Design**:
+- Build args: `VITE_OPNET_NETWORK`, `VITE_FACTORY_ADDRESS`, `VITE_POOL_TEMPLATE_ADDRESS` (baked into static bundle at build time — safe, these are public values)
+- Certs mounted at runtime, never in image layer
+- Restart policy: `unless-stopped`
+- Image size target: <30MB (nginx:alpine base)
+
+**Definition of Done**:
+- [ ] Multi-stage build produces nginx image <30MB
+- [ ] Vite build args passed and baked into bundle correctly
+- [ ] SPA routing works (all paths return `index.html`)
+- [ ] HTTPS works with Cloudflare Origin Cert
+- [ ] HTTP redirects to HTTPS
+- [ ] Security headers present (verified with `curl -I`)
+- [ ] Gzip enabled for JS/CSS/HTML
+- [ ] Hashed assets cached with `immutable` header, `index.html` with `no-cache`
+- [ ] Cert files gitignored
+
+---
+
+### Story 5.5: Network & Environment Strategy (Testnet as Production Default)
+
+**As a** product owner
+**I want** production to target OPNet testnet until mainnet launch
+**So that** users can test the real protocol without risking mainnet funds
+
+#### Background
+
+OPNet testnet is a Signet fork with real smart contracts but no financial risk. Production will
+serve testnet until contracts are deployed and verified on mainnet. A clear migration path is
+needed so the switch to mainnet is a single config change with no code changes.
+
+**Key constraint**: `VITE_` env vars are baked into the static JS bundle at Docker build time.
+Changing the network requires a rebuild and redeploy of the container.
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 5.5.1 | Audit `src/config/index.ts` — verify all network-dependent values read from `VITE_` vars | 0.5h | No hardcoded regtest/mainnet addresses in source |
+| 5.5.2 | Add `networks.opnetTestnet` from `@btc-vision/bitcoin` as the default for testnet | 0.5h | Testnet uses correct network constant (NOT `networks.testnet`) |
+| 5.5.3 | Create `.env.testnet` template (committed, no secrets) with testnet contract addresses | 0.5h | Developers can copy and use immediately |
+| 5.5.4 | Create `.env.mainnet` template (committed, no secrets) as placeholder for future mainnet addresses | 0.5h | Mainnet migration is a 1-line env change |
+| 5.5.5 | Update `docker-compose.prod.yml`: default build arg `VITE_OPNET_NETWORK=testnet` | 0.5h | Prod container defaults to testnet |
+| 5.5.6 | Add network indicator in frontend UI (small badge showing current network) | 1h | Users can always see which network they are on; badge hidden on mainnet |
+| 5.5.7 | Document mainnet migration checklist in `docs/deployment/MAINNET_MIGRATION.md` | 1h | Step-by-step: deploy contracts → update env → rebuild → redeploy |
+
+**Network Mapping**:
+| Environment | `VITE_OPNET_NETWORK` | Bitcoin Network Constant |
+|-------------|---------------------|------------------------|
+| Dev (local) | `regtest` | `networks.regtest` |
+| Production (now) | `testnet` | `networks.opnetTestnet` ⚠️ NOT `networks.testnet` |
+| Production (future) | `mainnet` | `networks.bitcoin` |
+
+**Definition of Done**:
+- [ ] Production container defaults to `testnet`
+- [ ] No hardcoded network addresses in source code
+- [ ] `.env.testnet` and `.env.mainnet` templates committed
+- [ ] Network badge visible in UI on testnet (hidden on mainnet)
+- [ ] Mainnet migration doc written
+- [ ] Switching networks requires only env change + rebuild (no code change)
+
+---
+
+### Story 5.6: Hetzner Server Setup & Cloudflare Configuration
+
+**As a** DevOps
+**I want** the server and CDN configured securely
+**So that** only legitimate traffic reaches the origin and the site is protected
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 5.6.1 | Provision Hetzner VPS (Ubuntu 24.04 LTS, minimum CX22: 2vCPU, 4GB RAM) | 0.5h | Server accessible via SSH |
+| 5.6.2 | Harden SSH: disable password auth, key-only login, change default port (optional) | 0.5h | `PasswordAuthentication no` in sshd_config |
+| 5.6.3 | Install Docker + Docker Compose plugin | 0.5h | `docker compose version` works |
+| 5.6.4 | Configure UFW: deny all → allow SSH + 80 + 443 | 0.5h | Only required ports open |
+| 5.6.5 | Restrict ports 80/443 to Cloudflare IP ranges only (script fetches CF IP list) | 1h | Direct access to server IP blocked; only CF proxy can reach nginx |
+| 5.6.6 | Add Cloudflare A record → Hetzner IP, enable proxy (orange cloud) | 0.5h | DNS resolves through Cloudflare |
+| 5.6.7 | Set Cloudflare SSL/TLS mode to **Full (Strict)** | 0.5h | CF validates Origin Cert on server |
+| 5.6.8 | Generate Cloudflare Origin Certificate (15-year) → place in `frontend/nginx/ssl/` on server | 0.5h | nginx starts with cert; HTTPS works end-to-end |
+| 5.6.9 | Enable Cloudflare: Always Use HTTPS, Bot Fight Mode, HSTS in edge | 0.5h | Security features active at Cloudflare edge |
+| 5.6.10 | Add Cloudflare Cache Rule: cache `/assets/*` at edge (Cache Everything) | 0.5h | Static assets served from CF edge, reducing origin load |
+| 5.6.11 | Verify end-to-end: DNS → Cloudflare → nginx → SPA routing | 0.5h | All routes work, HTTPS green, no mixed content |
+| 5.6.12 | Document deployment runbook in `docs/deployment/DEPLOY.md` | 1h | Any developer can deploy from scratch using the doc |
+
+**Security Architecture**:
+```
+Internet → Cloudflare (DDoS, WAF, CDN, SSL termination)
+             ↓ HTTPS (Origin Cert, TLS 1.2/1.3 only)
+           Hetzner VPS (UFW: only CF IPs on 80/443)
+             ↓
+           nginx Docker container (security headers, gzip, SPA routing)
+```
+
+**Definition of Done**:
+- [ ] Server accessible via SSH (key only)
+- [ ] UFW blocks all ports except SSH, 80, 443 (80/443 CF IPs only)
+- [ ] Docker running prod container successfully
+- [ ] Cloudflare proxy active (orange cloud) with Full Strict SSL
+- [ ] Origin Cert installed and valid
+- [ ] Site loads over HTTPS with Cloudflare in the path
+- [ ] Direct server IP access returns connection refused or Cloudflare error
+- [ ] Deployment runbook documented
+
+---
+
+## Epic 8: Contract Hardening (BLOCKING before Frontend Contract Integration)
+
+**Based on critical design review (2026-02-25). Must complete before Sprint 6 stories 6.5-6.9.**
+
+**Rationale**: Design review identified that accumulated fees mix two token types into one counter
+(meaningless), there's no way to withdraw protocol fees (locked forever), and writers are unfairly
+penalized when reclaiming collateral from expired unsold options. These changes modify method
+signatures and add new methods, so they must land before the frontend contract service layer.
+
+### Story 8.1: Split Fee Tracking Per Token
+
+**As a** protocol operator
+**I want** fees tracked separately per token type
+**So that** accumulated fees are meaningful and withdrawable
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 8.1.1 | Add `ACCUMULATED_FEES_PREMIUM_POINTER` after existing pointers | 0.5h | New pointer appended, no existing pointer shift |
+| 8.1.2 | Add lazy-loaded `accumulatedFeesPremium: StoredU256` | 0.5h | Lazy getter pattern consistent with existing fields |
+| 8.1.3 | Rename existing `accumulatedFees` to `accumulatedFeesUnderlying` (same pointer) | 0.5h | Semantics clarified, no storage migration needed |
+| 8.1.4 | Update `cancelOption()`: route fees to correct bucket by option type | 1h | CALL fees → underlying, PUT fees → premium |
+| 8.1.5 | Add view methods: `accumulatedFeesUnderlying()`, `accumulatedFeesPremium()` | 1h | Both return correct per-token amounts |
+| 8.1.6 | Update `execute()` router with new selectors | 0.5h | New selectors reachable |
+| 8.1.7 | Update unit tests | 1h | Tests verify per-token accumulation for CALL and PUT cancels |
+
+**Definition of Done**:
+- [ ] CALL cancellation fees accumulate in `accumulatedFeesUnderlying`
+- [ ] PUT cancellation fees accumulate in `accumulatedFeesPremium`
+- [ ] Both view methods return correct values
+- [ ] Old `accumulatedFees()` selector removed or aliased
+- [ ] Unit tests verify per-token fee accumulation
+
+---
+
+### Story 8.2: Fee Withdrawal Mechanism
+
+**As a** protocol deployer
+**I want** to withdraw accumulated fees to a designated address
+**So that** protocol revenue isn't locked forever in the contract
+
+#### Blocker
+
+> Verify `onlyDeployer()` is accessible from `ReentrancyGuard → OP_NET` inheritance chain.
+> If not available, implement manual deployer check using a `StoredAddress` set in `onDeployment()`
+> (same pattern as Factory's `_owner`).
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 8.2.1 | Add `FEE_RECIPIENT_POINTER`, lazy-loaded `StoredAddress` | 0.5h | Pointer appended after 8.1 pointers |
+| 8.2.2 | Set fee recipient to deployer in `onDeployment()` | 0.5h | Default recipient = deployer |
+| 8.2.3 | Implement `setFeeRecipient(address)` with deployer-only guard | 1h | Only deployer can change recipient |
+| 8.2.4 | Implement `withdrawFees()` with checks-effects-interactions | 2h | Zeros accumulators before transfers |
+| 8.2.5 | Add `FeesWithdrawnEvent` and `FeeRecipientChangedEvent` | 0.5h | Events emitted with amounts/addresses |
+| 8.2.6 | Add view method `feeRecipient()` | 0.5h | Returns current fee recipient address |
+| 8.2.7 | Add selectors to `execute()` router | 0.5h | All new methods routable |
+| 8.2.8 | Unit + integration tests | 2h | Withdrawal tested for both token types |
+
+**Design Notes**:
+- `withdrawFees()`: Only callable by fee recipient (or deployer if recipient not set)
+- Zeros BOTH accumulators BEFORE `_transfer` calls (checks-effects-interactions)
+- Transfers underlying fees then premium fees in two separate `_transfer` calls
+- Emits `FeesWithdrawn(recipient, underlyingAmount, premiumAmount)`
+- Reverts if both accumulators are zero (no-op protection)
+
+**Definition of Done**:
+- [ ] Fee recipient defaults to deployer on deployment
+- [ ] Only deployer can call `setFeeRecipient()`
+- [ ] Only fee recipient can call `withdrawFees()`
+- [ ] Fees zeroed before transfers (reentrancy safe)
+- [ ] Both token types transferred correctly
+- [ ] Events emitted for withdrawal and recipient change
+- [ ] Unauthorized callers revert
+- [ ] Integration test on regtest passes
+
+---
+
+### Story 8.3: Free Reclaim for Expired Unsold Options
+
+**As a** writer
+**I want** to reclaim full collateral from options that expired without being bought
+**So that** I'm not penalized for market conditions beyond my control
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 8.3.1 | Add expiry check in `cancelOption()`: if expired, fee = 0 | 1h | Zero fee when `currentBlock >= expiryBlock` |
+| 8.3.2 | Update cancel event to reflect zero fee when expired | 0.5h | Event fee field = 0 for expired options |
+| 8.3.3 | Unit tests: cancel before expiry (1% fee) and after expiry (0% fee) | 1.5h | Both paths verified |
+| 8.3.4 | Integration test: write option, wait for expiry, reclaim full collateral | 1h | Full collateral returned on regtest |
+
+**Definition of Done**:
+- [ ] Cancel before expiry: 1% fee deducted, fee accumulated
+- [ ] Cancel after expiry: 0% fee, full collateral returned, no fee accumulated
+- [ ] Events correctly reflect fee amount (0 for expired reclaim)
+- [ ] Unit tests cover both paths
+
+---
+
+### Story 8.4: Fix Fee Rounding Direction
+
+**As a** protocol
+**I want** cancellation fees rounded up (ceiling division)
+**So that** the protocol never under-collects on dust amounts
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 8.4.1 | Replace floor division with ceiling division in fee calculation | 0.5h | `ceilDiv(a, b) = (a + b - 1) / b` |
+| 8.4.2 | Update tests to verify rounding direction | 0.5h | Non-divisible amounts round up |
+
+**Definition of Done**:
+- [ ] Fee rounds up on non-divisible amounts
+- [ ] Tests verify rounding with edge case values
+- [ ] Writer receives `collateral - ceilFee` (never more than collateral)
+
+---
+
+### Story 8.5: Protocol Buy Fee (1% of Premium)
+
+**As a** protocol
+**I want** a 1% fee charged on option purchases
+**So that** the protocol generates sustainable revenue from trading volume
+
+#### Background
+
+Research across DeFi options protocols (Deribit, Lyra, Premia, Hegic, Panoptic, Stryke/Dopex)
+shows the competitive fee range is 0.5–3% of premium. The current protocol has no revenue from
+the core trading flow — the 1% cancellation fee only triggers on a rare edge case.
+
+**Benchmarks**:
+- Deribit: ~0.6% effective (0.03% of notional)
+- Lyra: 0.5% of premium
+- Premia: 3% of premium (high end)
+- Hegic: 1% of notional (~1-3% of premium)
+- Opyn: 0% (shut down — unsustainable)
+
+**Decision**: 1% of premium on buy — mid-low range, competitive, simple to implement.
+
+**Fee flow**: Buyer pays `premium + 1% protocolFee`. Writer receives full `premium`. Protocol
+receives `protocolFee` (accumulated in pool, withdrawable via Story 8.2).
+
+#### Tasks
+
+| # | Task | Est. | Acceptance Criteria |
+|---|------|------|---------------------|
+| 8.5.1 | Add `PROTOCOL_FEE_BPS` constant (100 = 1%) | 0.5h | Constant defined alongside CANCEL_FEE_BPS |
+| 8.5.2 | Add `protocolFeeBps()` view method | 0.5h | Returns 100 (1%) |
+| 8.5.3 | Modify `buyOption()`: calculate protocolFee = ceilDiv(premium * PROTOCOL_FEE_BPS, 10000) | 1h | Fee calculated with ceiling division |
+| 8.5.4 | Modify `buyOption()`: transfer `premium` from buyer to writer, `protocolFee` from buyer to contract | 2h | Two transfers; buyer must have approved premium + fee |
+| 8.5.5 | Accumulate buy fees into `accumulatedFeesPremium` (always premium token) | 0.5h | Buy fees always denominated in premium token |
+| 8.5.6 | Add `OptionPurchased` event update: include protocolFee field | 0.5h | Event reflects fee amount |
+| 8.5.7 | Add selector to `execute()` router for `protocolFeeBps()` | 0.5h | View method routable |
+| 8.5.8 | Unit tests: verify buyer pays premium + fee, writer receives full premium | 1.5h | All fee paths tested |
+| 8.5.9 | Integration test: buy option and verify fee accumulation | 1h | Fee shows in accumulatedFeesPremium |
+
+**Design Notes**:
+- Fee is always in premium token (regardless of CALL/PUT) — buy fees are premium-denominated
+- Ceiling division ensures protocol never under-collects on dust
+- Buyer must `approve(poolAddress, premium + protocolFee)` before buying
+- Writer receives exactly the premium they set — no reduction
+- Frontend must display total cost = premium + 1% fee to buyer
+
+**Definition of Done**:
+- [ ] `buyOption()` charges buyer `premium + 1% fee`
+- [ ] Writer receives full premium (unchanged)
+- [ ] Protocol fee accumulated in `accumulatedFeesPremium`
+- [ ] `protocolFeeBps()` view returns 100
+- [ ] Event includes fee amount
+- [ ] Ceiling division used for fee calculation
+- [ ] Unit tests pass for fee paths
+- [ ] Integration test verifies fee accumulation
+- [ ] Frontend fee documentation updated
 
 ---
 
@@ -787,14 +1175,35 @@ See [GAS_OPTIMIZATION_REFACTOR.md](./GAS_OPTIMIZATION_REFACTOR.md) for details.
 | Story | Points | Priority |
 |-------|--------|----------|
 | 5.1 Regtest Setup & Integration Testing | 13 | Must |
-| 5.2 Frontend Deployment | 3 | Should |
+| 5.2 Frontend Deployment (IPFS) | 3 | Should |
+| 5.3 Docker Dev Container | 3 | Must |
+| 5.4 Docker Prod Container (nginx) | 8 | Must |
+| 5.5 Network & Environment Strategy (testnet default) | 5 | Must |
+| 5.6 Hetzner + Cloudflare Setup | 5 | Must |
 
-**Sprint Goal**: Full option lifecycle tested on regtest with real OP20 tokens
+**Sprint Goal**: Full option lifecycle tested on regtest; frontend deployable via Docker to Hetzner with Cloudflare; testnet as production default
 
-**BLOCKING**: Frontend cannot start until integration tests pass on regtest.
-This sprint replaces Sprint 6 from original plan.
+**BLOCKING**: Frontend contract integration cannot start until integration tests pass on regtest.
 
-### Sprint 6 (Week 6): Frontend MVP
+### Sprint 5.5 (INSERT): Contract Hardening 🔴 BLOCKING
+
+| Story | Points | Priority |
+|-------|--------|----------|
+| 8.1 Split Fee Tracking | 3 | Must |
+| 8.2 Fee Withdrawal | 5 | Must |
+| 8.3 Free Expired Reclaim | 3 | Must |
+| 8.4 Fix Fee Rounding | 1 | Should |
+| 8.5 Protocol Buy Fee (1%) | 5 | Must |
+
+**Sprint Goal**: Protocol fees withdrawable, writers treated fairly, contract ready for frontend
+
+**Rationale**: Design review revealed fee accounting bugs, locked protocol revenue, and unfair
+writer penalties. These changes modify contract method signatures (new methods, renamed views),
+so they must land before the frontend contract service layer (Sprint 6 stories 6.5-6.9).
+
+**Post-sprint**: Redeploy contracts on regtest, re-run integration tests.
+
+### Sprint 6 (Week 6-7): Frontend MVP
 
 | Story | Points | Priority |
 |-------|--------|----------|
@@ -805,6 +1214,9 @@ This sprint replaces Sprint 6 from original plan.
 | 4.5 Buy Flow | 5 | Must |
 
 **Sprint Goal**: Users can write and buy options via UI
+
+**Note**: Stories 6.5-6.9 (contract service layer, exercise/cancel modals) depend on Sprint 5.5
+completion for final method signatures.
 
 ---
 
@@ -830,31 +1242,49 @@ Story Dependencies:
                                                           │
 2.x (Security) depends on 1.x contracts                  │
 3.x (Testing) depends on 1.x contracts                   │
-
-6.x (Gas Optimization) depends on 1.x, 2.x contracts ◄── CRITICAL PATH
-        │
-        ▼
-4.x (Frontend) depends on 6.x (optimized contracts) ◄───┘
-        │
-        ▼
-5.x (Deploy) depends on 4.x
+                                                          │
+6.x (Gas Optimization) depends on 1.x, 2.x              │
+        │                                                 │
+        ▼                                                 │
+5.x (Integration Testing) depends on 6.x                │
+        │                                                 │
+        ▼                                                 │
+8.x (Contract Hardening) depends on 5.x ◄─── NEW        │
+        │                                                 │
+        ├── 8.1 (Split Fees) ── no deps                  │
+        ├── 8.2 (Withdrawal) ── depends on 8.1           │
+        ├── 8.3 (Expired Reclaim) ── no deps             │
+        └── 8.4 (Rounding) ── no deps                    │
+        │                                                 │
+        ▼                                                 │
+4.x (Frontend 6.5-6.9) depends on 8.x ◄── CRITICAL PATH │
+        │                                                 │
+        ▼                                                 │
+5.2 (Deploy) depends on 4.x                         ◄───┘
 ```
 
 ### Critical Path Update
 
-**Before**: 1.x → 2.x → 3.x → 4.x → 5.x
-**After**: 1.x → 2.x → **6.x** → **5.x** → 4.x → 5.x
+**Original**: 1.x → 2.x → 3.x → 4.x → 5.x
+**Previous**: 1.x → 2.x → 6.x → 5.x → 4.x → 5.x
+**Current**:  1.x → 2.x → 6.x → 5.x → **8.x** → 4.x (6.5-6.9) → 5.2
 
-**Epic 6 (Gas Optimization)**: On critical path - must complete before frontend
+**Epic 6 (Gas Optimization)**: Completed - on critical path
 1. Frontend depends on stable contract ABIs (Story 6.4)
 2. Mainnet deployment requires acceptable gas costs (Story 6.2)
 3. Event indexing needed for frontend (Story 6.5)
 
-**Epic 5 (Integration Testing)**: NEW - BLOCKING before frontend
+**Epic 5 (Integration Testing)**: In progress - BLOCKING
 1. Unit tests cannot test token transfers (Blockchain.call() limitation)
 2. Frontend needs verified contract behavior on real network
 3. Must test full option lifecycle with real OP20 tokens
 4. Regtest deployment required before frontend development
+
+**Epic 8 (Contract Hardening)**: Planned - BLOCKING before frontend contract integration
+1. New methods (`withdrawFees`, `setFeeRecipient`) change the contract ABI
+2. Renamed view methods (`accumulatedFeesUnderlying`, `accumulatedFeesPremium`) affect frontend
+3. Modified `cancelOption` behavior (free expired reclaim) affects frontend UX
+4. Must redeploy and re-test before frontend service layer (stories 6.5-6.9)
 
 ---
 
@@ -879,6 +1309,8 @@ Story Dependencies:
 | **Gas optimization introduces bugs** | **Medium** | **High** | **Comprehensive tests, incremental changes** |
 | **Storage migration needed** | **Low** | **High** | **Design for upgradability, test on regtest** |
 | ~~Gas optimization late~~ | ~~Low~~ | ~~Medium~~ | **MOVED to Sprint 4.5 (blocking)** |
+| **`onlyDeployer` not in inheritance** | **Low** | **Low** | **Fallback: manual deployer check via StoredAddress** |
+| **Contract hardening delays frontend** | **Medium** | **Medium** | **17.5h est., stories are independent and parallelizable** |
 
 ---
 
@@ -911,11 +1343,15 @@ Redesign OptionStorage to use direct pointer arithmetic:
 
 ## Next Steps
 
-1. **IMMEDIATE**: Review [GAS_OPTIMIZATION_REFACTOR.md](./GAS_OPTIMIZATION_REFACTOR.md)
-2. **APPROVE**: Sprint 4.5 insertion into roadmap
-3. **EXECUTE**: Story 6.1 (Gas Baseline) to measure current state
-4. **THEN**: Proceed with stories 6.2-6.5
-5. **RESUME**: Sprint 5 (Frontend) after optimization complete
+1. ~~**IMMEDIATE**: Review GAS_OPTIMIZATION_REFACTOR.md~~ ✅ Done (Sprint 4.5)
+2. ~~**APPROVE**: Sprint 4.5 insertion into roadmap~~ ✅ Done
+3. ~~**EXECUTE**: Story 6.1 (Gas Baseline)~~ ✅ Done
+4. ~~**THEN**: Proceed with stories 6.2-6.5~~ ✅ Done
+5. **CURRENT**: Complete Sprint 5 integration testing
+6. **NEXT**: Investigate blocker for Story 8.2 (`onlyDeployer` availability)
+7. **THEN**: Execute Sprint 5.5 (Stories 8.1-8.4, contract hardening)
+8. **THEN**: Redeploy contracts, re-run integration tests
+9. **RESUME**: Sprint 6 stories 6.5-6.9 (frontend contract service layer)
 
 ---
 

@@ -1,7 +1,9 @@
 import 'dotenv/config';
 import { JSONRpcProvider } from 'opnet';
-import { getConfig, saveDeployedContracts, loadDeployedContracts, getLogger } from './config.js';
-import { DeploymentHelper, getWasmPath } from './deployment.js';
+import { Address, BinaryWriter, TransactionFactory } from '@btc-vision/transaction';
+import { getConfig, saveDeployedContracts, loadDeployedContracts, getLogger, formatAddress } from './config.js';
+import { DeploymentHelper, getWasmPath, createPoolCalldata, createSetPoolTemplateCalldata } from './deployment.js';
+import { FACTORY_SELECTORS } from './config.js';
 
 const log = getLogger('02-deploy-factory');
 
@@ -60,11 +62,16 @@ async function main() {
         log.info('Waiting for UTXOs to confirm...');
         await sleep(5000);
         
-        log.info('Deploying OptionsPool Template...');
+        // Deploy Pool template with dummy addresses (will be overwritten when cloned by Factory)
+        const dummyUnderlying = Address.fromString('0x0000000000000000000000000000000000000000000000000000000000000000');
+        const dummyPremium = Address.fromString('0x0000000000000000000000000000000000000000000000000000000000000001');
+        const poolCalldata = createPoolCalldata(dummyUnderlying, dummyPremium);
+        
+        log.info('Deploying OptionsPool Template (with dummy calldata for template initialization)...');
         const poolResult = await deployer.deployContract(
             getWasmPath('OptionsPool'),
-            undefined,
-            30_000n
+            poolCalldata,
+            50_000n  // Increased gas for larger contract
         );
         poolTemplateAddress = poolResult.contractAddress;
         log.success(`OptionsPool Template deployed at: ${poolTemplateAddress}`);
@@ -94,11 +101,16 @@ async function main() {
         const newBalance = await deployer.checkBalance();
         log.info(`New balance: ${newBalance} satoshis`);
         
-        log.info('Deploying OptionsPool Template...');
+        // Deploy Pool template with dummy addresses (will be overwritten when cloned by Factory)
+        const dummyUnderlying = Address.fromString('0x0000000000000000000000000000000000000000000000000000000000000000');
+        const dummyPremium = Address.fromString('0x0000000000000000000000000000000000000000000000000000000000000001');
+        const poolCalldata = createPoolCalldata(dummyUnderlying, dummyPremium);
+        
+        log.info('Deploying OptionsPool Template (with dummy calldata for template initialization)...');
         const poolResult = await deployer.deployContract(
             getWasmPath('OptionsPool'),
-            undefined,
-            30_000n
+            poolCalldata,
+            50_000n  // Increased gas for larger contract
         );
         poolTemplateAddress = poolResult.contractAddress;
         log.success(`OptionsPool Template deployed at: ${poolTemplateAddress}`);
@@ -107,6 +119,55 @@ async function main() {
         deployed.deployedAt = new Date().toISOString();
         
         saveDeployedContracts(deployed);
+    }
+    
+    // Now set the pool template on the factory
+    log.info('Setting pool template on factory...');
+    
+    // Check if template is already set
+    const templateResult = await provider.call(
+        factoryAddress,
+        FACTORY_SELECTORS.getPoolTemplate
+    );
+    
+    let needsSetTemplate = true;
+    if (!('error' in templateResult) && !templateResult.revert) {
+        const currentTemplate = templateResult.result.readAddress();
+        if (currentTemplate.toString() === poolTemplateAddress) {
+            log.info('Pool template already set on factory');
+            needsSetTemplate = false;
+        }
+    }
+    
+    if (needsSetTemplate) {
+        log.info('Waiting for contracts to be mined before setting template...');
+        await sleep(30000);
+
+        // Refresh deployer's UTXO cache
+        const newBalance = await deployer.checkBalance();
+        log.info(`Balance: ${newBalance} satoshis`);
+
+        // Get the public key for the pool template address (converts opr1... to 0x... format)
+        const templatePubKeyInfo = await provider.getPublicKeyInfo(poolTemplateAddress, true);
+        if (!templatePubKeyInfo) {
+            log.warn('Pool template not yet mined. Waiting another 30 seconds...');
+            await sleep(30000);
+            const retryInfo = await provider.getPublicKeyInfo(poolTemplateAddress, true);
+            if (!retryInfo) {
+                throw new Error('Pool template contract not found on-chain. Wait for mining and re-run.');
+            }
+        }
+        const templateAddress = templatePubKeyInfo || await provider.getPublicKeyInfo(poolTemplateAddress, true);
+
+        const setTemplateCalldata = createSetPoolTemplateCalldata(templateAddress);
+
+        log.info(`Calling setPoolTemplate(${formatAddress(templateAddress)})...`);
+        const result = await deployer.callContract(
+            factoryAddress,
+            setTemplateCalldata,
+            50_000n  // Increased gas limit
+        );
+        log.success(`Pool template set! TX: ${result.txId}`);
     }
     
     log.success('Factory deployment complete!');
