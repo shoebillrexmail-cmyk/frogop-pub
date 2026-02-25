@@ -665,7 +665,7 @@ No backend needed. Cloudflare Pages is free, auto-deploys on push, and handles C
 |---|------|------|--------|
 | 5.7.1 | Connect GitHub repo to Cloudflare Pages | 0.5h | |
 | 5.7.2 | Set build command: `cd frontend && npm install --legacy-peer-deps && npm run build` | 0.5h | |
-| 5.7.3 | Set build output directory: `frontend/dist`, Node version: `24` | 0.5h | |
+| 5.7.3 | Set build output directory: `frontend/dist` (Node 24 via `.nvmrc` already committed) | 0.5h | |
 | 5.7.4 | Set `VITE_OPNET_NETWORK=testnet` and `VITE_OPNET_RPC_URL` in Pages dashboard | 0.5h | |
 | 5.7.5 | Configure custom domain in Pages dashboard | 0.5h | |
 | 5.7.6 | Verify deploy: HTTPS, SPA routing, correct network config | 0.5h | |
