@@ -810,7 +810,7 @@ export function AboutPage() {
         <h2 className="text-2xl font-semibold text-terminal-text-primary mb-4">Links</h2>
         <div className="flex gap-4">
           <a
-            href="https://github.com/btc-vision/frogop"
+            href="https://github.com/shoebillrexmail-cmyk/"
             target="_blank"
             rel="noopener noreferrer"
             className="btn-secondary px-4 py-2 rounded-lg inline-block"

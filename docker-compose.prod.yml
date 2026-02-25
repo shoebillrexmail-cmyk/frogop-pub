@@ -1,0 +1,23 @@
+services:
+  frogop:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_OPNET_NETWORK: ${VITE_OPNET_NETWORK:-testnet}
+        VITE_OPNET_RPC_URL: ${VITE_OPNET_RPC_URL:-}
+        VITE_FACTORY_ADDRESS: ${VITE_FACTORY_ADDRESS:-}
+        VITE_POOL_TEMPLATE_ADDRESS: ${VITE_POOL_TEMPLATE_ADDRESS:-}
+    restart: unless-stopped
+    networks:
+      - proxy-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  proxy-net:
+    external: true

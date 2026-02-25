@@ -590,37 +590,14 @@ npm run test:integration:full        # 06 - Full option lifecycle
 
 ---
 
-### Story 5.4: Docker Prod Container (Nginx + Multi-Stage Build) 📋
+### Story 5.4: Docker Prod Container (Nginx + Multi-Stage Build) ~~📋~~ SUPERSEDED
 
-**As a** DevOps
-**I want** a production-optimized Docker container
-**So that** the frontend is served securely and efficiently via nginx
+> **Decision (2026-02-25)**: FroGop is a pure SPA — all OPNet interaction happens
+> client-side via OPWallet + RPC. **Cloudflare Pages** (Story 5.7) is used instead.
+> The Docker prod artifacts (`Dockerfile.prod`, `proxy/`) are kept in the repo as
+> reference and are used for the shared VPS proxy serving shoebillhl.ai.
 
-| # | Task | Est. | Status |
-|---|------|------|--------|
-| 5.4.1 | Create `frontend/Dockerfile.prod` — Stage 1: node:22-alpine builder | 1h | |
-| 5.4.2 | Stage 2: nginx:1.27-alpine — copy `dist/` from builder | 0.5h | |
-| 5.4.3 | Create `frontend/nginx/nginx.conf` — SPA routing, gzip, cache headers | 2h | |
-| 5.4.4 | Add SSL config (Cloudflare Origin Cert, TLS 1.2/1.3) | 1h | |
-| 5.4.5 | Add security headers (HSTS, CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy) | 1h | |
-| 5.4.6 | Add Cloudflare real-IP passthrough (`set_real_ip_from`) | 0.5h | |
-| 5.4.7 | Create `docker-compose.prod.yml` at project root | 1h | |
-| 5.4.8 | Mount `./frontend/nginx/ssl/` as read-only volume (certs never in image) | 0.5h | |
-| 5.4.9 | HTTP → HTTPS redirect (port 80 → 443) | 0.5h | |
-| 5.4.10 | Add `frontend/nginx/ssl/.gitignore` to exclude cert files | 0.5h | |
-
-**Est.**: 8.5h | **Points**: 8
-
-**Acceptance Criteria**:
-- [ ] Multi-stage build produces nginx image <30MB
-- [ ] Build args (`VITE_OPNET_NETWORK` etc.) baked into bundle
-- [ ] SPA routing works — all paths return `index.html`
-- [ ] HTTPS on 443 with Cloudflare Origin Cert
-- [ ] HTTP on 80 redirects to HTTPS
-- [ ] Security headers present (`curl -I` verified)
-- [ ] Gzip enabled for JS/CSS/HTML
-- [ ] Hashed assets use `immutable` cache; `index.html` uses `no-cache`
-- [ ] Cert files gitignored
+**Est.**: 8.5h | **Points**: 8 | **Status**: N/A for FroGop
 
 ---
 
@@ -634,76 +611,74 @@ npm run test:integration:full        # 06 - Full option lifecycle
 build time — switching networks requires a rebuild + redeploy, not a runtime config change.
 **Critical**: testnet must use `networks.opnetTestnet` from `@btc-vision/bitcoin` — NOT
 `networks.testnet` (that is Testnet4, which OPNet does NOT support).
+**Deployment**: With Cloudflare Pages, `VITE_` vars are set in the Pages dashboard (not .env files).
 
 | # | Task | Est. | Status |
 |---|------|------|--------|
 | 5.5.1 | Audit `src/config/index.ts` — verify all network values read from `VITE_` vars | 0.5h | |
 | 5.5.2 | Ensure `networks.opnetTestnet` used for testnet (not `networks.testnet`) | 0.5h | |
-| 5.5.3 | Create `.env.testnet` template (committed, no secrets) with testnet contract addresses | 0.5h | |
-| 5.5.4 | Create `.env.mainnet` template (committed, placeholder) for future mainnet | 0.5h | |
-| 5.5.5 | Set `VITE_OPNET_NETWORK=testnet` as default in `docker-compose.prod.yml` | 0.5h | |
+| 5.5.3 | Create `frontend/.env.testnet` template (committed, no secrets) for local dev reference | 0.5h | ✅ |
+| 5.5.4 | Create `frontend/.env.mainnet` template (committed, placeholder) for future mainnet | 0.5h | ✅ |
+| 5.5.5 | ~~Set `VITE_OPNET_NETWORK=testnet` as default in `docker-compose.prod.yml`~~ Set in Cloudflare Pages dashboard | 0.5h | |
 | 5.5.6 | Add network indicator badge in UI (visible on testnet/regtest, hidden on mainnet) | 1h | |
-| 5.5.7 | Write `docs/deployment/MAINNET_MIGRATION.md` — step-by-step mainnet switch checklist | 1h | |
+| 5.5.7 | Write `docs/deployment/MAINNET_MIGRATION.md` — step-by-step mainnet switch checklist | 1h | ✅ |
 
 **Est.**: 4.5h | **Points**: 5
 
 **Network Mapping**:
-| Environment | `VITE_OPNET_NETWORK` | Network Constant |
-|-------------|---------------------|-----------------|
-| Dev (local) | `regtest` | `networks.regtest` |
-| Production (now) | `testnet` | `networks.opnetTestnet` ⚠️ |
-| Production (future) | `mainnet` | `networks.bitcoin` |
+| Environment | `VITE_OPNET_NETWORK` | Network Constant | Where set |
+|-------------|---------------------|-----------------|-----------|
+| Dev (local) | `regtest` | `networks.regtest` | `frontend/.env.dev` |
+| Production (now) | `testnet` | `networks.opnetTestnet` ⚠️ | CF Pages dashboard |
+| Production (future) | `mainnet` | `networks.bitcoin` | CF Pages dashboard |
 
 **Acceptance Criteria**:
-- [ ] Prod container defaults to testnet
+- [ ] Production defaults to testnet (set in Cloudflare Pages dashboard)
 - [ ] No hardcoded network addresses in source
-- [ ] `.env.testnet` and `.env.mainnet` templates committed
+- [x] `.env.testnet` and `.env.mainnet` templates committed (local dev reference)
 - [ ] Network badge visible in UI on non-mainnet environments
-- [ ] Mainnet migration doc complete
-- [ ] Switching networks = env change + rebuild only (zero code changes)
+- [x] Mainnet migration doc complete
+- [ ] Switching networks = env change in CF Pages dashboard + redeploy (zero code changes)
 
 ---
 
-### Story 5.6: Hetzner Server Setup & Cloudflare Configuration 📋
+### Story 5.6: Hetzner Server Setup & Cloudflare Configuration ~~📋~~ SUPERSEDED FOR FROGOP
+
+> **Decision (2026-02-25)**: FroGop deploys via Cloudflare Pages (Story 5.7) — no VPS needed.
+> This story applies to the **shared VPS** used by shoebillhl.ai. See `docs/deployment/DEPLOY.md`
+> for the full runbook (proxy setup, UFW, shared nginx, multi-site Docker).
+
+**Est.**: 7h | **Points**: 5 | **Status**: N/A for FroGop (applies to shoebillhl.ai VPS)
+
+---
+
+### Story 5.7: Cloudflare Pages Deployment 📋
 
 **As a** DevOps
-**I want** the server and CDN configured securely
-**So that** only legitimate traffic reaches the origin and the site is DDoS-protected
+**I want** FroGop deployed on Cloudflare Pages
+**So that** the SPA is served globally with zero server maintenance
+
+**Context**: FroGop is a pure SPA — all OPNet interaction is client-side (OPWallet + RPC).
+No backend needed. Cloudflare Pages is free, auto-deploys on push, and handles CDN + HTTPS.
 
 | # | Task | Est. | Status |
 |---|------|------|--------|
-| 5.6.1 | Provision Hetzner VPS (Ubuntu 24.04, CX22: 2vCPU 4GB min) | 0.5h | |
-| 5.6.2 | Harden SSH: disable password auth, key-only login | 0.5h | |
-| 5.6.3 | Install Docker + Docker Compose plugin | 0.5h | |
-| 5.6.4 | Configure UFW: deny all → allow SSH + 80 + 443 | 0.5h | |
-| 5.6.5 | Restrict 80/443 to Cloudflare IP ranges only (auto-fetch CF IP list script) | 1h | |
-| 5.6.6 | Add Cloudflare A record → Hetzner IP, enable proxy (orange cloud) | 0.5h | |
-| 5.6.7 | Set Cloudflare SSL/TLS mode to **Full (Strict)** | 0.5h | |
-| 5.6.8 | Generate Cloudflare Origin Certificate (15-year) → place on server | 0.5h | |
-| 5.6.9 | Enable Cloudflare: Always Use HTTPS, Bot Fight Mode, HSTS at edge | 0.5h | |
-| 5.6.10 | Add Cloudflare Cache Rule: cache `/assets/*` at edge | 0.5h | |
-| 5.6.11 | Verify end-to-end: DNS → Cloudflare → nginx → SPA routing | 0.5h | |
-| 5.6.12 | Write `docs/deployment/DEPLOY.md` — full deployment runbook | 1h | |
+| 5.7.1 | Connect GitHub repo to Cloudflare Pages | 0.5h | |
+| 5.7.2 | Set build command: `cd frontend && npm install --legacy-peer-deps && npm run build` | 0.5h | |
+| 5.7.3 | Set build output directory: `frontend/dist`, Node version: `24` | 0.5h | |
+| 5.7.4 | Set `VITE_OPNET_NETWORK=testnet` and `VITE_OPNET_RPC_URL` in Pages dashboard | 0.5h | |
+| 5.7.5 | Configure custom domain in Pages dashboard | 0.5h | |
+| 5.7.6 | Verify deploy: HTTPS, SPA routing, correct network config | 0.5h | |
 
-**Est.**: 7h | **Points**: 5
-
-**Security Architecture**:
-```
-Internet
-  → Cloudflare (DDoS, WAF, CDN, TLS termination)
-    → Hetzner VPS — UFW: only Cloudflare IPs on 80/443
-      → nginx Docker — security headers, gzip, SPA routing
-```
+**Est.**: 3h | **Points**: 3
 
 **Acceptance Criteria**:
-- [ ] Server accessible via SSH (key only, password disabled)
-- [ ] UFW: 80/443 open to Cloudflare IPs only; all else denied
-- [ ] Docker prod container running and healthy
-- [ ] Cloudflare orange cloud active, Full Strict SSL mode
-- [ ] Origin Cert installed and valid in nginx
-- [ ] Site loads over HTTPS, Cloudflare shows in headers
-- [ ] Direct IP access returns connection refused
-- [ ] Deployment runbook documented
+- [ ] Push to `master` triggers automatic deploy
+- [ ] Custom domain resolves over HTTPS
+- [ ] SPA routing works — all paths return `index.html`
+- [ ] `VITE_OPNET_NETWORK=testnet` baked into bundle
+- [ ] Network badge shows "Testnet" in UI
+- [ ] See `docs/deployment/CLOUDFLARE_PAGES.md` for full setup guide
 
 ### Known Issues (2026-02-25)
 

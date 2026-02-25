@@ -1,0 +1,25 @@
+services:
+  proxy:
+    image: nginx:1.27-alpine
+    container_name: proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # Cloudflare Origin Certificates — place on server, never commit
+      # frogop.crt / frogop.key  →  for frogop.com
+      # shoebill.crt / shoebill.key  →  for shoebillhl.ai
+      - ./ssl:/etc/nginx/ssl:ro
+    restart: unless-stopped
+    networks:
+      - proxy-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  proxy-net:
+    external: true

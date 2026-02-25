@@ -1,0 +1,4 @@
+# Cloudflare Origin Certificates — place on server manually, never commit
+*.crt
+*.key
+*.pem

@@ -132,8 +132,11 @@ async function main() {
     // TEST 3: Check Pool for Token Pair
     // ========================================
     await runTest('Factory: Query pool for MOTO/PILL', async () => {
-        const underlying = Address.fromString(deployed.tokens.frogU);
-        const premiumToken = Address.fromString(deployed.tokens.frogP);
+        // Resolve opt1... addresses to hex for Address.fromString()
+        const frogUHex = (await provider.getPublicKeyInfo(deployed.tokens.frogU, true)).toString();
+        const frogPHex = (await provider.getPublicKeyInfo(deployed.tokens.frogP, true)).toString();
+        const underlying = Address.fromString(frogUHex);
+        const premiumToken = Address.fromString(frogPHex);
 
         const writer = new BinaryWriter();
         writer.writeAddress(underlying);

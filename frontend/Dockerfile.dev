@@ -1,0 +1,14 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+# Install dependencies first (cached layer)
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
+
+# Source is mounted as a volume at runtime — no COPY needed
+# node_modules is an anonymous volume to prevent host override
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

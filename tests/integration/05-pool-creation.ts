@@ -86,6 +86,16 @@ async function main() {
         config.network,
     );
 
+    // Resolve opt1/opr1 addresses to hex for Address.fromString()
+    const frogUHex = deployed.tokens.frogU.startsWith('0x')
+        ? deployed.tokens.frogU
+        : (await provider.getPublicKeyInfo(deployed.tokens.frogU, true)).toString();
+    const frogPHex = deployed.tokens.frogP.startsWith('0x')
+        ? deployed.tokens.frogP
+        : (await provider.getPublicKeyInfo(deployed.tokens.frogP, true)).toString();
+    log.info(`  FROG-U hex: ${formatAddress(frogUHex)}`);
+    log.info(`  FROG-P hex: ${formatAddress(frogPHex)}`);
+
     // ========================================
     // PHASE 1: Factory State Verification
     // ========================================
@@ -135,8 +145,8 @@ async function main() {
     let poolAddress: string | null = deployed.pool || null;
 
     await runTest('Factory: Check existing pool for MOTO/PILL', async () => {
-        const underlying = Address.fromString(deployed.tokens.frogU);
-        const premiumToken = Address.fromString(deployed.tokens.frogP);
+        const underlying = Address.fromString(frogUHex);
+        const premiumToken = Address.fromString(frogPHex);
 
         const writer = new BinaryWriter();
         writer.writeAddress(underlying);
@@ -177,8 +187,8 @@ async function main() {
         let factoryCreateFailed = false;
 
         await runTest('Factory: Create MOTO/PILL pool (via factory)', async () => {
-            const underlying = Address.fromString(deployed.tokens.frogU);
-            const premiumToken = Address.fromString(deployed.tokens.frogP);
+            const underlying = Address.fromString(frogUHex);
+            const premiumToken = Address.fromString(frogPHex);
 
             // Simulate first to check if it will revert
             const simWriter = new BinaryWriter();
@@ -237,8 +247,8 @@ async function main() {
 
         if (factoryCreateFailed) {
             await runTest('Direct: Deploy OptionsPool with real token addresses', async () => {
-                const underlying = Address.fromString(deployed.tokens.frogU);
-                const premiumToken = Address.fromString(deployed.tokens.frogP);
+                const underlying = Address.fromString(frogUHex);
+                const premiumToken = Address.fromString(frogPHex);
                 const calldata = createPoolCalldata(underlying, premiumToken);
 
                 const currentBlock = await provider.getBlockNumber();

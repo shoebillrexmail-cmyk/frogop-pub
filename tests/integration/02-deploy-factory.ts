@@ -1,15 +1,11 @@
 import 'dotenv/config';
 import { JSONRpcProvider } from 'opnet';
 import { Address, BinaryWriter, TransactionFactory } from '@btc-vision/transaction';
-import { getConfig, saveDeployedContracts, loadDeployedContracts, getLogger, formatAddress } from './config.js';
+import { getConfig, saveDeployedContracts, loadDeployedContracts, getLogger, formatAddress, sleep, waitForBlock } from './config.js';
 import { DeploymentHelper, getWasmPath, createPoolCalldata, createSetPoolTemplateCalldata } from './deployment.js';
 import { FACTORY_SELECTORS } from './config.js';
 
 const log = getLogger('02-deploy-factory');
-
-async function sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 async function main() {
     log.info('Starting factory and pool deployment...');
@@ -140,24 +136,27 @@ async function main() {
     }
     
     if (needsSetTemplate) {
-        log.info('Waiting for contracts to be mined before setting template...');
-        await sleep(30000);
+        // Wait for pool template to be mined (poll until getPublicKeyInfo succeeds)
+        log.info('Waiting for pool template to be mined...');
+        const startBlock = await provider.getBlockNumber();
+        await waitForBlock(provider, startBlock, 1, 300); // up to 25 min
 
         // Refresh deployer's UTXO cache
         const newBalance = await deployer.checkBalance();
         log.info(`Balance: ${newBalance} satoshis`);
 
         // Get the public key for the pool template address (converts opr1... to 0x... format)
-        const templatePubKeyInfo = await provider.getPublicKeyInfo(poolTemplateAddress, true);
+        let templatePubKeyInfo = await provider.getPublicKeyInfo(poolTemplateAddress, true);
         if (!templatePubKeyInfo) {
-            log.warn('Pool template not yet mined. Waiting another 30 seconds...');
-            await sleep(30000);
-            const retryInfo = await provider.getPublicKeyInfo(poolTemplateAddress, true);
-            if (!retryInfo) {
-                throw new Error('Pool template contract not found on-chain. Wait for mining and re-run.');
+            log.warn('Pool template not yet visible. Waiting one more block...');
+            const cur = await provider.getBlockNumber();
+            await waitForBlock(provider, cur, 1, 300);
+            templatePubKeyInfo = await provider.getPublicKeyInfo(poolTemplateAddress, true);
+            if (!templatePubKeyInfo) {
+                throw new Error('Pool template contract not found on-chain after 2 blocks. Re-run this script.');
             }
         }
-        const templateAddress = templatePubKeyInfo || await provider.getPublicKeyInfo(poolTemplateAddress, true);
+        const templateAddress = templatePubKeyInfo;
 
         const setTemplateCalldata = createSetPoolTemplateCalldata(templateAddress);
 

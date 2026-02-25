@@ -82,7 +82,7 @@ export function Layout() {
                 About
               </Link>
               <a
-                href="https://github.com/btc-vision/frogop"
+                href="https://github.com/shoebillrexmail-cmyk/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-terminal-text-primary transition-colors"

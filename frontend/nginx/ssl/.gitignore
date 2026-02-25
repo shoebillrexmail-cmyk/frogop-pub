@@ -1,0 +1,6 @@
+# Cloudflare Origin Certificate — NEVER commit these
+origin.crt
+origin.key
+*.crt
+*.key
+*.pem

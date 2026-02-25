@@ -1,0 +1,25 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      # Mount source code for hot reload
+      - ./frontend:/app
+      # Isolate container node_modules from host
+      - /app/node_modules
+    env_file:
+      - ./frontend/.env.dev
+    environment:
+      - VITE_OPNET_NETWORK=${VITE_OPNET_NETWORK:-regtest}
+      - VITE_OPNET_RPC_URL=${VITE_OPNET_RPC_URL:-}
+      - VITE_FACTORY_ADDRESS=${VITE_FACTORY_ADDRESS:-}
+      - VITE_POOL_TEMPLATE_ADDRESS=${VITE_POOL_TEMPLATE_ADDRESS:-}
+    networks:
+      - frogop-dev
+
+networks:
+  frogop-dev:
+    driver: bridge
