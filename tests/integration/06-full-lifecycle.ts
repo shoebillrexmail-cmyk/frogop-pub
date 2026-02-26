@@ -667,7 +667,8 @@ async function main() {
 
     const buyerWallet = config.mnemonic.deriveOPWallet(AddressTypes.P2TR, 1);
     const buyerHex = buyerWallet.address.toString();
-    const buyerDeployer = new DeploymentHelper(provider, buyerWallet, config.network);
+    // false = MLDSA key not yet linked for buyer wallet (will be linked on first interaction TX)
+    const buyerDeployer = new DeploymentHelper(provider, buyerWallet, config.network, false);
 
     log.info(`Buyer wallet: ${buyerWallet.p2tr}`);
     log.info(`Buyer hex: ${formatAddress(buyerHex)}`);
@@ -1247,12 +1248,15 @@ async function main() {
                 const calldata = createBuyOptionCalldata(settleOptionId!);
                 const result = await buyerDeployer.callContract(poolAddress!, calldata, 200_000n);
                 log.info(`  Buy TX: ${result.txId}`);
+                // Wait for the buy TX to be included in a block before polling status
+                currentBlock = await provider.getBlockNumber();
+                try { currentBlock = await waitForBlock(provider, currentBlock, 1); } catch { log.warn('  Block timeout'); }
                 return { txId: result.txId };
             });
 
             // Verify PURCHASED and save state for later settle
             await runTest('Settle prep: Verify PURCHASED + save state', async () => {
-                for (let attempt = 0; attempt < 24; attempt++) {
+                for (let attempt = 0; attempt < 40; attempt++) {
                     const opt = await readOptionStatus(settleOptionId!);
                     if (!opt) throw new Error('Failed to read option');
 
@@ -1277,8 +1281,8 @@ async function main() {
                         return { status: opt.status, settleState };
                     }
 
-                    if (attempt < 23) {
-                        log.info(`  Status still ${opt.status}, polling... (${attempt + 1}/24)`);
+                    if (attempt < 39) {
+                        log.info(`  Status still ${opt.status}, polling... (${attempt + 1}/40)`);
                         await new Promise((r) => setTimeout(r, 30_000));
                     }
                 }

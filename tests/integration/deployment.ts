@@ -22,11 +22,20 @@ export class DeploymentHelper {
     private provider: JSONRpcProvider;
     private wallet: Wallet;
     private network: Network;
+    /** Whether this wallet's MLDSA key is already linked on-chain. */
+    private mldsaKeyLinked: boolean;
 
-    constructor(provider: JSONRpcProvider, wallet: Wallet, network: Network) {
+    /**
+     * @param mldsaKeyAlreadyLinked - Set false for wallets that have never sent an
+     *   interaction TX (the first call will reveal/link the key; subsequent calls skip it).
+     *   Defaults to false — always re-reveals MLDSA key on the first interaction of each
+     *   test run, handling epoch-boundary expiry and testnet node restarts.
+     */
+    constructor(provider: JSONRpcProvider, wallet: Wallet, network: Network, mldsaKeyAlreadyLinked = false) {
         this.provider = provider;
         this.wallet = wallet;
         this.network = network;
+        this.mldsaKeyLinked = mldsaKeyAlreadyLinked;
     }
 
     async checkBalance(): Promise<bigint> {
@@ -91,6 +100,9 @@ export class DeploymentHelper {
         const fundingTxId = fundingResult.result || 'unknown';
         log.success(`Funding TX broadcast: ${fundingTxId}`);
 
+        // Track UTXO spending so subsequent calls don't reuse spent inputs
+        this.provider.utxoManager.spentUTXO(this.wallet.p2tr, deployment.inputUtxos, deployment.utxos);
+
         // Broadcast reveal transaction (second in array)
         const revealResult = await this.provider.sendRawTransaction(
             deployment.transaction[1],
@@ -101,6 +113,9 @@ export class DeploymentHelper {
         }
         const revealTxId = revealResult.result || 'unknown';
         log.success(`Reveal TX broadcast: ${revealTxId}`);
+
+        // Deployment always reveals MLDSA key — mark as linked for subsequent callContract calls
+        this.mldsaKeyLinked = true;
 
         return {
             contractAddress: deployment.contractAddress,
@@ -116,68 +131,99 @@ export class DeploymentHelper {
     ): Promise<{ txId: string }> {
         log.info(`Calling contract at ${formatAddress(contractAddress)}...`);
 
-        const utxos = await this.getUTXOs();
-
-        if (utxos.length === 0) {
-            throw new Error('No UTXOs available. Please fund your wallet.');
-        }
-
-        const challenge = await this.provider.getChallenge();
-        const factory = new TransactionFactory();
-
-        // Get contract's public key from getCode (returns Uint8Array)
-        const code = await this.provider.getCode(contractAddress);
-        const contractHexBytes = (code as any).contractPublicKey;
-        const contractHex = '0x' + Buffer.from(contractHexBytes).toString('hex');
+        // Use getPublicKeyInfo for the contract's tweaked public key (documented approach)
+        const publicKeyInfo = await this.provider.getPublicKeyInfo(contractAddress, true);
+        const contractHex = publicKeyInfo.toString();
         log.info(`Contract hex: ${formatAddress(contractHex)}`);
 
-        // Use TransactionFactory.signInteraction
-        const signedTx = await factory.signInteraction({
-            signer: this.wallet.keypair,
-            mldsaSigner: this.wallet.mldsaKeypair,
-            from: this.wallet.p2tr,
-            to: contractAddress,
-            contract: contractHex,
-            calldata: calldata,
-            utxos: utxos,
-            feeRate: 15,
-            priorityFee: 0n,
-            gasSatFee: gasLimit,
-            network: this.network,
-            challenge: challenge as any,
-            linkMLDSAPublicKeyToAddress: true,
-            revealMLDSAPublicKey: true,
-        });
+        const factory = new TransactionFactory();
+        const needsMLDSA = !this.mldsaKeyLinked;
 
-        log.info(`Interaction TX signed`);
+        // Two-attempt strategy for "Could not decode transaction" resilience:
+        //   Attempt 1: use the default MLDSA strategy (reveal if key not linked)
+        //   Attempt 2: flip the MLDSA strategy (handles epoch-boundary expiry / node restarts)
+        // If attempt 1's funding TX was already broadcast, attempt 2 uses the change UTXO.
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            const utxos = await this.getUTXOs();
+            if (utxos.length === 0) {
+                throw new Error('No UTXOs available. Please fund your wallet.');
+            }
 
-        // Broadcast the funding transaction first (if exists)
-        if (signedTx.fundingTransaction) {
-            const fundingResult = await this.provider.sendRawTransaction(
-                signedTx.fundingTransaction,
+            const challenge = await this.provider.getChallenge();
+            const useMLDSA = attempt === 1 ? needsMLDSA : !needsMLDSA;
+
+            const signedTx = await factory.signInteraction({
+                signer: this.wallet.keypair,
+                mldsaSigner: this.wallet.mldsaKeypair,
+                from: this.wallet.p2tr,
+                to: contractAddress,
+                contract: contractHex,
+                calldata: calldata,
+                utxos: utxos,
+                feeRate: 15,
+                priorityFee: 0n,
+                gasSatFee: gasLimit,
+                network: this.network,
+                challenge: challenge as any,
+                ...(useMLDSA ? { linkMLDSAPublicKeyToAddress: true, revealMLDSAPublicKey: true } : {}),
+            });
+
+            log.info(`Interaction TX signed (attempt ${attempt}, mldsaReveal=${useMLDSA})`);
+
+            // Broadcast the funding transaction first (if exists)
+            if (signedTx.fundingTransaction) {
+                const fundingResult = await this.provider.sendRawTransaction(
+                    signedTx.fundingTransaction,
+                    false
+                );
+
+                if (!fundingResult.success) {
+                    throw new Error(`Funding transaction failed: ${fundingResult.error}`);
+                }
+                log.success(`Funding TX broadcast: ${fundingResult.result}`);
+
+                // Track UTXO spending so subsequent calls don't reuse spent inputs
+                this.provider.utxoManager.spentUTXO(
+                    this.wallet.p2tr,
+                    signedTx.fundingInputUtxos,
+                    signedTx.nextUTXOs,
+                );
+
+                // Brief pause to allow the funding TX to propagate to the OPNet node's
+                // Bitcoin backend before submitting the interaction TX that spends its output.
+                await new Promise(r => setTimeout(r, 3000));
+            }
+
+            // Broadcast the interaction transaction
+            const result = await this.provider.sendRawTransaction(
+                signedTx.interactionTransaction,
                 false
             );
-            
-            if (!fundingResult.success) {
-                throw new Error(`Funding transaction failed: ${fundingResult.error}`);
+
+            if (!result.success) {
+                log.error(`Interaction TX response: ${JSON.stringify(result)}`);
+                const errMsg = result.result || result.error || 'Unknown error';
+
+                // On decode errors, retry with the opposite MLDSA strategy once.
+                // This handles: key expired at epoch boundary, node restart lost state, etc.
+                if (attempt === 1 && errMsg.toLowerCase().includes('decode')) {
+                    log.warn(`Decode error on attempt 1. Retrying with mldsaReveal=${!useMLDSA}...`);
+                    // Wait 5s before retry to let network state settle
+                    await new Promise(r => setTimeout(r, 5000));
+                    continue;
+                }
+                throw new Error(`Interaction transaction failed: ${errMsg}`);
             }
-            log.success(`Funding TX broadcast: ${fundingResult.result}`);
+
+            const txId = result.result || 'unknown';
+            log.success(`Interaction TX broadcast: ${txId}`);
+
+            // Key is confirmed linked (either was already linked or just revealed).
+            this.mldsaKeyLinked = true;
+            return { txId };
         }
 
-        // Broadcast the interaction transaction
-        const result = await this.provider.sendRawTransaction(
-            signedTx.interactionTransaction,
-            false
-        );
-
-        if (!result.success) {
-            throw new Error(`Interaction transaction failed: ${result.error}`);
-        }
-
-        const txId = result.result || 'unknown';
-        log.success(`Interaction TX broadcast: ${txId}`);
-
-        return { txId };
+        throw new Error('All interaction attempts exhausted');
     }
 
     async sendBTC(to: string, amount: bigint): Promise<{ txId: string }> {
@@ -206,6 +252,9 @@ export class DeploymentHelper {
         if (!txResult.success) {
             throw new Error(`BTC transfer failed: ${txResult.error}`);
         }
+
+        // Track UTXO spending so subsequent calls don't reuse spent inputs
+        this.provider.utxoManager.spentUTXO(this.wallet.p2tr, result.inputUtxos, result.nextUTXOs);
 
         const txId = txResult.result || 'unknown';
         log.success(`BTC transfer TX: ${txId}`);
