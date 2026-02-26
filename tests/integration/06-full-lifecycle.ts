@@ -15,7 +15,6 @@ import {
     computeSelector,
     POOL_SELECTORS,
     TOKEN_SELECTORS,
-    FEE_RECIPIENT_BECH32,
 } from './config.js';
 import {
     DeploymentHelper,
@@ -128,17 +127,14 @@ async function main() {
     const walletHex = config.wallet.address.toString();
     log.info(`Wallet hex: ${formatAddress(walletHex)}`);
 
-    // Resolve dedicated fee recipient address for fee distribution verification
-    let feeRecipientHex = walletHex; // fallback to deployer wallet
-    let feeRecipientAddress = config.wallet.address;
-    try {
-        const resolvedHex = (await provider.getPublicKeyInfo(FEE_RECIPIENT_BECH32, true)).toString();
-        feeRecipientHex = resolvedHex;
-        feeRecipientAddress = Address.fromString(resolvedHex);
-        log.info(`Dedicated fee recipient: ${formatAddress(feeRecipientHex)}`);
-    } catch {
-        log.warn(`Could not resolve dedicated fee recipient (${FEE_RECIPIENT_BECH32}). Falling back to deployer wallet.`);
-    }
+    // Resolve dedicated fee recipient - derive from mnemonic index 2
+    // (index 0 = deployer, index 1 = buyer, index 2 = fee recipient)
+    // Use wallet.address (MLDSA hash) — NOT getPublicKeyInfo, which returns MLDSA hash or tweaked
+    // pubkey depending on whether the wallet has linked its key on-chain, causing non-determinism.
+    const feeRecipientWallet = config.mnemonic.deriveOPWallet(AddressTypes.P2TR, 2);
+    const feeRecipientHex = feeRecipientWallet.address.toString();
+    const feeRecipientAddress = feeRecipientWallet.address;
+    log.info(`Dedicated fee recipient (index 2): ${formatAddress(feeRecipientHex)}`);
 
     // =====================================================================
     // PHASE 1: Ensure pool exists
