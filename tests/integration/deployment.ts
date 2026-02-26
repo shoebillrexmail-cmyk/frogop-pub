@@ -180,6 +180,38 @@ export class DeploymentHelper {
         return { txId };
     }
 
+    async sendBTC(to: string, amount: bigint): Promise<{ txId: string }> {
+        log.info(`Sending ${amount} sats to ${formatAddress(to)}...`);
+
+        const utxos = await this.getUTXOs();
+        if (utxos.length === 0) {
+            throw new Error('No UTXOs available. Please fund your wallet.');
+        }
+
+        const factory = new TransactionFactory();
+        const result = await factory.createBTCTransfer({
+            signer: this.wallet.keypair,
+            mldsaSigner: this.wallet.mldsaKeypair,
+            network: this.network,
+            utxos: utxos,
+            from: this.wallet.p2tr,
+            to: to,
+            amount: amount,
+            feeRate: 15,
+            priorityFee: 0n,
+            gasSatFee: 0n,
+        });
+
+        const txResult = await this.provider.sendRawTransaction(result.tx, false);
+        if (!txResult.success) {
+            throw new Error(`BTC transfer failed: ${txResult.error}`);
+        }
+
+        const txId = txResult.result || 'unknown';
+        log.success(`BTC transfer TX: ${txId}`);
+        return { txId };
+    }
+
     getProvider(): JSONRpcProvider {
         return this.provider;
     }
@@ -294,6 +326,17 @@ export function createApproveCalldata(
     const writer = new BinaryWriter();
     writer.writeU32(TOKEN_SELECTORS.approve);
     writer.writeAddress(spender);
+    writer.writeU256(amount);
+    return writer.getBuffer();
+}
+
+export function createTransferCalldata(
+    to: Address,
+    amount: bigint
+): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(TOKEN_SELECTORS.transfer);
+    writer.writeAddress(to);
     writer.writeU256(amount);
     return writer.getBuffer();
 }

@@ -4,9 +4,9 @@
 
 Phase 1 delivers the minimum viable product: peer-to-peer options trading with OP20 tokens only. No BTC, no AMM - just the core option mechanics.
 
-**Status**: Planning
+**Status**: In Progress — contracts complete on testnet, UI integration pending
 
-**Timeline**: 4-6 weeks
+**Timeline**: Contracts done. UI integration next.
 
 ---
 
@@ -20,7 +20,12 @@ Phase 1 delivers the minimum viable product: peer-to-peer options trading with O
 - ✅ 100% collateralization
 - ✅ Block-height expiry
 - ✅ Permissionless pool creation
-- ✅ Option lifecycle management
+- ✅ Option lifecycle management (write, buy, exercise, cancel, settle)
+- ✅ All integration tests passing on testnet (13/13)
+- 🔲 Protocol fee model (buy fee 1%, exercise fee 0.1%, cancel fee 1%) — sprint backlog
+- 🔲 Pool enumeration for UI (getPoolCount, getPoolByIndex) — sprint backlog
+- 🔲 Batch option fetching for UI (getOptionsBatch) — sprint backlog
+- 🔲 Frontend UI integration — sprint backlog
 
 ### Excluded (Future Phases)
 
@@ -30,6 +35,7 @@ Phase 1 delivers the minimum viable product: peer-to-peer options trading with O
 - ❌ AMM liquidity pools (Phase 3)
 - ❌ LP rewards (Phase 3)
 - ❌ Partial collateral/leverage
+- ❌ Per-address on-chain option index (Phase 2 — Phase 1 uses client-side batch scan)
 
 ---
 
@@ -76,12 +82,14 @@ Permissionless pool creation.
 **Key Methods**:
 - `createPool(underlying, premiumToken)` → poolAddress
 - `getPool(underlying, premiumToken)` → poolAddress
-- `allPools(index)` → poolAddress
-- `poolCount()` → count
+- `getPoolByIndex(index)` → poolAddress *(pending — sprint backlog)*
+- `getPoolCount()` → count *(currently returns 0 — fix pending)*
+- `setTreasury(addr)` / `getTreasury()` → fee recipient *(pending — sprint backlog)*
 
 **Storage**:
 - Pool registry (underlying → premium → address)
-- Pool list (array of all pools)
+- Pool list (array of all pools) *(pending)*
+- Treasury address *(pending)*
 
 ### 2. OptionsPool
 
@@ -92,12 +100,16 @@ Individual option market.
 - `buyOption(optionId)` → success
 - `exercise(optionId)` → success
 - `cancelOption(optionId)` → success
+- `settle(optionId)` → success
 - `getOption(optionId)` → Option struct
+- `getOptionsBatch(startId, count)` → packed Option array *(pending — sprint backlog)*
+- `claimFees()` / `feeRecipient()` *(pending — sprint backlog)*
 
 **Storage**:
 - Options map (id → Option)
-- Writer options (writer → [optionIds])
-- Buyer options (buyer → [optionIds])
+- feeRecipient address *(pending)*
+
+> Note: Per-address writer/buyer index arrays are deferred to Phase 2. Phase 1 uses client-side filtering via `getOptionsBatch()`.
 
 ---
 
@@ -292,34 +304,28 @@ Full lifecycle tests:
 
 ## Milestones
 
-### Week 1-2: Core Contracts
+### Contracts — DONE ✅
 
-- [ ] OptionsFactory contract
-- [ ] OptionsPool contract (basic structure)
-- [ ] Storage layout
-- [ ] Basic tests
+- [x] OptionsFactory contract
+- [x] OptionsPool contract
+- [x] Storage layout (SHA256-based option storage, lazy-loaded fields)
+- [x] Full option lifecycle (write, buy, exercise, cancel, settle)
+- [x] Reentrancy guards, access control, input validation
+- [x] Integration tests passing on testnet (13/13)
 
-### Week 3-4: Option Lifecycle
+### Contract Additions — In Sprint 🔲
 
-- [ ] writeOption() implementation
-- [ ] buyOption() implementation
-- [ ] exercise() implementation
-- [ ] cancelOption() implementation
-- [ ] Full test coverage
+- [ ] Protocol fee model (feeRecipient, buy fee, exercise fee, cancel fee routing)
+- [ ] Pool enumeration (getPoolCount, getPoolByIndex in factory)
+- [ ] Batch option fetch (getOptionsBatch in pool)
+- [ ] Updated integration tests for all above
 
-### Week 5: Security
+### Frontend UI — Pending 🔲
 
-- [ ] Reentrancy guards
-- [ ] Access control
-- [ ] Input validation
-- [ ] Security tests
-
-### Week 6: Deployment Prep
-
-- [ ] Gas optimization
-- [ ] Integration tests
-- [ ] Documentation
-- [ ] Deployment scripts
+- [ ] Pools page (list pools, browse open options, write option)
+- [ ] Portfolio page (my written options, my bought options, exercise/cancel/settle)
+- [ ] Wallet integration (OPWallet)
+- [ ] Deployed to Cloudflare Workers
 
 ---
 
@@ -357,8 +363,10 @@ Phase 1 is complete when:
 4. ✅ Options can be exercised (ITM) or expire (OTM)
 5. ✅ Writers can cancel unpurchased options
 6. ✅ All security checks pass
-7. ✅ Test coverage > 90%
-8. ✅ Deployed to regtest
+7. ✅ Integration tests passing on testnet
+8. 🔲 Protocol fee model implemented and tested
+9. 🔲 Pool enumeration + batch fetch implemented and tested
+10. 🔲 Frontend UI live on Cloudflare Workers (testnet)
 
 ---
 

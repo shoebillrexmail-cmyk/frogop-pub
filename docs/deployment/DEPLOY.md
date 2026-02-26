@@ -1,18 +1,23 @@
 # FroGop Deployment Runbook
 
-## Architecture
+> **FroGop frontend is deployed via Cloudflare Workers (static assets).**
+> See [`docs/deployment/CLOUDFLARE_PAGES.md`](./CLOUDFLARE_PAGES.md) for the frontend deployment guide.
+> The VPS/Docker setup below is **no longer used for FroGop** and is retained only as reference for the shared proxy server hosting other services (shoebillhl.ai).
+
+---
+
+## Current Architecture
 
 ```
+Internet
+  → Cloudflare Workers (FroGop SPA — global CDN, auto-deploy on push to master)
+
 Internet
   → Cloudflare (DDoS, WAF, CDN, TLS termination)
     → Hetzner VPS — UFW: only Cloudflare IPs on 80/443
       → proxy container (nginx — TLS termination, routing by domain)
-           ├─ frogop.com       → frogop container :3000  (FroGop SPA)
            └─ shoebillhl.ai    → h-quant-web :8080       (other site)
 ```
-
-Both site containers run on internal ports only — no direct port exposure.
-The proxy container is the single point of entry for all HTTPS traffic.
 
 ---
 

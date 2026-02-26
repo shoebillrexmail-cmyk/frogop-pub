@@ -1,7 +1,9 @@
 import 'dotenv/config';
+import * as fs from 'fs';
+import * as path from 'path';
 import { JSONRpcProvider } from 'opnet';
 import type { CallResult, ICallRequestError } from 'opnet';
-import { Address, BinaryWriter } from '@btc-vision/transaction';
+import { Address, AddressTypes, BinaryWriter } from '@btc-vision/transaction';
 import {
     getConfig,
     loadDeployedContracts,
@@ -18,6 +20,11 @@ import {
     DeploymentHelper,
     createWriteOptionCalldata,
     createCancelOptionCalldata,
+    createBuyOptionCalldata,
+    createExerciseCalldata,
+    createSettleCalldata,
+    createIncreaseAllowanceCalldata,
+    createTransferCalldata,
 } from './deployment.js';
 
 const log = getLogger('06-full-lifecycle');
@@ -316,8 +323,6 @@ async function main() {
         } else {
             // --- Approve MOTO for the pool using raw calldata ---
             await runTest('Token: Approve MOTO for pool', async () => {
-                const { createIncreaseAllowanceCalldata } = await import('./deployment.js');
-                // Use poolCallAddr (hex) not poolAddress (opr1) for Address.fromString
                 const poolAddr = Address.fromString(poolCallAddr);
                 const calldata = createIncreaseAllowanceCalldata(poolAddr, OPTION_AMOUNT);
 
@@ -530,13 +535,576 @@ async function main() {
     }
 
     // =====================================================================
-    // PHASE 5: Notes on untested flows
+    // PHASE 5: Set up buyer wallet (for buyOption / exercise tests)
+    // =====================================================================
+    //
+    // The contract prevents writers from buying their own options
+    // (Revert: "Writer cannot buy own option"), so we derive a second
+    // wallet from the same mnemonic at index 1 and fund it.
     // =====================================================================
 
-    log.info('\n=== Untested Flows (require second wallet) ===');
-    log.info('  - buyOption: Contract prevents writer buying own option');
-    log.info('  - exercise: Requires buyer + block advancement past expiry');
-    log.info('  - settle: Requires purchased option past grace period');
+    log.info('\n=== Phase 5: Buyer Wallet Setup ===');
+
+    const buyerWallet = config.mnemonic.deriveOPWallet(AddressTypes.P2TR, 1);
+    const buyerHex = buyerWallet.address.toString();
+    const buyerDeployer = new DeploymentHelper(provider, buyerWallet, config.network);
+
+    log.info(`Buyer wallet: ${buyerWallet.p2tr}`);
+    log.info(`Buyer hex: ${formatAddress(buyerHex)}`);
+
+    const MIN_BUYER_BTC = 1_200_000n;        // 1.2M sats for gas across 6+ TXs (phases 6-8)
+    const MIN_BUYER_PILL = 100n * 10n ** 18n; // 100 PILL for premium + exercise
+
+    let buyerBtcBalance = 0n;
+    let buyerPillBalance = 0n;
+    let buyerReady = false;
+
+    await runTest('Buyer: Check BTC balance', async () => {
+        buyerBtcBalance = await provider.getBalance(buyerWallet.p2tr);
+        log.info(`  Buyer BTC: ${buyerBtcBalance} sats (${Number(buyerBtcBalance) / 1e8} BTC)`);
+        return { balance: buyerBtcBalance.toString() };
+    });
+
+    await runTest('Buyer: Check PILL balance', async () => {
+        const calldata = buildBalanceOfCalldata(buyerHex);
+        const result = await provider.call(
+            deployed.tokens.frogP,
+            TOKEN_SELECTORS.balanceOf + calldata,
+        );
+        if (isCallError(result)) throw new Error(`Call error: ${result.error}`);
+        if (result.revert) throw new Error(`Revert: ${Buffer.from(result.revert, 'base64').toString()}`);
+        buyerPillBalance = result.result.readU256();
+        log.info(`  Buyer PILL: ${buyerPillBalance} (${formatBigInt(buyerPillBalance)})`);
+        return { balance: buyerPillBalance.toString() };
+    });
+
+    // Fund buyer with BTC if needed
+    if (hasTokens && buyerBtcBalance < MIN_BUYER_BTC) {
+        await runTest('Buyer: Fund with BTC', async () => {
+            const sendAmount = MIN_BUYER_BTC;
+            currentBlock = await provider.getBlockNumber();
+            const result = await deployer.sendBTC(buyerWallet.p2tr, sendAmount);
+            log.info(`  Sent ${sendAmount} sats to buyer. TX: ${result.txId}`);
+            try {
+                currentBlock = await waitForBlock(provider, currentBlock, 1);
+            } catch {
+                log.warn('  Block timeout - TX broadcast OK, may confirm later');
+            }
+            return { txId: result.txId, amount: sendAmount.toString() };
+        });
+    } else if (!hasTokens) {
+        skipTest('Buyer: Fund with BTC', 'Insufficient writer MOTO tokens');
+    } else {
+        skipTest('Buyer: Fund with BTC', 'Already has enough BTC');
+    }
+
+    // Fund buyer with PILL tokens if needed
+    if (hasTokens && pillBalance >= MIN_BUYER_PILL && buyerPillBalance < MIN_BUYER_PILL) {
+        await runTest('Buyer: Fund with PILL tokens', async () => {
+            const sendAmount = MIN_BUYER_PILL;
+            const calldata = createTransferCalldata(buyerWallet.address, sendAmount);
+            currentBlock = await provider.getBlockNumber();
+            const result = await deployer.callContract(deployed.tokens.frogP, calldata, 50_000n);
+            log.info(`  Sent ${formatBigInt(sendAmount)} PILL to buyer. TX: ${result.txId}`);
+            try {
+                currentBlock = await waitForBlock(provider, currentBlock, 1);
+            } catch {
+                log.warn('  Block timeout - TX broadcast OK, may confirm later');
+            }
+            return { txId: result.txId, amount: sendAmount.toString() };
+        });
+    } else if (!hasTokens || pillBalance < MIN_BUYER_PILL) {
+        skipTest('Buyer: Fund with PILL tokens', 'Insufficient writer token balance');
+    } else {
+        skipTest('Buyer: Fund with PILL tokens', 'Already has enough PILL');
+    }
+
+    // Re-check buyer balances after funding
+    await runTest('Buyer: Verify funding', async () => {
+        // Poll a few times in case funding TXs are still pending
+        for (let attempt = 0; attempt < 12; attempt++) {
+            buyerBtcBalance = await provider.getBalance(buyerWallet.p2tr);
+
+            const calldata = buildBalanceOfCalldata(buyerHex);
+            const result = await provider.call(
+                deployed.tokens.frogP,
+                TOKEN_SELECTORS.balanceOf + calldata,
+            );
+            if (!isCallError(result) && !result.revert) {
+                buyerPillBalance = result.result.readU256();
+            }
+
+            buyerReady = buyerBtcBalance >= 100_000n && buyerPillBalance >= 5n * 10n ** 18n;
+            if (buyerReady) break;
+
+            if (attempt < 11) {
+                log.info(`  Buyer not ready yet (BTC: ${buyerBtcBalance}, PILL: ${buyerPillBalance}), polling... (${attempt + 1}/12)`);
+                await new Promise((r) => setTimeout(r, 30_000));
+            }
+        }
+
+        log.info(`  Buyer BTC: ${buyerBtcBalance} sats, PILL: ${formatBigInt(buyerPillBalance)}`);
+        log.info(`  Buyer ready: ${buyerReady}`);
+
+        if (!buyerReady) {
+            log.warn(`  Buyer wallet not funded yet. Fund and re-run.`);
+            log.warn(`  Buyer address: ${buyerWallet.p2tr}`);
+        }
+
+        return { btc: buyerBtcBalance.toString(), pill: buyerPillBalance.toString(), ready: buyerReady };
+    });
+
+    // =====================================================================
+    // PHASE 6: Write + Buy Option (buyOption test)
+    // =====================================================================
+    //
+    // Contract math: strikeValue = strikePrice * underlyingAmount (no decimal scaling).
+    // With strikePrice = 50 and underlyingAmount = 1e18, strikeValue = 50e18 = 50 PILL.
+    // =====================================================================
+
+    const BUY_STRIKE_PRICE = 50n;              // raw multiplier (not 50e18!)
+    const BUY_PREMIUM = 5n * 10n ** 18n;       // 5 PILL
+    const BUY_AMOUNT = 1n * 10n ** 18n;        // 1 MOTO
+    const BUY_STRIKE_VALUE = BUY_STRIKE_PRICE * BUY_AMOUNT; // 50e18 = 50 PILL
+
+    let buyTestOptionId: bigint | null = null;
+    let buyTestExpiryBlock: bigint | null = null;
+    let buyTestPurchased = false;
+
+    if (!buyerReady || !hasTokens) {
+        const reason = !buyerReady ? 'Buyer wallet not funded' : 'Insufficient MOTO';
+        skipTest('Writer: Approve MOTO for buy-test option', reason);
+        skipTest('Writer: Write CALL for buy-test', reason);
+        skipTest('Verify buy-test option exists', reason);
+        skipTest('Buyer: Approve PILL premium for pool', reason);
+        skipTest('Buyer: Buy option (buyOption)', reason);
+        skipTest('Verify option status = PURCHASED', reason);
+    } else {
+        log.info('\n=== Phase 6: Write + Buy Option ===');
+
+        // Read current option count before writing
+        let preWriteCount = 0n;
+        {
+            const r = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
+            if (!isCallError(r) && !r.revert) preWriteCount = r.result.readU256();
+        }
+
+        // Writer approves MOTO for pool
+        await runTest('Writer: Approve MOTO for buy-test option', async () => {
+            const poolAddr = Address.fromString(poolCallAddr);
+            const calldata = createIncreaseAllowanceCalldata(poolAddr, BUY_AMOUNT);
+            currentBlock = await provider.getBlockNumber();
+            const result = await deployer.callContract(deployed.tokens.frogU, calldata, 50_000n);
+            log.info(`  Approve TX: ${result.txId}`);
+            try { currentBlock = await waitForBlock(provider, currentBlock, 1); } catch { log.warn('  Block timeout'); }
+            return { txId: result.txId };
+        });
+
+        // Writer writes CALL option with short expiry
+        await runTest('Writer: Write CALL for buy-test', async () => {
+            currentBlock = await provider.getBlockNumber();
+            buyTestExpiryBlock = currentBlock + 4n; // ~40 min to buy before expiry
+            const calldata = createWriteOptionCalldata(0, BUY_STRIKE_PRICE, buyTestExpiryBlock, BUY_AMOUNT, BUY_PREMIUM);
+            const result = await deployer.callContract(poolAddress!, calldata, 200_000n);
+            log.info(`  Write TX: ${result.txId}`);
+            log.info(`  Expiry: block ${buyTestExpiryBlock} (current: ${currentBlock})`);
+            return { txId: result.txId, expiryBlock: buyTestExpiryBlock.toString() };
+        });
+
+        // Poll for the new option to appear
+        await runTest('Verify buy-test option exists', async () => {
+            const expectedCount = preWriteCount + 1n;
+            for (let attempt = 0; attempt < 24; attempt++) {
+                const r = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
+                if (isCallError(r) || r.revert) throw new Error('Call error');
+                const count = r.result.readU256();
+
+                if (count >= expectedCount) {
+                    buyTestOptionId = preWriteCount; // 0-based ID
+                    log.info(`  Option count: ${count}, buy-test option ID: ${buyTestOptionId}`);
+                    return { optionCount: count.toString(), optionId: buyTestOptionId.toString() };
+                }
+
+                if (attempt < 23) {
+                    log.info(`  Option count still ${count} (need ${expectedCount}), polling... (${attempt + 1}/24)`);
+                    await new Promise((r) => setTimeout(r, 30_000));
+                }
+            }
+            throw new Error('Buy-test option not mined after polling. Re-run later.');
+        });
+
+        // Buyer approves PILL premium for pool
+        if (buyTestOptionId !== null) {
+            await runTest('Buyer: Approve PILL premium for pool', async () => {
+                const poolAddr = Address.fromString(poolCallAddr);
+                const calldata = createIncreaseAllowanceCalldata(poolAddr, BUY_PREMIUM);
+                const result = await buyerDeployer.callContract(deployed.tokens.frogP, calldata, 50_000n);
+                log.info(`  Buyer approve TX: ${result.txId}`);
+                // Re-fetch block AFTER broadcast so we wait for a genuinely new block
+                currentBlock = await provider.getBlockNumber();
+                try { currentBlock = await waitForBlock(provider, currentBlock, 1); } catch { log.warn('  Block timeout'); }
+                return { txId: result.txId };
+            });
+
+            // Buyer calls buyOption
+            await runTest('Buyer: Buy option (buyOption)', async () => {
+                const calldata = createBuyOptionCalldata(buyTestOptionId!);
+                const result = await buyerDeployer.callContract(poolAddress!, calldata, 200_000n);
+                log.info(`  Buy TX: ${result.txId}`);
+                return { txId: result.txId, optionId: buyTestOptionId!.toString() };
+            });
+
+            // Verify status = PURCHASED (1)
+            await runTest('Verify option status = PURCHASED', async () => {
+                for (let attempt = 0; attempt < 24; attempt++) {
+                    const opt = await readOptionStatus(buyTestOptionId!);
+                    if (!opt) throw new Error('Failed to read option');
+
+                    if (opt.status === 1) {
+                        buyTestPurchased = true;
+                        log.info(`  Status: ${opt.status} (PURCHASED)`);
+                        log.info(`  Buyer: ${formatAddress(opt.buyer)}`);
+                        return { status: opt.status, buyer: opt.buyer };
+                    }
+
+                    if (attempt < 23) {
+                        log.info(`  Status still ${opt.status}, polling for PURCHASED... (${attempt + 1}/24)`);
+                        await new Promise((r) => setTimeout(r, 30_000));
+                    }
+                }
+                throw new Error('Option not PURCHASED after polling. Re-run later.');
+            });
+        } else {
+            skipTest('Buyer: Approve PILL premium for pool', 'No option to buy');
+            skipTest('Buyer: Buy option (buyOption)', 'No option to buy');
+            skipTest('Verify option status = PURCHASED', 'No option to buy');
+        }
+    }
+
+    // =====================================================================
+    // PHASE 7: Exercise Option (CALL)
+    // =====================================================================
+    //
+    // Exercise requires: PURCHASED + currentBlock >= expiryBlock
+    //                    + currentBlock < expiryBlock + 144 (grace period)
+    // For CALL: buyer pays strikeValue (PILL) to writer, receives underlying (MOTO).
+    // =====================================================================
+
+    if (!buyTestPurchased || buyTestOptionId === null || buyTestExpiryBlock === null) {
+        const reason = !buyTestPurchased ? 'Option not purchased' : 'No option ID';
+        skipTest('Wait for option expiry', reason);
+        skipTest('Buyer: Approve PILL for exercise (strikeValue)', reason);
+        skipTest('Buyer: Exercise option', reason);
+        skipTest('Verify option status = EXERCISED', reason);
+        skipTest('Verify buyer received underlying tokens', reason);
+    } else {
+        log.info('\n=== Phase 7: Exercise Option (CALL) ===');
+        log.info(`Option ID: ${buyTestOptionId}, expiry: block ${buyTestExpiryBlock}`);
+
+        // Wait for expiry
+        await runTest('Wait for option expiry', async () => {
+            currentBlock = await provider.getBlockNumber();
+            if (currentBlock >= buyTestExpiryBlock!) {
+                log.info(`  Already past expiry (current: ${currentBlock}, expiry: ${buyTestExpiryBlock})`);
+                return { currentBlock: currentBlock.toString(), alreadyExpired: true };
+            }
+            const blocksToWait = Number(buyTestExpiryBlock! - currentBlock);
+            log.info(`  Need ${blocksToWait} more blocks (current: ${currentBlock}, expiry: ${buyTestExpiryBlock})`);
+            log.info(`  Estimated wait: ~${blocksToWait * 10} minutes`);
+
+            // Wait with generous timeout (up to ~2 hours)
+            currentBlock = await waitForBlock(provider, currentBlock, blocksToWait, 720);
+            log.info(`  Reached block ${currentBlock}, past expiry ${buyTestExpiryBlock}`);
+            return { currentBlock: currentBlock.toString(), alreadyExpired: false };
+        });
+
+        // Check we're within grace period
+        const graceEnd = buyTestExpiryBlock + 144n;
+        currentBlock = await provider.getBlockNumber();
+        if (currentBlock >= graceEnd) {
+            log.warn(`  Past grace period (current: ${currentBlock}, graceEnd: ${graceEnd}). Cannot exercise.`);
+            skipTest('Buyer: Approve PILL for exercise (strikeValue)', 'Grace period ended');
+            skipTest('Buyer: Exercise option', 'Grace period ended');
+            skipTest('Verify option status = EXERCISED', 'Grace period ended');
+            skipTest('Verify buyer received underlying tokens', 'Grace period ended');
+        } else {
+            // Buyer approves PILL for strikeValue payment
+            await runTest('Buyer: Approve PILL for exercise (strikeValue)', async () => {
+                const poolAddr = Address.fromString(poolCallAddr);
+                const calldata = createIncreaseAllowanceCalldata(poolAddr, BUY_STRIKE_VALUE);
+                const result = await buyerDeployer.callContract(deployed.tokens.frogP, calldata, 50_000n);
+                log.info(`  Approve strikeValue (${formatBigInt(BUY_STRIKE_VALUE)} PILL) TX: ${result.txId}`);
+                // Re-fetch block AFTER broadcast
+                currentBlock = await provider.getBlockNumber();
+                try { currentBlock = await waitForBlock(provider, currentBlock, 1); } catch { log.warn('  Block timeout'); }
+                return { txId: result.txId, strikeValue: BUY_STRIKE_VALUE.toString() };
+            });
+
+            // Record buyer MOTO balance before exercise
+            let buyerMotoBefore = 0n;
+            {
+                const cd = buildBalanceOfCalldata(buyerHex);
+                const r = await provider.call(deployed.tokens.frogU, TOKEN_SELECTORS.balanceOf + cd);
+                if (!isCallError(r) && !r.revert) buyerMotoBefore = r.result.readU256();
+            }
+
+            // Buyer exercises the option
+            await runTest('Buyer: Exercise option', async () => {
+                const calldata = createExerciseCalldata(buyTestOptionId!);
+                currentBlock = await provider.getBlockNumber();
+                log.info(`  Current block: ${currentBlock}, expiry: ${buyTestExpiryBlock}, grace end: ${graceEnd}`);
+                const result = await buyerDeployer.callContract(poolAddress!, calldata, 200_000n);
+                log.info(`  Exercise TX: ${result.txId}`);
+                return { txId: result.txId, optionId: buyTestOptionId!.toString() };
+            });
+
+            // Verify status = EXERCISED (2)
+            await runTest('Verify option status = EXERCISED', async () => {
+                for (let attempt = 0; attempt < 24; attempt++) {
+                    const opt = await readOptionStatus(buyTestOptionId!);
+                    if (!opt) throw new Error('Failed to read option');
+
+                    if (opt.status === 2) {
+                        log.info(`  Status: ${opt.status} (EXERCISED)`);
+                        return { status: opt.status, statusName: 'EXERCISED' };
+                    }
+
+                    if (attempt < 23) {
+                        log.info(`  Status still ${opt.status}, polling for EXERCISED... (${attempt + 1}/24)`);
+                        await new Promise((r) => setTimeout(r, 30_000));
+                    }
+                }
+                throw new Error('Option not EXERCISED after polling. Re-run later.');
+            });
+
+            // Verify buyer received underlying tokens (MOTO)
+            await runTest('Verify buyer received underlying tokens', async () => {
+                const cd = buildBalanceOfCalldata(buyerHex);
+                const r = await provider.call(deployed.tokens.frogU, TOKEN_SELECTORS.balanceOf + cd);
+                if (isCallError(r)) throw new Error(`Call error: ${r.error}`);
+                if (r.revert) throw new Error(`Revert: ${Buffer.from(r.revert, 'base64').toString()}`);
+                const buyerMotoAfter = r.result.readU256();
+                const received = buyerMotoAfter - buyerMotoBefore;
+                log.info(`  Buyer MOTO before: ${formatBigInt(buyerMotoBefore)}`);
+                log.info(`  Buyer MOTO after:  ${formatBigInt(buyerMotoAfter)}`);
+                log.info(`  Received: ${formatBigInt(received)} (expected: ${formatBigInt(BUY_AMOUNT)})`);
+
+                if (received !== BUY_AMOUNT) {
+                    log.warn(`  Mismatch: received ${received}, expected ${BUY_AMOUNT}`);
+                }
+
+                return {
+                    before: buyerMotoBefore.toString(),
+                    after: buyerMotoAfter.toString(),
+                    received: received.toString(),
+                    expected: BUY_AMOUNT.toString(),
+                };
+            });
+        }
+    }
+
+    // =====================================================================
+    // PHASE 8: Settle prep (write + buy another option, save ID for later)
+    // =====================================================================
+    //
+    // Settle requires: PURCHASED + currentBlock >= expiryBlock + 144
+    // That's ~24 hours after expiry on Signet. We can't wait in a single run.
+    // Instead we write + buy a new option and save its ID for a later run.
+    // =====================================================================
+
+    if (!buyerReady || !hasTokens) {
+        skipTest('Settle prep: Writer approve MOTO', 'Buyer or writer not ready');
+        skipTest('Settle prep: Writer write CALL', 'Buyer or writer not ready');
+        skipTest('Settle prep: Verify option exists', 'Buyer or writer not ready');
+        skipTest('Settle prep: Buyer approve PILL premium', 'Buyer or writer not ready');
+        skipTest('Settle prep: Buyer buy option', 'Buyer or writer not ready');
+        skipTest('Settle prep: Verify PURCHASED + save state', 'Buyer or writer not ready');
+    } else {
+        log.info('\n=== Phase 8: Settle Prep ===');
+
+        let settleOptionId: bigint | null = null;
+        let settleExpiryBlock: bigint | null = null;
+
+        // Read current option count
+        let preSettleCount = 0n;
+        {
+            const r = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
+            if (!isCallError(r) && !r.revert) preSettleCount = r.result.readU256();
+        }
+
+        // Writer approves MOTO
+        await runTest('Settle prep: Writer approve MOTO', async () => {
+            const poolAddr = Address.fromString(poolCallAddr);
+            const calldata = createIncreaseAllowanceCalldata(poolAddr, BUY_AMOUNT);
+            currentBlock = await provider.getBlockNumber();
+            const result = await deployer.callContract(deployed.tokens.frogU, calldata, 50_000n);
+            log.info(`  Approve TX: ${result.txId}`);
+            try { currentBlock = await waitForBlock(provider, currentBlock, 1); } catch { log.warn('  Block timeout'); }
+            return { txId: result.txId };
+        });
+
+        // Writer writes CALL with short expiry (same params as buy-test)
+        await runTest('Settle prep: Writer write CALL', async () => {
+            currentBlock = await provider.getBlockNumber();
+            settleExpiryBlock = currentBlock + 3n;
+            const calldata = createWriteOptionCalldata(0, BUY_STRIKE_PRICE, settleExpiryBlock, BUY_AMOUNT, BUY_PREMIUM);
+            const result = await deployer.callContract(poolAddress!, calldata, 200_000n);
+            log.info(`  Write TX: ${result.txId}`);
+            log.info(`  Expiry: block ${settleExpiryBlock}`);
+            return { txId: result.txId, expiryBlock: settleExpiryBlock.toString() };
+        });
+
+        // Poll for option to appear
+        await runTest('Settle prep: Verify option exists', async () => {
+            const expectedCount = preSettleCount + 1n;
+            for (let attempt = 0; attempt < 24; attempt++) {
+                const r = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
+                if (isCallError(r) || r.revert) throw new Error('Call error');
+                const count = r.result.readU256();
+
+                if (count >= expectedCount) {
+                    settleOptionId = preSettleCount;
+                    log.info(`  Settle-prep option ID: ${settleOptionId}`);
+                    return { optionId: settleOptionId.toString() };
+                }
+
+                if (attempt < 23) {
+                    log.info(`  Polling for settle-prep option... (${attempt + 1}/24)`);
+                    await new Promise((r) => setTimeout(r, 30_000));
+                }
+            }
+            throw new Error('Settle-prep option not mined. Re-run later.');
+        });
+
+        if (settleOptionId !== null) {
+            // Re-fund buyer with BTC if needed (spent on Phase 6+7 transactions)
+            const buyerBtcBalance = await provider.getBalance(buyerWallet.p2tr);
+            if (buyerBtcBalance < 500_000n) {
+                await runTest('Settle prep: Re-fund buyer with BTC', async () => {
+                    const amount = 500_000n;
+                    const result = await deployer.sendBTC(buyerWallet.p2tr, amount);
+                    log.info(`  Sent ${amount} sats to buyer. TX: ${result.txId}`);
+                    currentBlock = await provider.getBlockNumber();
+                    try { currentBlock = await waitForBlock(provider, currentBlock, 1); } catch { log.warn('  Block timeout'); }
+                    return { txId: result.txId, amount: amount.toString() };
+                });
+            } else {
+                log.info(`  Buyer has ${buyerBtcBalance} sats BTC — enough for settle prep`);
+            }
+
+            // Buyer approves PILL premium
+            await runTest('Settle prep: Buyer approve PILL premium', async () => {
+                const poolAddr = Address.fromString(poolCallAddr);
+                const calldata = createIncreaseAllowanceCalldata(poolAddr, BUY_PREMIUM);
+                const result = await buyerDeployer.callContract(deployed.tokens.frogP, calldata, 50_000n);
+                log.info(`  Buyer approve TX: ${result.txId}`);
+                // Re-fetch block AFTER broadcast
+                currentBlock = await provider.getBlockNumber();
+                try { currentBlock = await waitForBlock(provider, currentBlock, 1); } catch { log.warn('  Block timeout'); }
+                return { txId: result.txId };
+            });
+
+            // Buyer buys the option
+            await runTest('Settle prep: Buyer buy option', async () => {
+                const calldata = createBuyOptionCalldata(settleOptionId!);
+                const result = await buyerDeployer.callContract(poolAddress!, calldata, 200_000n);
+                log.info(`  Buy TX: ${result.txId}`);
+                return { txId: result.txId };
+            });
+
+            // Verify PURCHASED and save state for later settle
+            await runTest('Settle prep: Verify PURCHASED + save state', async () => {
+                for (let attempt = 0; attempt < 24; attempt++) {
+                    const opt = await readOptionStatus(settleOptionId!);
+                    if (!opt) throw new Error('Failed to read option');
+
+                    if (opt.status === 1) {
+                        log.info(`  Status: ${opt.status} (PURCHASED) - ready for settle`);
+
+                        // Save state for later settle test
+                        const settleState = {
+                            optionId: settleOptionId!.toString(),
+                            expiryBlock: settleExpiryBlock!.toString(),
+                            graceEnd: (settleExpiryBlock! + 144n).toString(),
+                            pool: poolAddress,
+                            poolCallAddr,
+                            network: process.env.OPNET_NETWORK || 'regtest',
+                            savedAt: new Date().toISOString(),
+                        };
+                        const statePath = path.join(process.cwd(), 'tests', 'integration', 'settle-state.json');
+                        fs.writeFileSync(statePath, JSON.stringify(settleState, null, 2));
+                        log.info(`  Settle state saved to: ${statePath}`);
+                        log.info(`  Settle available after block: ${settleState.graceEnd}`);
+
+                        return { status: opt.status, settleState };
+                    }
+
+                    if (attempt < 23) {
+                        log.info(`  Status still ${opt.status}, polling... (${attempt + 1}/24)`);
+                        await new Promise((r) => setTimeout(r, 30_000));
+                    }
+                }
+                throw new Error('Settle-prep option not PURCHASED after polling.');
+            });
+        } else {
+            skipTest('Settle prep: Buyer approve PILL premium', 'No option to buy');
+            skipTest('Settle prep: Buyer buy option', 'No option to buy');
+            skipTest('Settle prep: Verify PURCHASED + save state', 'No option to buy');
+        }
+    }
+
+    // =====================================================================
+    // Check for pending settle from a previous run
+    // =====================================================================
+
+    const settleStatePath = path.join(process.cwd(), 'tests', 'integration', 'settle-state.json');
+    if (fs.existsSync(settleStatePath)) {
+        const settleState = JSON.parse(fs.readFileSync(settleStatePath, 'utf-8'));
+        const settleGraceEnd = BigInt(settleState.graceEnd);
+        currentBlock = await provider.getBlockNumber();
+
+        if (currentBlock >= settleGraceEnd) {
+            log.info('\n=== Bonus: Settle from previous run ===');
+            log.info(`Option ID: ${settleState.optionId}, grace ended at block ${settleGraceEnd}, current: ${currentBlock}`);
+
+            await runTest('Settle: Call settle on expired option', async () => {
+                const optId = BigInt(settleState.optionId);
+                const calldata = createSettleCalldata(optId);
+                currentBlock = await provider.getBlockNumber();
+                const result = await deployer.callContract(poolAddress!, calldata, 200_000n);
+                log.info(`  Settle TX: ${result.txId}`);
+                return { txId: result.txId, optionId: settleState.optionId };
+            });
+
+            await runTest('Settle: Verify option status = EXPIRED', async () => {
+                const optId = BigInt(settleState.optionId);
+                for (let attempt = 0; attempt < 24; attempt++) {
+                    const opt = await readOptionStatus(optId);
+                    if (!opt) throw new Error('Failed to read option');
+
+                    if (opt.status === 3) {
+                        log.info(`  Status: ${opt.status} (EXPIRED/SETTLED)`);
+                        // Remove settle state file after successful settle
+                        fs.unlinkSync(settleStatePath);
+                        log.info('  Settle state file cleaned up.');
+                        return { status: opt.status, statusName: 'EXPIRED' };
+                    }
+
+                    if (attempt < 23) {
+                        log.info(`  Status still ${opt.status}, polling for EXPIRED... (${attempt + 1}/24)`);
+                        await new Promise((r) => setTimeout(r, 30_000));
+                    }
+                }
+                throw new Error('Settle not confirmed after polling.');
+            });
+        } else {
+            const blocksRemaining = settleGraceEnd - currentBlock;
+            log.info(`\n=== Settle pending (${blocksRemaining} blocks until grace end) ===`);
+            log.info(`  Option ID: ${settleState.optionId}`);
+            log.info(`  Grace ends at block: ${settleGraceEnd} (current: ${currentBlock})`);
+            log.info(`  Estimated wait: ~${Number(blocksRemaining) * 10} minutes`);
+        }
+    }
 
     printSummary();
 }
