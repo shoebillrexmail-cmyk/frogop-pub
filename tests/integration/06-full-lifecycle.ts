@@ -141,7 +141,8 @@ async function main() {
         // Deploy pool directly (factory createPool is not supported by OPNet runtime)
         log.info('  Deploying pool directly...');
         const { createPoolCalldata, getWasmPath } = await import('./deployment.js');
-        const calldata = createPoolCalldata(motoAddress, pillAddress);
+        // Deployer wallet is the feeRecipient (treasury) for integration testing
+        const calldata = createPoolCalldata(motoAddress, pillAddress, config.wallet.address);
         currentBlock = await provider.getBlockNumber();
         const deployResult = await deployer.deployContract(
             getWasmPath('OptionsPool'),
@@ -243,6 +244,29 @@ async function main() {
         return { optionCount: initialOptionCount.toString() };
     });
 
+    await runTest('Pool: Read fee configuration', async () => {
+        const [r1, r2, r3] = await Promise.all([
+            provider.call(poolCallAddr, POOL_SELECTORS.feeRecipient),
+            provider.call(poolCallAddr, POOL_SELECTORS.buyFeeBps),
+            provider.call(poolCallAddr, POOL_SELECTORS.exerciseFeeBps),
+        ]);
+        if (isCallError(r1)) throw new Error(`feeRecipient error: ${r1.error}`);
+        if (isCallError(r2)) throw new Error(`buyFeeBps error: ${r2.error}`);
+        if (isCallError(r3)) throw new Error(`exerciseFeeBps error: ${r3.error}`);
+        if (r1.revert) throw new Error(`feeRecipient revert: ${r1.revert}`);
+        if (r2.revert) throw new Error(`buyFeeBps revert: ${r2.revert}`);
+        if (r3.revert) throw new Error(`exerciseFeeBps revert: ${r3.revert}`);
+        const feeRecip = r1.result.readAddress();
+        const buyBps = r2.result.readU64();
+        const exerciseBps = r3.result.readU64();
+        log.info(`  Fee recipient: ${formatAddress(feeRecip.toString())}`);
+        log.info(`  Buy fee: ${buyBps} bps (${Number(buyBps) / 100}%)`);
+        log.info(`  Exercise fee: ${exerciseBps} bps (${Number(exerciseBps) / 100}%)`);
+        if (buyBps !== 100n) throw new Error(`Expected buyFeeBps=100, got ${buyBps}`);
+        if (exerciseBps !== 10n) throw new Error(`Expected exerciseFeeBps=10, got ${exerciseBps}`);
+        return { feeRecipient: feeRecip.toString(), buyFeeBps: buyBps.toString(), exerciseFeeBps: exerciseBps.toString() };
+    });
+
     // =====================================================================
     // PHASE 4: Write & Cancel Option (requires MOTO tokens)
     // =====================================================================
@@ -287,7 +311,7 @@ async function main() {
         skipTest('Pool: Read option state (getOption)', reason);
         skipTest('Pool: Cancel option', reason);
         skipTest('Pool: Verify option cancelled', reason);
-        skipTest('Pool: Verify accumulated fees after cancel', reason);
+        skipTest('Pool: Verify feeRecipient receives cancel fee', reason);
     } else {
         // =================================================================
         // Check for existing OPEN option from a previous run (idempotent)
@@ -521,16 +545,23 @@ async function main() {
             skipTest('Pool: Verify option cancelled', 'No confirmed option to cancel');
         }
 
-        // --- Verify accumulated fees ---
-        await runTest('Pool: Verify accumulated fees after cancel', async () => {
-            const result = await provider.call(poolCallAddr, POOL_SELECTORS.accumulatedFees);
-            if (isCallError(result)) throw new Error(`Call error: ${result.error}`);
-            if (result.revert) throw new Error(`Revert: ${result.revert}`);
-
-            const fees = result.result.readU256();
-            const expectedFee = OPTION_AMOUNT / 100n; // 1% of 1 MOTO
-            log.info(`  Accumulated fees: ${fees} (expected ~${expectedFee})`);
-            return { accumulatedFees: fees.toString() };
+        // --- Verify feeRecipient received the cancel fee ---
+        // Since feeRecipient == deployer wallet in tests, we check the wallet's MOTO balance
+        // increased by ~OPTION_AMOUNT (writer refund + fee both go to same address).
+        await runTest('Pool: Verify feeRecipient receives cancel fee', async () => {
+            // Re-read deployer MOTO balance after cancel
+            const cd = buildBalanceOfCalldata(walletHex);
+            const r = await provider.call(deployed.tokens.frogU, TOKEN_SELECTORS.balanceOf + cd);
+            if (isCallError(r)) throw new Error(`Call error: ${r.error}`);
+            if (r.revert) throw new Error(`Revert: ${Buffer.from(r.revert, 'base64').toString()}`);
+            const motoAfterCancel = r.result.readU256();
+            const cancelFee = OPTION_AMOUNT * 100n / 10000n; // 1%
+            log.info(`  MOTO balance after cancel: ${formatBigInt(motoAfterCancel)}`);
+            log.info(`  Expected cancel fee routed to feeRecipient: ${cancelFee} (${formatBigInt(cancelFee)} MOTO)`);
+            // Since writer == feeRecipient, MOTO balance should be back to approximately pre-write level
+            // (writer gets collateral - fee back, feeRecipient gets fee — same wallet = net OPTION_AMOUNT returned)
+            log.info(`  Note: writer == feeRecipient so net change from pool = OPTION_AMOUNT (both go to same wallet)`);
+            return { motoAfterCancel: motoAfterCancel.toString(), expectedCancelFee: cancelFee.toString() };
         });
     }
 
@@ -679,6 +710,7 @@ async function main() {
         skipTest('Buyer: Approve PILL premium for pool', reason);
         skipTest('Buyer: Buy option (buyOption)', reason);
         skipTest('Verify option status = PURCHASED', reason);
+        skipTest('Verify writer received premium minus fee', reason);
     } else {
         log.info('\n=== Phase 6: Write + Buy Option ===');
 
@@ -735,6 +767,16 @@ async function main() {
 
         // Buyer approves PILL premium for pool
         if (buyTestOptionId !== null) {
+            // Record writer PILL balance before buyer calls buyOption
+            // Writer should receive premium - 1% buy fee once the option is purchased
+            let writerPillBefore = 0n;
+            {
+                const cd = buildBalanceOfCalldata(walletHex);
+                const r = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + cd);
+                if (!isCallError(r) && !r.revert) writerPillBefore = r.result.readU256();
+                log.info(`  Writer PILL before buyOption: ${formatBigInt(writerPillBefore)}`);
+            }
+
             await runTest('Buyer: Approve PILL premium for pool', async () => {
                 const poolAddr = Address.fromString(poolCallAddr);
                 const calldata = createIncreaseAllowanceCalldata(poolAddr, BUY_PREMIUM);
@@ -774,10 +816,37 @@ async function main() {
                 }
                 throw new Error('Option not PURCHASED after polling. Re-run later.');
             });
+
+            // Verify writer received premium minus 1% buy fee
+            await runTest('Verify writer received premium minus fee', async () => {
+                const cd = buildBalanceOfCalldata(walletHex);
+                const r = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + cd);
+                if (isCallError(r)) throw new Error(`Call error: ${r.error}`);
+                if (r.revert) throw new Error(`Revert: ${Buffer.from(r.revert, 'base64').toString()}`);
+                const writerPillAfter = r.result.readU256();
+                const received = writerPillAfter - writerPillBefore;
+                const buyFee = BUY_PREMIUM * 100n / 10000n;          // 1% of 5 PILL = 0.05 PILL
+                const expectedWriterAmount = BUY_PREMIUM - buyFee;   // 4.95 PILL
+                log.info(`  Writer PILL before: ${formatBigInt(writerPillBefore)}`);
+                log.info(`  Writer PILL after:  ${formatBigInt(writerPillAfter)}`);
+                log.info(`  Writer received: ${formatBigInt(received)} (expected: ${formatBigInt(expectedWriterAmount)})`);
+                log.info(`  Buy fee deducted: ${formatBigInt(buyFee)} (sent to feeRecipient)`);
+                if (received !== expectedWriterAmount) {
+                    log.warn(`  Mismatch: received ${received}, expected ${expectedWriterAmount}`);
+                }
+                return {
+                    before: writerPillBefore.toString(),
+                    after: writerPillAfter.toString(),
+                    received: received.toString(),
+                    expected: expectedWriterAmount.toString(),
+                    buyFee: buyFee.toString(),
+                };
+            });
         } else {
             skipTest('Buyer: Approve PILL premium for pool', 'No option to buy');
             skipTest('Buyer: Buy option (buyOption)', 'No option to buy');
             skipTest('Verify option status = PURCHASED', 'No option to buy');
+            skipTest('Verify writer received premium minus fee', 'No option to buy');
         }
     }
 
@@ -885,19 +954,23 @@ async function main() {
                 if (r.revert) throw new Error(`Revert: ${Buffer.from(r.revert, 'base64').toString()}`);
                 const buyerMotoAfter = r.result.readU256();
                 const received = buyerMotoAfter - buyerMotoBefore;
+                const exerciseFee = BUY_AMOUNT * 10n / 10000n;           // 0.1% of 1 MOTO = 1e15
+                const expectedReceived = BUY_AMOUNT - exerciseFee;        // 0.999 MOTO
                 log.info(`  Buyer MOTO before: ${formatBigInt(buyerMotoBefore)}`);
                 log.info(`  Buyer MOTO after:  ${formatBigInt(buyerMotoAfter)}`);
-                log.info(`  Received: ${formatBigInt(received)} (expected: ${formatBigInt(BUY_AMOUNT)})`);
+                log.info(`  Received: ${formatBigInt(received)} (expected: ${formatBigInt(expectedReceived)} after 0.1% exercise fee)`);
+                log.info(`  Exercise fee deducted: ${formatBigInt(exerciseFee)} (sent to feeRecipient)`);
 
-                if (received !== BUY_AMOUNT) {
-                    log.warn(`  Mismatch: received ${received}, expected ${BUY_AMOUNT}`);
+                if (received !== expectedReceived) {
+                    log.warn(`  Mismatch: received ${received}, expected ${expectedReceived}`);
                 }
 
                 return {
                     before: buyerMotoBefore.toString(),
                     after: buyerMotoAfter.toString(),
                     received: received.toString(),
-                    expected: BUY_AMOUNT.toString(),
+                    expected: expectedReceived.toString(),
+                    exerciseFee: exerciseFee.toString(),
                 };
             });
         }

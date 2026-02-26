@@ -187,7 +187,8 @@ async function main() {
         await runTest('Direct: Deploy OptionsPool with real token addresses', async () => {
             const underlying = Address.fromString(frogUHex);
             const premiumToken = Address.fromString(frogPHex);
-            const calldata = createPoolCalldata(underlying, premiumToken);
+            // Deployer wallet is the feeRecipient (treasury) for integration testing
+            const calldata = createPoolCalldata(underlying, premiumToken, config.wallet.address);
 
             const currentBlock = await provider.getBlockNumber();
             log.info(`  Current block: ${currentBlock}`);
@@ -297,10 +298,10 @@ async function main() {
         return { optionCount: count.toString() };
     });
 
-    await runTest('Pool: Read accumulated fees (should be 0)', async () => {
+    await runTest('Pool: Read fee recipient', async () => {
         const result = await provider.call(
             poolCallAddr,
-            POOL_SELECTORS.accumulatedFees,
+            POOL_SELECTORS.feeRecipient,
         );
 
         if (isCallError(result)) {
@@ -310,10 +311,10 @@ async function main() {
             throw new Error(`Revert: ${result.revert}`);
         }
 
-        const fees = result.result.readU256();
-        log.info(`  Accumulated fees: ${fees}`);
+        const feeRecip = result.result.readAddress();
+        log.info(`  Fee recipient: ${formatAddress(feeRecip.toString())}`);
 
-        return { accumulatedFees: fees.toString() };
+        return { feeRecipient: feeRecip.toString() };
     });
 
     await runTest('Pool: Read grace period blocks (should be 144)', async () => {

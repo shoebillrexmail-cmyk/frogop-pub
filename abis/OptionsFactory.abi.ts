@@ -30,6 +30,19 @@ export const OptionsFactoryAbi = [
         type: BitcoinAbiTypes.Function,
     },
     {
+        name: 'getTreasury',
+        constant: true,
+        inputs: [],
+        outputs: [{ name: 'treasury', type: ABIDataTypes.ADDRESS }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'setTreasury',
+        inputs: [{ name: 'treasury', type: ABIDataTypes.ADDRESS }],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
         name: 'getPoolCount',
         constant: true,
         inputs: [],

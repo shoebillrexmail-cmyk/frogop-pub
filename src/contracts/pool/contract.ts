@@ -16,7 +16,7 @@
  * 
  * ### Lazy-Loaded Fields (initialized on first access):
  * - locked: Reentrancy guard boolean
- * - accumulatedFees: Protocol fees collected
+ * - feeRecipient: Protocol fee destination address
  * - options: Option storage (complex nested structure)
  * 
  * This pattern avoids the WASM start function gas limit while maintaining
@@ -51,8 +51,6 @@ import {
     SafeMath,
     StoredAddress,
     StoredU256,
-    StoredBoolean,
-    OP_NET,
     encodeSelector,
     Selector,
     EMPTY_BUFFER,
@@ -95,6 +93,12 @@ const MAX_EXPIRY_BLOCKS: u64 = 52560;
 /** Cancellation fee in basis points (100 = 1%) */
 const CANCEL_FEE_BPS: u64 = 100;
 
+/** Buy fee in basis points (100 = 1%) — deducted from premium before writer receives */
+const BUY_FEE_BPS: u64 = 100;
+
+/** Exercise fee in basis points (10 = 0.1%) — deducted from buyer's proceeds */
+const EXERCISE_FEE_BPS: u64 = 10;
+
 // =============================================================================
 // STORAGE POINTER DEFINITIONS - Using Blockchain.nextPointer
 // =============================================================================
@@ -104,7 +108,7 @@ const CANCEL_FEE_BPS: u64 = 100;
 const UNDERLYING_POINTER: u16 = Blockchain.nextPointer;
 const PREMIUM_TOKEN_POINTER: u16 = Blockchain.nextPointer;
 const NEXT_ID_POINTER: u16 = Blockchain.nextPointer;
-const ACCUMULATED_FEES_POINTER: u16 = Blockchain.nextPointer;
+const FEE_RECIPIENT_POINTER: u16 = Blockchain.nextPointer;
 
 const OPTIONS_BASE_POINTER: u16 = Blockchain.nextPointer;
 
@@ -144,6 +148,13 @@ class OptionExercisedEvent extends NetEvent {
 class OptionExpiredEvent extends NetEvent {
     constructor(data: BytesWriter) {
         super('OptionExpired', data);
+    }
+}
+
+/** Emitted when the fee recipient address is updated */
+class FeeRecipientUpdatedEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('FeeRecipientUpdated', data);
     }
 }
 
@@ -342,7 +353,7 @@ export class OptionsPool extends ReentrancyGuard {
     private _premiumToken: StoredAddress;
     private _nextId: StoredU256;
 
-    private _accumulatedFees: StoredU256 | null = null;
+    private _feeRecipient: StoredAddress | null = null;
     private _options: OptionStorage | null = null;
 
     public constructor() {
@@ -352,11 +363,11 @@ export class OptionsPool extends ReentrancyGuard {
         this._nextId = new StoredU256(NEXT_ID_POINTER, EMPTY_BUFFER);
     }
 
-    private get accumulatedFees(): StoredU256 {
-        if (!this._accumulatedFees) {
-            this._accumulatedFees = new StoredU256(ACCUMULATED_FEES_POINTER, EMPTY_BUFFER);
+    private get feeRecipient(): StoredAddress {
+        if (!this._feeRecipient) {
+            this._feeRecipient = new StoredAddress(FEE_RECIPIENT_POINTER);
         }
-        return this._accumulatedFees!;
+        return this._feeRecipient!;
     }
 
     private get options(): OptionStorage {
@@ -368,15 +379,18 @@ export class OptionsPool extends ReentrancyGuard {
 
     public override onDeployment(calldata: Calldata): void {
         super.onDeployment(calldata);
-        
-        // Template deployment: allow empty calldata for pool template
-        // When deployed from factory via deployContractFromExisting, calldata will have addresses
-        // For template deployment, calldata will be empty
+
         const underlying = calldata.readAddress();
         const premiumToken = calldata.readAddress();
-        
+        const feeRecipientAddr = calldata.readAddress();
+
+        if (feeRecipientAddr.equals(Address.zero())) {
+            throw new Revert('Fee recipient cannot be zero');
+        }
+
         this._underlying.value = underlying;
         this._premiumToken.value = premiumToken;
+        this.feeRecipient.value = feeRecipientAddr;
     }
     
     // -------------------------------------------------------------------------
@@ -403,8 +417,14 @@ export class OptionsPool extends ReentrancyGuard {
                 return this.getOption(calldata);
             case encodeSelector('optionCount()'):
                 return this.optionCount(calldata);
-            case encodeSelector('accumulatedFees()'):
-                return this.accumulatedFeesMethod(calldata);
+            case encodeSelector('feeRecipient()'):
+                return this.feeRecipientMethod(calldata);
+            case encodeSelector('buyFeeBps()'):
+                return this.buyFeeBpsMethod(calldata);
+            case encodeSelector('exerciseFeeBps()'):
+                return this.exerciseFeeBpsMethod(calldata);
+            case encodeSelector('updateFeeRecipient(address)'):
+                return this.updateFeeRecipientMethod(calldata);
             case encodeSelector('gracePeriodBlocks()'):
                 return this.gracePeriodBlocks(calldata);
             case encodeSelector('maxExpiryBlocks()'):
@@ -463,9 +483,21 @@ export class OptionsPool extends ReentrancyGuard {
         return writer;
     }
     
-    public accumulatedFeesMethod(_calldata: Calldata): BytesWriter {
+    public feeRecipientMethod(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(32);
-        writer.writeU256(this.accumulatedFees.value);
+        writer.writeAddress(this.feeRecipient.value);
+        return writer;
+    }
+
+    public buyFeeBpsMethod(_calldata: Calldata): BytesWriter {
+        const writer = new BytesWriter(8);
+        writer.writeU64(BUY_FEE_BPS);
+        return writer;
+    }
+
+    public exerciseFeeBpsMethod(_calldata: Calldata): BytesWriter {
+        const writer = new BytesWriter(8);
+        writer.writeU64(EXERCISE_FEE_BPS);
         return writer;
     }
     
@@ -504,6 +536,29 @@ export class OptionsPool extends ReentrancyGuard {
         return writer;
     }
     
+    public updateFeeRecipientMethod(calldata: Calldata): BytesWriter {
+        const caller = Blockchain.tx.sender;
+        if (!caller.equals(this.feeRecipient.value)) {
+            throw new Revert('Only fee recipient');
+        }
+
+        const newAddr = calldata.readAddress();
+        if (newAddr.equals(Address.zero())) {
+            throw new Revert('Zero address not allowed');
+        }
+
+        this.feeRecipient.value = newAddr;
+
+        const event = new BytesWriter(64);
+        event.writeAddress(caller);
+        event.writeAddress(newAddr);
+        Blockchain.emit(new FeeRecipientUpdatedEvent(event));
+
+        const result = new BytesWriter(1);
+        result.writeBoolean(true);
+        return result;
+    }
+
     // -------------------------------------------------------------------------
     // STATE-CHANGING METHODS
     // -------------------------------------------------------------------------
@@ -614,9 +669,7 @@ export class OptionsPool extends ReentrancyGuard {
         this.options.setStatus(optionId, CANCELLED);
 
         this._transfer(collateralToken, option.writer, returnAmount);
-
-        const currentFees = this.accumulatedFees.value;
-        this.accumulatedFees.value = SafeMath.add(currentFees, fee);
+        this._transfer(collateralToken, this.feeRecipient.value, fee);
 
         const event = new BytesWriter(128); // 32+32+32+32 = 128 bytes
         event.writeU256(optionId);
@@ -653,16 +706,24 @@ export class OptionsPool extends ReentrancyGuard {
             throw new Revert('Writer cannot buy own option');
         }
 
+        const buyFee = SafeMath.div(
+            SafeMath.mul(option.premium, u256.fromU64(BUY_FEE_BPS)),
+            u256.fromU64(10000)
+        );
+        const writerAmount = SafeMath.sub(option.premium, buyFee);
+
         this.options.setBuyer(optionId, buyer);
         this.options.setStatus(optionId, PURCHASED);
 
-        this._transferFrom(this._premiumToken.value, buyer, option.writer, option.premium);
+        this._transferFrom(this._premiumToken.value, buyer, option.writer, writerAmount);
+        this._transferFrom(this._premiumToken.value, buyer, this.feeRecipient.value, buyFee);
 
-        const event = new BytesWriter(136); // 32+32+32+32+8 = 136 bytes
+        const event = new BytesWriter(168); // 32+32+32+32+32+8 = 168 bytes
         event.writeU256(optionId);
         event.writeAddress(buyer);
         event.writeAddress(option.writer);
         event.writeU256(option.premium);
+        event.writeU256(writerAmount);
         event.writeU64(currentBlock);
         Blockchain.emit(new OptionPurchasedEvent(event));
 
@@ -703,21 +764,36 @@ export class OptionsPool extends ReentrancyGuard {
 
         this.options.setStatus(optionId, EXERCISED);
 
+        let exerciseFee: u256 = u256.Zero;
+
         if (option.optionType == CALL) {
+            exerciseFee = SafeMath.div(
+                SafeMath.mul(option.underlyingAmount, u256.fromU64(EXERCISE_FEE_BPS)),
+                u256.fromU64(10000)
+            );
+            const buyerReceives = SafeMath.sub(option.underlyingAmount, exerciseFee);
             this._transferFrom(this._premiumToken.value, caller, option.writer, strikeValue);
-            this._transfer(this._underlying.value, caller, option.underlyingAmount);
+            this._transfer(this._underlying.value, caller, buyerReceives);
+            this._transfer(this._underlying.value, this.feeRecipient.value, exerciseFee);
         } else {
+            exerciseFee = SafeMath.div(
+                SafeMath.mul(strikeValue, u256.fromU64(EXERCISE_FEE_BPS)),
+                u256.fromU64(10000)
+            );
+            const buyerReceives = SafeMath.sub(strikeValue, exerciseFee);
             this._transferFrom(this._underlying.value, caller, option.writer, option.underlyingAmount);
-            this._transfer(this._premiumToken.value, caller, strikeValue);
+            this._transfer(this._premiumToken.value, caller, buyerReceives);
+            this._transfer(this._premiumToken.value, this.feeRecipient.value, exerciseFee);
         }
 
-        const event = new BytesWriter(161); // 32+32+32+1+32+32 = 161 bytes
+        const event = new BytesWriter(193); // 32+32+32+1+32+32+32 = 193 bytes
         event.writeU256(optionId);
         event.writeAddress(option.buyer);
         event.writeAddress(option.writer);
         event.writeU8(option.optionType);
         event.writeU256(option.underlyingAmount);
         event.writeU256(strikeValue);
+        event.writeU256(exerciseFee);
         Blockchain.emit(new OptionExercisedEvent(event));
 
         const result = new BytesWriter(1);

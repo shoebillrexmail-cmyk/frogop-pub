@@ -45,6 +45,37 @@
             ]
         },
         {
+            "name": "getTreasury",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "treasury",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "setTreasury",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "treasury",
+                    "type": "ADDRESS"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
             "name": "getPoolCount",
             "type": "View",
             "payable": false,

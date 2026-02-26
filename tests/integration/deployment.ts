@@ -233,11 +233,13 @@ export function createTokenCalldata(
 
 export function createPoolCalldata(
     underlying: Address,
-    premiumToken: Address
+    premiumToken: Address,
+    feeRecipient: Address
 ): Uint8Array {
     const writer = new BinaryWriter();
     writer.writeAddress(underlying);
     writer.writeAddress(premiumToken);
+    writer.writeAddress(feeRecipient);
     return writer.getBuffer();
 }
 

@@ -43,6 +43,26 @@ export type SetPoolTemplate = CallResult<
 >;
 
 /**
+ * @description Represents the result of the getTreasury function call.
+ */
+export type GetTreasury = CallResult<
+    {
+        treasury: Address;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
+ * @description Represents the result of the setTreasury function call.
+ */
+export type SetTreasury = CallResult<
+    {
+        success: boolean;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
  * @description Represents the result of the getPoolCount function call.
  */
 export type GetPoolCount = CallResult<
@@ -79,6 +99,8 @@ export interface IOptionsFactory extends IOP_NETContract {
     getOwner(): Promise<GetOwner>;
     getPoolTemplate(): Promise<GetPoolTemplate>;
     setPoolTemplate(template: Address): Promise<SetPoolTemplate>;
+    getTreasury(): Promise<GetTreasury>;
+    setTreasury(treasury: Address): Promise<SetTreasury>;
     getPoolCount(): Promise<GetPoolCount>;
     createPool(
         underlying: Address,

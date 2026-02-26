@@ -20,12 +20,13 @@
  * The poolCount is derived from the pools mapping or tracked off-chain.
  * 
  * ### Pointer Layout
- * 
+ *
  * | Pointer | Purpose | Type | Initialization |
  * |---------|---------|------|----------------|
  * | 10 | owner | StoredAddress | Constructor |
  * | 11 | poolTemplate | StoredAddress | Constructor |
  * | 12 | pools | MapOfMap<u256> | Constructor |
+ * | 13 | treasury | StoredAddress | Lazy (set via setTreasury) |
  * 
  * @author Frogop Team
  * @version 1.0.0
@@ -50,6 +51,7 @@ import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
 const OWNER_POINTER: u16 = 10;
 const POOL_TEMPLATE_POINTER: u16 = 11;
 const POOLS_POINTER: u16 = 12;
+const TREASURY_POINTER: u16 = 13;
 
 class PoolCreatedEvent extends NetEvent {
     constructor(data: BytesWriter) {
@@ -62,6 +64,7 @@ export class OptionsFactory extends OP_NET {
     private _owner: StoredAddress;
     private _poolTemplate: StoredAddress;
     private _pools: MapOfMap<u256>;
+    private _treasury: StoredAddress | null = null;
 
     public constructor() {
         super();
@@ -73,6 +76,13 @@ export class OptionsFactory extends OP_NET {
     public override onDeployment(calldata: Calldata): void {
         super.onDeployment(calldata);
         this._owner.value = Blockchain.tx.origin;
+    }
+
+    private get treasury(): StoredAddress {
+        if (!this._treasury) {
+            this._treasury = new StoredAddress(TREASURY_POINTER);
+        }
+        return this._treasury!;
     }
 
     private onlyOwner(): void {
@@ -108,6 +118,29 @@ export class OptionsFactory extends OP_NET {
         this.onlyOwner();
         const template = calldata.readAddress();
         this._poolTemplate.value = template;
+        const writer = new BytesWriter(1);
+        writer.writeBoolean(true);
+        return writer;
+    }
+
+    @view
+    @method()
+    @returns({ name: 'treasury', type: ABIDataTypes.ADDRESS })
+    public getTreasury(_calldata: Calldata): BytesWriter {
+        const writer = new BytesWriter(32);
+        writer.writeAddress(this.treasury.value);
+        return writer;
+    }
+
+    @method({ name: 'treasury', type: ABIDataTypes.ADDRESS })
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    public setTreasury(calldata: Calldata): BytesWriter {
+        this.onlyOwner();
+        const addr = calldata.readAddress();
+        if (addr.equals(Address.zero())) {
+            throw new Revert('Treasury cannot be zero address');
+        }
+        this.treasury.value = addr;
         const writer = new BytesWriter(1);
         writer.writeBoolean(true);
         return writer;
@@ -157,11 +190,17 @@ export class OptionsFactory extends OP_NET {
             throw new Revert('Pool template not set');
         }
 
+        const treasuryAddr = this.treasury.value;
+        if (treasuryAddr.equals(Address.zero())) {
+            throw new Revert('Treasury not set');
+        }
+
         const salt = this._generateSalt(underlying, premiumToken);
 
-        const initCalldata = new BytesWriter(66);
+        const initCalldata = new BytesWriter(98);
         initCalldata.writeAddress(underlying);
         initCalldata.writeAddress(premiumToken);
+        initCalldata.writeAddress(treasuryAddr);
         initCalldata.writeU8(underlyingDecimals);
         initCalldata.writeU8(premiumDecimals);
 
