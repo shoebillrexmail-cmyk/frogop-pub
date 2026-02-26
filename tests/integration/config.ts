@@ -154,6 +154,9 @@ export function computeSelectorU32(signature: string): number {
     return hash.readUInt32BE(0);
 }
 
+/** Dedicated fee recipient address for integration tests (separate from deployer wallet) */
+export const FEE_RECIPIENT_BECH32 = 'opt1pmjm25ux490c00szsup2995ut8v20l0dmx2grxz0q9wmp8n9krurs48l3m7';
+
 export function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }

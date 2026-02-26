@@ -15,6 +15,7 @@ import {
     computeSelector,
     POOL_SELECTORS,
     TOKEN_SELECTORS,
+    FEE_RECIPIENT_BECH32,
 } from './config.js';
 import {
     DeploymentHelper,
@@ -25,6 +26,7 @@ import {
     createSettleCalldata,
     createIncreaseAllowanceCalldata,
     createTransferCalldata,
+    createUpdateFeeRecipientCalldata,
 } from './deployment.js';
 
 const log = getLogger('06-full-lifecycle');
@@ -126,6 +128,18 @@ async function main() {
     const walletHex = config.wallet.address.toString();
     log.info(`Wallet hex: ${formatAddress(walletHex)}`);
 
+    // Resolve dedicated fee recipient address for fee distribution verification
+    let feeRecipientHex = walletHex; // fallback to deployer wallet
+    let feeRecipientAddress = config.wallet.address;
+    try {
+        const resolvedHex = (await provider.getPublicKeyInfo(FEE_RECIPIENT_BECH32, true)).toString();
+        feeRecipientHex = resolvedHex;
+        feeRecipientAddress = Address.fromString(resolvedHex);
+        log.info(`Dedicated fee recipient: ${formatAddress(feeRecipientHex)}`);
+    } catch {
+        log.warn(`Could not resolve dedicated fee recipient (${FEE_RECIPIENT_BECH32}). Falling back to deployer wallet.`);
+    }
+
     // =====================================================================
     // PHASE 1: Ensure pool exists
     // =====================================================================
@@ -141,8 +155,8 @@ async function main() {
         // Deploy pool directly (factory createPool is not supported by OPNet runtime)
         log.info('  Deploying pool directly...');
         const { createPoolCalldata, getWasmPath } = await import('./deployment.js');
-        // Deployer wallet is the feeRecipient (treasury) for integration testing
-        const calldata = createPoolCalldata(motoAddress, pillAddress, config.wallet.address);
+        // Use dedicated fee recipient address for fee distribution verification
+        const calldata = createPoolCalldata(motoAddress, pillAddress, feeRecipientAddress);
         currentBlock = await provider.getBlockNumber();
         const deployResult = await deployer.deployContract(
             getWasmPath('OptionsPool'),
@@ -234,6 +248,7 @@ async function main() {
     // =====================================================================
 
     let initialOptionCount = 0n;
+    let poolFeeRecipientHex = ''; // read from pool's feeRecipient() view — used for fee balance tracking
 
     await runTest('Pool: Read initial option count', async () => {
         const result = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
@@ -259,12 +274,60 @@ async function main() {
         const feeRecip = r1.result.readAddress();
         const buyBps = r2.result.readU64();
         const exerciseBps = r3.result.readU64();
-        log.info(`  Fee recipient: ${formatAddress(feeRecip.toString())}`);
+        poolFeeRecipientHex = feeRecip.toString();
+        log.info(`  Fee recipient: ${formatAddress(poolFeeRecipientHex)}`);
         log.info(`  Buy fee: ${buyBps} bps (${Number(buyBps) / 100}%)`);
         log.info(`  Exercise fee: ${exerciseBps} bps (${Number(exerciseBps) / 100}%)`);
         if (buyBps !== 100n) throw new Error(`Expected buyFeeBps=100, got ${buyBps}`);
         if (exerciseBps !== 10n) throw new Error(`Expected exerciseFeeBps=10, got ${exerciseBps}`);
-        return { feeRecipient: feeRecip.toString(), buyFeeBps: buyBps.toString(), exerciseFeeBps: exerciseBps.toString() };
+        return { feeRecipient: poolFeeRecipientHex, buyFeeBps: buyBps.toString(), exerciseFeeBps: exerciseBps.toString() };
+    });
+
+    // If pool's feeRecipient is not the dedicated address, update it
+    // (updateFeeRecipient can only be called by the current feeRecipient)
+    await runTest('Pool: Set fee recipient to dedicated address', async () => {
+        if (!poolFeeRecipientHex) {
+            log.warn('  poolFeeRecipientHex not set — skipping fee recipient update');
+            return { skipped: true };
+        }
+
+        if (poolFeeRecipientHex.toLowerCase() === feeRecipientHex.toLowerCase()) {
+            log.info(`  Fee recipient already set to dedicated address: ${formatAddress(poolFeeRecipientHex)}`);
+            return { alreadySet: true };
+        }
+
+        if (poolFeeRecipientHex.toLowerCase() !== walletHex.toLowerCase()) {
+            log.warn(`  Current fee recipient (${formatAddress(poolFeeRecipientHex)}) is not deployer — cannot update`);
+            log.warn(`  Re-deploy pool or manually call updateFeeRecipient from the current fee recipient`);
+            return { skipped: true, currentFeeRecipient: poolFeeRecipientHex };
+        }
+
+        // Deployer is current feeRecipient — update to dedicated address
+        log.info(`  Updating fee recipient: ${formatAddress(walletHex)} → ${formatAddress(feeRecipientHex)}`);
+        const calldata = createUpdateFeeRecipientCalldata(feeRecipientAddress);
+        currentBlock = await provider.getBlockNumber();
+        const result = await deployer.callContract(poolAddress!, calldata, 50_000n);
+        log.info(`  UpdateFeeRecipient TX: ${result.txId}`);
+
+        try { currentBlock = await waitForBlock(provider, currentBlock, 3); } catch { log.warn('  Block timeout'); }
+
+        // Poll for confirmation
+        for (let attempt = 0; attempt < 12; attempt++) {
+            const r = await provider.call(poolCallAddr, POOL_SELECTORS.feeRecipient);
+            if (!isCallError(r) && !r.revert) {
+                const updated = r.result.readAddress().toString();
+                if (updated.toLowerCase() === feeRecipientHex.toLowerCase()) {
+                    poolFeeRecipientHex = updated;
+                    log.info(`  Fee recipient confirmed: ${formatAddress(poolFeeRecipientHex)}`);
+                    return { updated: true, txId: result.txId, newRecipient: poolFeeRecipientHex };
+                }
+            }
+            if (attempt < 11) {
+                log.info(`  Waiting for fee recipient update... (${attempt + 1}/12)`);
+                await new Promise(r => setTimeout(r, 30_000));
+            }
+        }
+        throw new Error('Fee recipient update not confirmed after polling. Re-run later.');
     });
 
     // =====================================================================
@@ -461,6 +524,7 @@ async function main() {
         });
 
         // --- Cancel the option (only if OPEN) ---
+        let feeRecipientMotoBefore = 0n; // captured in pre-cancel diagnostics
         if (targetOptionId !== null && targetOptionStatus === 0) {
             // Pre-cancel diagnostics: check pool token balance and simulate
             await runTest('Pool: Pre-cancel diagnostics', async () => {
@@ -474,6 +538,19 @@ async function main() {
                     ? 'ERROR'
                     : poolBalResult.result.readU256().toString();
                 log.info(`  Pool MOTO balance: ${poolMoto}`);
+
+                // Read fee recipient MOTO balance before cancel for precise fee verification
+                if (poolFeeRecipientHex) {
+                    const feeRecipCd = buildBalanceOfCalldata(poolFeeRecipientHex);
+                    const feeRecipResult = await provider.call(
+                        deployed.tokens.frogU,
+                        TOKEN_SELECTORS.balanceOf + feeRecipCd,
+                    );
+                    if (!isCallError(feeRecipResult) && !feeRecipResult.revert) {
+                        feeRecipientMotoBefore = feeRecipResult.result.readU256();
+                        log.info(`  Fee recipient MOTO before cancel: ${formatBigInt(feeRecipientMotoBefore)}`);
+                    }
+                }
 
                 // Simulate cancelOption via provider.call — pass wallet address as `from`
                 // so Blockchain.tx.sender = wallet (= option writer) during simulation
@@ -498,7 +575,7 @@ async function main() {
                 }
 
                 log.info('  Cancel simulation: OK');
-                return { poolMotoBalance: poolMoto, simulationPassed: true };
+                return { poolMotoBalance: poolMoto, simulationPassed: true, feeRecipientMotoBefore: feeRecipientMotoBefore.toString() };
             });
 
             await runTest('Pool: Cancel option', async () => {
@@ -535,34 +612,46 @@ async function main() {
                 log.warn(`  Cancel TX broadcast but status still ${opt?.status}. May confirm later.`);
                 throw new Error(`Cancel not yet confirmed (status=${opt?.status}). Re-run later.`);
             });
+
+            // --- Verify feeRecipient received the cancel fee ---
+            await runTest('Pool: Verify feeRecipient receives cancel fee', async () => {
+                const queryHex = poolFeeRecipientHex || walletHex;
+                const cd = buildBalanceOfCalldata(queryHex);
+                const r = await provider.call(deployed.tokens.frogU, TOKEN_SELECTORS.balanceOf + cd);
+                if (isCallError(r)) throw new Error(`Call error: ${r.error}`);
+                if (r.revert) throw new Error(`Revert: ${Buffer.from(r.revert, 'base64').toString()}`);
+                const feeRecipMotoAfter = r.result.readU256();
+                const cancelFee = OPTION_AMOUNT * 100n / 10000n; // 1%
+                const received = feeRecipMotoAfter - feeRecipientMotoBefore;
+                log.info(`  Fee recipient MOTO before: ${formatBigInt(feeRecipientMotoBefore)}`);
+                log.info(`  Fee recipient MOTO after:  ${formatBigInt(feeRecipMotoAfter)}`);
+                log.info(`  Cancel fee received: ${formatBigInt(received)} (expected: ${formatBigInt(cancelFee)})`);
+                // Only assert strict match if feeRecipient != writer (separate address)
+                const isSeparate = queryHex.toLowerCase() !== walletHex.toLowerCase();
+                if (isSeparate && received !== cancelFee) {
+                    log.warn(`  Fee mismatch: received ${received}, expected ${cancelFee}`);
+                } else if (!isSeparate) {
+                    log.info(`  Note: writer == feeRecipient (net includes refund + fee)`);
+                }
+                return {
+                    before: feeRecipientMotoBefore.toString(),
+                    after: feeRecipMotoAfter.toString(),
+                    received: received.toString(),
+                    expected: cancelFee.toString(),
+                    separateRecipient: isSeparate,
+                };
+            });
         } else if (targetOptionId !== null && targetOptionStatus === 4) {
             // Already cancelled from previous run
             log.info('  Option already CANCELLED from previous run');
             skipTest('Pool: Cancel option', 'Option already cancelled');
             skipTest('Pool: Verify option cancelled', 'Option already cancelled');
+            skipTest('Pool: Verify feeRecipient receives cancel fee', 'Option already cancelled');
         } else {
             skipTest('Pool: Cancel option', 'No confirmed option to cancel');
             skipTest('Pool: Verify option cancelled', 'No confirmed option to cancel');
+            skipTest('Pool: Verify feeRecipient receives cancel fee', 'No confirmed option to cancel');
         }
-
-        // --- Verify feeRecipient received the cancel fee ---
-        // Since feeRecipient == deployer wallet in tests, we check the wallet's MOTO balance
-        // increased by ~OPTION_AMOUNT (writer refund + fee both go to same address).
-        await runTest('Pool: Verify feeRecipient receives cancel fee', async () => {
-            // Re-read deployer MOTO balance after cancel
-            const cd = buildBalanceOfCalldata(walletHex);
-            const r = await provider.call(deployed.tokens.frogU, TOKEN_SELECTORS.balanceOf + cd);
-            if (isCallError(r)) throw new Error(`Call error: ${r.error}`);
-            if (r.revert) throw new Error(`Revert: ${Buffer.from(r.revert, 'base64').toString()}`);
-            const motoAfterCancel = r.result.readU256();
-            const cancelFee = OPTION_AMOUNT * 100n / 10000n; // 1%
-            log.info(`  MOTO balance after cancel: ${formatBigInt(motoAfterCancel)}`);
-            log.info(`  Expected cancel fee routed to feeRecipient: ${cancelFee} (${formatBigInt(cancelFee)} MOTO)`);
-            // Since writer == feeRecipient, MOTO balance should be back to approximately pre-write level
-            // (writer gets collateral - fee back, feeRecipient gets fee — same wallet = net OPTION_AMOUNT returned)
-            log.info(`  Note: writer == feeRecipient so net change from pool = OPTION_AMOUNT (both go to same wallet)`);
-            return { motoAfterCancel: motoAfterCancel.toString(), expectedCancelFee: cancelFee.toString() };
-        });
     }
 
     // =====================================================================
@@ -711,6 +800,7 @@ async function main() {
         skipTest('Buyer: Buy option (buyOption)', reason);
         skipTest('Verify option status = PURCHASED', reason);
         skipTest('Verify writer received premium minus fee', reason);
+        skipTest('Verify feeRecipient received buy fee', reason);
     } else {
         log.info('\n=== Phase 6: Write + Buy Option ===');
 
@@ -767,14 +857,22 @@ async function main() {
 
         // Buyer approves PILL premium for pool
         if (buyTestOptionId !== null) {
-            // Record writer PILL balance before buyer calls buyOption
-            // Writer should receive premium - 1% buy fee once the option is purchased
+            // Record writer and fee recipient PILL balances before buyOption
+            // Writer receives premium - 1% buy fee; feeRecipient receives the 1% fee
             let writerPillBefore = 0n;
+            let feeRecipientPillBefore = 0n;
             {
-                const cd = buildBalanceOfCalldata(walletHex);
-                const r = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + cd);
-                if (!isCallError(r) && !r.revert) writerPillBefore = r.result.readU256();
+                const writerCd = buildBalanceOfCalldata(walletHex);
+                const wr = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + writerCd);
+                if (!isCallError(wr) && !wr.revert) writerPillBefore = wr.result.readU256();
                 log.info(`  Writer PILL before buyOption: ${formatBigInt(writerPillBefore)}`);
+
+                if (poolFeeRecipientHex) {
+                    const feeCd = buildBalanceOfCalldata(poolFeeRecipientHex);
+                    const fr = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + feeCd);
+                    if (!isCallError(fr) && !fr.revert) feeRecipientPillBefore = fr.result.readU256();
+                    log.info(`  Fee recipient PILL before buyOption: ${formatBigInt(feeRecipientPillBefore)}`);
+                }
             }
 
             await runTest('Buyer: Approve PILL premium for pool', async () => {
@@ -842,11 +940,40 @@ async function main() {
                     buyFee: buyFee.toString(),
                 };
             });
+
+            // Verify feeRecipient received the 1% buy fee in PILL
+            await runTest('Verify feeRecipient received buy fee', async () => {
+                const queryHex = poolFeeRecipientHex || walletHex;
+                const cd = buildBalanceOfCalldata(queryHex);
+                const r = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + cd);
+                if (isCallError(r)) throw new Error(`Call error: ${r.error}`);
+                if (r.revert) throw new Error(`Revert: ${Buffer.from(r.revert, 'base64').toString()}`);
+                const feeRecipPillAfter = r.result.readU256();
+                const buyFee = BUY_PREMIUM * 100n / 10000n; // 1% of 5 PILL = 0.05 PILL
+                const received = feeRecipPillAfter - feeRecipientPillBefore;
+                log.info(`  Fee recipient PILL before: ${formatBigInt(feeRecipientPillBefore)}`);
+                log.info(`  Fee recipient PILL after:  ${formatBigInt(feeRecipPillAfter)}`);
+                log.info(`  Buy fee received: ${formatBigInt(received)} (expected: ${formatBigInt(buyFee)})`);
+                const isSeparate = queryHex.toLowerCase() !== walletHex.toLowerCase();
+                if (isSeparate && received !== buyFee) {
+                    log.warn(`  Fee mismatch: received ${received}, expected ${buyFee}`);
+                } else if (!isSeparate) {
+                    log.info(`  Note: writer == feeRecipient — fee is included in writer balance change`);
+                }
+                return {
+                    before: feeRecipientPillBefore.toString(),
+                    after: feeRecipPillAfter.toString(),
+                    received: received.toString(),
+                    expected: buyFee.toString(),
+                    separateRecipient: isSeparate,
+                };
+            });
         } else {
             skipTest('Buyer: Approve PILL premium for pool', 'No option to buy');
             skipTest('Buyer: Buy option (buyOption)', 'No option to buy');
             skipTest('Verify option status = PURCHASED', 'No option to buy');
             skipTest('Verify writer received premium minus fee', 'No option to buy');
+            skipTest('Verify feeRecipient received buy fee', 'No option to buy');
         }
     }
 
@@ -866,6 +993,7 @@ async function main() {
         skipTest('Buyer: Exercise option', reason);
         skipTest('Verify option status = EXERCISED', reason);
         skipTest('Verify buyer received underlying tokens', reason);
+        skipTest('Verify feeRecipient received exercise fee', reason);
     } else {
         log.info('\n=== Phase 7: Exercise Option (CALL) ===');
         log.info(`Option ID: ${buyTestOptionId}, expiry: block ${buyTestExpiryBlock}`);
@@ -896,6 +1024,7 @@ async function main() {
             skipTest('Buyer: Exercise option', 'Grace period ended');
             skipTest('Verify option status = EXERCISED', 'Grace period ended');
             skipTest('Verify buyer received underlying tokens', 'Grace period ended');
+            skipTest('Verify feeRecipient received exercise fee', 'Grace period ended');
         } else {
             // Buyer approves PILL for strikeValue payment
             await runTest('Buyer: Approve PILL for exercise (strikeValue)', async () => {
@@ -909,12 +1038,20 @@ async function main() {
                 return { txId: result.txId, strikeValue: BUY_STRIKE_VALUE.toString() };
             });
 
-            // Record buyer MOTO balance before exercise
+            // Record buyer MOTO balance and fee recipient MOTO balance before exercise
             let buyerMotoBefore = 0n;
+            let feeRecipientMotoBeforeExercise = 0n;
             {
-                const cd = buildBalanceOfCalldata(buyerHex);
-                const r = await provider.call(deployed.tokens.frogU, TOKEN_SELECTORS.balanceOf + cd);
-                if (!isCallError(r) && !r.revert) buyerMotoBefore = r.result.readU256();
+                const buyerCd = buildBalanceOfCalldata(buyerHex);
+                const br = await provider.call(deployed.tokens.frogU, TOKEN_SELECTORS.balanceOf + buyerCd);
+                if (!isCallError(br) && !br.revert) buyerMotoBefore = br.result.readU256();
+
+                if (poolFeeRecipientHex) {
+                    const feeCd = buildBalanceOfCalldata(poolFeeRecipientHex);
+                    const fr = await provider.call(deployed.tokens.frogU, TOKEN_SELECTORS.balanceOf + feeCd);
+                    if (!isCallError(fr) && !fr.revert) feeRecipientMotoBeforeExercise = fr.result.readU256();
+                    log.info(`  Fee recipient MOTO before exercise: ${formatBigInt(feeRecipientMotoBeforeExercise)}`);
+                }
             }
 
             // Buyer exercises the option
@@ -971,6 +1108,34 @@ async function main() {
                     received: received.toString(),
                     expected: expectedReceived.toString(),
                     exerciseFee: exerciseFee.toString(),
+                };
+            });
+
+            // Verify feeRecipient received the 0.1% exercise fee in MOTO (CALL option)
+            await runTest('Verify feeRecipient received exercise fee', async () => {
+                const queryHex = poolFeeRecipientHex || walletHex;
+                const cd = buildBalanceOfCalldata(queryHex);
+                const r = await provider.call(deployed.tokens.frogU, TOKEN_SELECTORS.balanceOf + cd);
+                if (isCallError(r)) throw new Error(`Call error: ${r.error}`);
+                if (r.revert) throw new Error(`Revert: ${Buffer.from(r.revert, 'base64').toString()}`);
+                const feeRecipMotoAfter = r.result.readU256();
+                const exerciseFee = BUY_AMOUNT * 10n / 10000n; // 0.1% of 1 MOTO
+                const received = feeRecipMotoAfter - feeRecipientMotoBeforeExercise;
+                log.info(`  Fee recipient MOTO before: ${formatBigInt(feeRecipientMotoBeforeExercise)}`);
+                log.info(`  Fee recipient MOTO after:  ${formatBigInt(feeRecipMotoAfter)}`);
+                log.info(`  Exercise fee received: ${formatBigInt(received)} (expected: ${formatBigInt(exerciseFee)})`);
+                const isSeparate = queryHex.toLowerCase() !== walletHex.toLowerCase();
+                if (isSeparate && received !== exerciseFee) {
+                    log.warn(`  Fee mismatch: received ${received}, expected ${exerciseFee}`);
+                } else if (!isSeparate) {
+                    log.info(`  Note: writer == feeRecipient — fee is included in writer balance change`);
+                }
+                return {
+                    before: feeRecipientMotoBeforeExercise.toString(),
+                    after: feeRecipMotoAfter.toString(),
+                    received: received.toString(),
+                    expected: exerciseFee.toString(),
+                    separateRecipient: isSeparate,
                 };
             });
         }

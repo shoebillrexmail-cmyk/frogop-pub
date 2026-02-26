@@ -356,6 +356,13 @@ export function createTransferCalldata(
     return writer.getBuffer();
 }
 
+export function createUpdateFeeRecipientCalldata(newRecipient: Address): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(POOL_SELECTORS.updateFeeRecipient);
+    writer.writeAddress(newRecipient);
+    return writer.getBuffer();
+}
+
 export function getWasmPath(contractName: string): string {
     return path.join(process.cwd(), 'build', `${contractName}.wasm`);
 }
