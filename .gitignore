@@ -41,3 +41,12 @@ npm-debug.log*
 
 # Deployed contracts (generated)
 tests/integration/deployed-contracts.json
+
+# Windows artifacts
+nul
+
+# Claude Code internal state
+.claude/
+
+# Local package copies / token ABIs (not part of source)
+tokens/

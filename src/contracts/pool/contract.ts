@@ -618,7 +618,7 @@ export class OptionsPool extends ReentrancyGuard {
         const currentFees = this.accumulatedFees.value;
         this.accumulatedFees.value = SafeMath.add(currentFees, fee);
 
-        const event = new BytesWriter(100);
+        const event = new BytesWriter(128); // 32+32+32+32 = 128 bytes
         event.writeU256(optionId);
         event.writeAddress(option.writer);
         event.writeU256(returnAmount);
@@ -658,7 +658,7 @@ export class OptionsPool extends ReentrancyGuard {
 
         this._transferFrom(this._premiumToken.value, buyer, option.writer, option.premium);
 
-        const event = new BytesWriter(100);
+        const event = new BytesWriter(136); // 32+32+32+32+8 = 136 bytes
         event.writeU256(optionId);
         event.writeAddress(buyer);
         event.writeAddress(option.writer);
@@ -711,7 +711,7 @@ export class OptionsPool extends ReentrancyGuard {
             this._transfer(this._premiumToken.value, caller, strikeValue);
         }
 
-        const event = new BytesWriter(100);
+        const event = new BytesWriter(161); // 32+32+32+1+32+32 = 161 bytes
         event.writeU256(optionId);
         event.writeAddress(option.buyer);
         event.writeAddress(option.writer);
@@ -788,14 +788,20 @@ export class OptionsPool extends ReentrancyGuard {
     }
     
     private _transfer(token: Address, to: Address, amount: u256): void {
-        const calldata = new BytesWriter(68);
-        calldata.writeSelector(encodeSelector('transfer(address,uint256)'));
+        // Use transferFrom(self, to, amount) — when from == msg.sender (pool == pool),
+        // the OP20 _spendAllowance check is bypassed. This avoids cross-contract
+        // `tx.sender` ambiguity that causes `transfer(to, amount)` to fail.
+        // Use stopOnFailure=false so we get a clean short error instead of OPNet's
+        // verbose "Revert error too long." system message.
+        const calldata = new BytesWriter(100);
+        calldata.writeSelector(encodeSelector('transferFrom(address,address,uint256)'));
+        calldata.writeAddress(Blockchain.contractAddress);
         calldata.writeAddress(to);
         calldata.writeU256(amount);
-        
-        const result = Blockchain.call(token, calldata, true);
+
+        const result = Blockchain.call(token, calldata, false);
         if (!result.success) {
-            throw new Revert('Token transfer failed');
+            throw new Revert('Transfer out failed');
         }
     }
 }

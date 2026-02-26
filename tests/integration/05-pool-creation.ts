@@ -11,7 +11,7 @@ import {
     FACTORY_SELECTORS,
     POOL_SELECTORS,
 } from './config.js';
-import { DeploymentHelper, createCreatePoolCalldata, createPoolCalldata, getWasmPath } from './deployment.js';
+import { DeploymentHelper, createPoolCalldata, getWasmPath } from './deployment.js';
 import type { CallResult, ICallRequestError } from 'opnet';
 
 const log = getLogger('05-pool-creation');
@@ -183,100 +183,37 @@ async function main() {
     });
 
     if (!poolAddress) {
-        // Try factory createPool first, fall back to direct deployment
-        let factoryCreateFailed = false;
-
-        await runTest('Factory: Create MOTO/PILL pool (via factory)', async () => {
+        // Deploy pool directly (factory createPool is not supported by OPNet runtime)
+        await runTest('Direct: Deploy OptionsPool with real token addresses', async () => {
             const underlying = Address.fromString(frogUHex);
             const premiumToken = Address.fromString(frogPHex);
-
-            // Simulate first to check if it will revert
-            const simWriter = new BinaryWriter();
-            simWriter.writeAddress(underlying);
-            simWriter.writeAddress(premiumToken);
-            const simCalldata = Buffer.from(simWriter.getBuffer()).toString('hex');
-
-            // Build full calldata
-            const calldata = createCreatePoolCalldata(
-                underlying,
-                premiumToken,
-                18,
-                18,
-            );
+            const calldata = createPoolCalldata(underlying, premiumToken);
 
             const currentBlock = await provider.getBlockNumber();
             log.info(`  Current block: ${currentBlock}`);
 
-            const result = await deployer.callContract(
-                deployed.factory,
+            const result = await deployer.deployContract(
+                getWasmPath('OptionsPool'),
                 calldata,
-                200_000n,
+                50_000n,
             );
 
-            log.info(`  TX: ${result.txId}`);
-            await waitForBlock(provider, currentBlock, 3);
-
-            // Verify pool was created
-            const verifyResult = await provider.call(
-                deployed.factory,
-                FACTORY_SELECTORS.getPool + simCalldata,
-            );
-
-            if (isCallError(verifyResult) || verifyResult.revert) {
-                throw new Error('Pool not found after factory creation');
-            }
-
-            const pool = verifyResult.result.readAddress();
-            poolAddress = pool.toString();
-            const isZero = poolAddress === '0x' + '0'.repeat(64);
-            if (isZero) {
-                throw new Error('Pool address is zero after creation');
-            }
-
+            // Save immediately BEFORE waiting for blocks
+            poolAddress = result.contractAddress;
             deployed.pool = poolAddress;
             saveDeployedContracts(deployed);
-            return { poolAddress, method: 'factory' };
+            log.info(`  Pool deployed at: ${result.contractAddress}`);
+
+            // Wait for confirmation (non-fatal - pool may confirm later)
+            try {
+                await waitForBlock(provider, currentBlock, 3);
+            } catch {
+                log.warn('  Block advancement timed out. Pool TX broadcast but unconfirmed.');
+                log.warn('  Re-run tests after blocks advance to test pool view methods.');
+            }
+
+            return { poolAddress, method: 'direct-deploy', txId: result.revealTxId };
         });
-
-        // Check if factory creation succeeded
-        if (!poolAddress) {
-            factoryCreateFailed = true;
-            log.warn('Factory createPool failed (known issue: deployContractFromExisting revert).');
-            log.warn('Falling back to direct pool deployment...');
-        }
-
-        if (factoryCreateFailed) {
-            await runTest('Direct: Deploy OptionsPool with real token addresses', async () => {
-                const underlying = Address.fromString(frogUHex);
-                const premiumToken = Address.fromString(frogPHex);
-                const calldata = createPoolCalldata(underlying, premiumToken);
-
-                const currentBlock = await provider.getBlockNumber();
-                log.info(`  Current block: ${currentBlock}`);
-
-                const result = await deployer.deployContract(
-                    getWasmPath('OptionsPool'),
-                    calldata,
-                    50_000n,
-                );
-
-                // Save immediately BEFORE waiting for blocks
-                poolAddress = result.contractAddress;
-                deployed.pool = poolAddress;
-                saveDeployedContracts(deployed);
-                log.info(`  Pool deployed at: ${result.contractAddress}`);
-
-                // Wait for confirmation (non-fatal - pool may confirm later)
-                try {
-                    await waitForBlock(provider, currentBlock, 3);
-                } catch {
-                    log.warn('  Block advancement timed out. Pool TX broadcast but unconfirmed.');
-                    log.warn('  Re-run tests after blocks advance to test pool view methods.');
-                }
-
-                return { poolAddress, method: 'direct-deploy', txId: result.revealTxId };
-            });
-        }
     }
 
     // ========================================

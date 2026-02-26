@@ -11,13 +11,11 @@ import {
     formatBigInt,
     waitForBlock,
     computeSelector,
-    FACTORY_SELECTORS,
     POOL_SELECTORS,
     TOKEN_SELECTORS,
 } from './config.js';
 import {
     DeploymentHelper,
-    createCreatePoolCalldata,
     createWriteOptionCalldata,
     createCancelOptionCalldata,
 } from './deployment.js';
@@ -104,8 +102,18 @@ async function main() {
     // Token and wallet address setup (raw provider.call approach)
     // =====================================================================
 
-    const motoAddress = Address.fromString(deployed.tokens.frogU);
-    const pillAddress = Address.fromString(deployed.tokens.frogP);
+    // Resolve opr1/opt1 addresses to hex (0x...) for Address.fromString
+    const frogUHex = deployed.tokens.frogU.startsWith('0x')
+        ? deployed.tokens.frogU
+        : (await provider.getPublicKeyInfo(deployed.tokens.frogU, true)).toString();
+    const frogPHex = deployed.tokens.frogP.startsWith('0x')
+        ? deployed.tokens.frogP
+        : (await provider.getPublicKeyInfo(deployed.tokens.frogP, true)).toString();
+    log.info(`FROG-U hex: ${formatAddress(frogUHex)}`);
+    log.info(`FROG-P hex: ${formatAddress(frogPHex)}`);
+
+    const motoAddress = Address.fromString(frogUHex);
+    const pillAddress = Address.fromString(frogPHex);
 
     // Use wallet.address (MLDSA address hash) for balanceOf queries, NOT getPublicKeyInfo
     const walletHex = config.wallet.address.toString();
@@ -123,47 +131,28 @@ async function main() {
             return { poolAddress, source: 'saved' };
         }
 
-        // Check on-chain
-        const w = new BinaryWriter();
-        w.writeAddress(motoAddress);
-        w.writeAddress(pillAddress);
-        const cd = Buffer.from(w.getBuffer()).toString('hex');
-
-        const result = await provider.call(
-            deployed.factory,
-            FACTORY_SELECTORS.getPool + cd,
-        );
-        if (isCallError(result)) throw new Error(`Call error: ${result.error}`);
-        if (result.revert) throw new Error(`Revert: ${result.revert}`);
-
-        const pool = result.result.readAddress();
-        const poolHex = pool.toString();
-        const isZero = poolHex === '0x' + '0'.repeat(64);
-
-        if (!isZero) {
-            poolAddress = poolHex;
-            deployed.pool = poolAddress;
-            saveDeployedContracts(deployed);
-            log.info(`  Pool found on-chain: ${formatAddress(poolHex)}`);
-            return { poolAddress: poolHex, source: 'on-chain' };
-        }
-
-        // Create pool
-        log.info('  Creating pool...');
-        const calldata = createCreatePoolCalldata(motoAddress, pillAddress, 18, 18);
+        // Deploy pool directly (factory createPool is not supported by OPNet runtime)
+        log.info('  Deploying pool directly...');
+        const { createPoolCalldata, getWasmPath } = await import('./deployment.js');
+        const calldata = createPoolCalldata(motoAddress, pillAddress);
         currentBlock = await provider.getBlockNumber();
-        const txResult = await deployer.callContract(deployed.factory, calldata, 200_000n);
-        log.info(`  Create pool TX: ${txResult.txId}`);
-        currentBlock = await waitForBlock(provider, currentBlock, 3);
-
-        // Fetch pool address
-        const vr = await provider.call(deployed.factory, FACTORY_SELECTORS.getPool + cd);
-        if (isCallError(vr) || vr.revert) throw new Error('Failed to verify pool creation');
-        const np = vr.result.readAddress();
-        poolAddress = np.toString();
+        const deployResult = await deployer.deployContract(
+            getWasmPath('OptionsPool'),
+            calldata,
+            50_000n,
+        );
+        poolAddress = deployResult.contractAddress;
         deployed.pool = poolAddress;
         saveDeployedContracts(deployed);
-        return { poolAddress, source: 'created', txId: txResult.txId };
+        log.info(`  Pool deployed at: ${formatAddress(poolAddress)}`);
+
+        try {
+            currentBlock = await waitForBlock(provider, currentBlock, 3);
+        } catch {
+            log.warn('  Block timeout - pool TX broadcast, re-run after blocks advance.');
+        }
+
+        return { poolAddress, source: 'direct-deploy', txId: deployResult.revealTxId };
     });
 
     if (!poolAddress) {
@@ -457,7 +446,8 @@ async function main() {
                     : poolBalResult.result.readU256().toString();
                 log.info(`  Pool MOTO balance: ${poolMoto}`);
 
-                // Simulate cancelOption via provider.call
+                // Simulate cancelOption via provider.call — pass wallet address as `from`
+                // so Blockchain.tx.sender = wallet (= option writer) during simulation
                 const cancelSelectorHex = computeSelector('cancelOption(uint256)');
                 const cw = new BinaryWriter();
                 cw.writeU256(targetOptionId!);
@@ -465,6 +455,7 @@ async function main() {
                 const simResult = await provider.call(
                     poolCallAddr,
                     cancelSelectorHex + cancelCd,
+                    config.wallet.address,
                 );
 
                 if (isCallError(simResult)) {

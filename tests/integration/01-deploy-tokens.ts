@@ -105,8 +105,8 @@ async function main() {
         log.info(`  FROG-P (PILL): ${frogPAddress}`);
     } else {
         // Deploy fresh tokens on testnet/mainnet
-        const walletPkInfo = await provider.getPublicKeyInfo(config.wallet.p2tr, true);
-        const walletAddress = Address.fromString(walletPkInfo.toString());
+        // Use wallet.address (MLDSA hash) — this matches what balanceOf queries use
+        const walletAddress = config.wallet.address;
         const mintAmount = 1_000_000n * (10n ** 18n); // 1M tokens each
 
         frogUAddress = await deployAndMintToken(
