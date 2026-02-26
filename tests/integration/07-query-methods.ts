@@ -330,9 +330,9 @@ async function main() {
         }
 
 
-        // Test: fetch first 10 options
-        await runTest('Pool: getOptionsBatch(0, 10) — fetch first 10', async () => {
-            const requestCount = 10n;
+        // Test: fetch first 9 options (max per batch due to OPNet 2048-byte receipt limit)
+        await runTest('Pool: getOptionsBatch(0, 9) — fetch first 9', async () => {
+            const requestCount = 9n;
             const cd = buildBatchCalldata(0n, requestCount);
             const result = await provider.call(
                 poolCallAddr,
@@ -344,7 +344,7 @@ async function main() {
             const reader = result.result;
             const actualCount = reader.readU256();
             const expectedCount = totalOptions < requestCount ? totalOptions : requestCount;
-            log.info(`  Requested: ${requestCount}, returned: ${actualCount} (total options: ${totalOptions})`);
+            log.info(`  Requested: ${requestCount}, returned: ${actualCount} (total options: ${totalOptions}, cap: 9)`);
 
             if (actualCount !== expectedCount) {
                 throw new Error(`Expected actualCount=${expectedCount}, got ${actualCount}`);
@@ -374,7 +374,7 @@ async function main() {
             return { actualCount: actualCount.toString(), options };
         });
 
-        // Test: request more than available — should return only what exists
+        // Test: request more than available — should return only what exists (capped at 9)
         await runTest('Pool: getOptionsBatch with count > available returns all', async () => {
             const hugeCount = 999n;
             const cd = buildBatchCalldata(0n, hugeCount);
@@ -386,7 +386,7 @@ async function main() {
             if (result.revert) throw new Error(`Revert: ${Buffer.from(result.revert, 'base64').toString()}`);
 
             const actualCount = result.result.readU256();
-            const expectedCount = totalOptions < 50n ? totalOptions : 50n;
+            const expectedCount = totalOptions < 9n ? totalOptions : 9n;
             log.info(`  Requested: ${hugeCount}, returned: ${actualCount} (expected: ${expectedCount})`);
 
             if (actualCount !== expectedCount) {
@@ -413,8 +413,8 @@ async function main() {
             return { startId: totalOptions.toString(), returned: actualCount.toString() };
         });
 
-        // Test: batch is capped at 50
-        await runTest('Pool: getOptionsBatch capped at 50', async () => {
+        // Test: batch is capped at 9 (OPNet receipt limit: 2048 bytes, 9 × 202 + 32 = 1850)
+        await runTest('Pool: getOptionsBatch capped at 9', async () => {
             const cd = buildBatchCalldata(0n, 1000n);
             const result = await provider.call(
                 poolCallAddr,
@@ -424,7 +424,7 @@ async function main() {
             if (result.revert) throw new Error(`Revert: ${Buffer.from(result.revert, 'base64').toString()}`);
 
             const actualCount = result.result.readU256();
-            const expectedCap = totalOptions > 50n ? 50n : totalOptions;
+            const expectedCap = totalOptions > 9n ? 9n : totalOptions;
             log.info(`  Requested 1000, returned ${actualCount} (cap: ${expectedCap})`);
             if (actualCount !== expectedCap) {
                 throw new Error(`Expected at most ${expectedCap}, got ${actualCount}`);

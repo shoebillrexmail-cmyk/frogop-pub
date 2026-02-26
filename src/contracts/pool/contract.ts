@@ -505,8 +505,9 @@ export class OptionsPool extends ReentrancyGuard {
             return writer;
         }
 
-        // Cap at 50 per batch
-        const maxBatch: u256 = u256.fromU64(50);
+        // OPNet receipt limit is 2048 bytes. Each option encodes to 202 bytes.
+        // Max options that fit: floor((2048 - 32) / 202) = 9.
+        const maxBatch: u256 = u256.fromU64(9);
         let actualCount: u256 = requestedCount;
         if (u256.gt(actualCount, maxBatch)) {
             actualCount = maxBatch;
@@ -518,8 +519,10 @@ export class OptionsPool extends ReentrancyGuard {
             actualCount = available;
         }
 
-        // Each option = 202 bytes; max allocation = 32 + 202 * 50 = 10132 bytes
-        const writer = new BytesWriter(32 + 202 * 50);
+        // Allocate exactly the bytes needed so BytesWriter capacity stays under the 2048-byte limit.
+        // BytesWriter capacity = 32 (count header) + 202 * actualCount  (≤ 1850 for 9 options)
+        const count: i32 = i32(u32(actualCount.lo1));
+        const writer = new BytesWriter(32 + 202 * count);
         writer.writeU256(actualCount);
 
         let i: u256 = u256.Zero;
