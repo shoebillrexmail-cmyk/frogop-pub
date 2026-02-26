@@ -415,6 +415,8 @@ export class OptionsPool extends ReentrancyGuard {
                 return this.settle(calldata);
             case encodeSelector('getOption(uint256)'):
                 return this.getOption(calldata);
+            case encodeSelector('getOptionsBatch(uint256,uint256)'):
+                return this.getOptionsBatch(calldata);
             case encodeSelector('optionCount()'):
                 return this.optionCount(calldata);
             case encodeSelector('feeRecipient()'):
@@ -482,7 +484,63 @@ export class OptionsPool extends ReentrancyGuard {
         writer.writeU256(this._nextId.value);
         return writer;
     }
-    
+
+    /**
+     * Return a batch of options starting at startId (inclusive).
+     * Response: u256 actualCount, then actualCount × option records.
+     * Each record: id(32) writer(32) buyer(32) optionType(1) strikePrice(32)
+     *              underlyingAmount(32) premium(32) expiryBlock(8) status(1) = 202 bytes.
+     * Capped at 50 options per call.
+     */
+    public getOptionsBatch(calldata: Calldata): BytesWriter {
+        const startId = calldata.readU256();
+        const requestedCount = calldata.readU256();
+
+        const totalOptions = this._nextId.value;
+
+        // Nothing to return if startId is at or beyond the option count
+        if (!u256.lt(startId, totalOptions)) {
+            const writer = new BytesWriter(32);
+            writer.writeU256(u256.Zero);
+            return writer;
+        }
+
+        // Cap at 50 per batch
+        const maxBatch: u256 = u256.fromU64(50);
+        let actualCount: u256 = requestedCount;
+        if (u256.gt(actualCount, maxBatch)) {
+            actualCount = maxBatch;
+        }
+
+        // Can't return more than what exists from startId onward
+        const available = SafeMath.sub(totalOptions, startId);
+        if (u256.gt(actualCount, available)) {
+            actualCount = available;
+        }
+
+        // Each option = 202 bytes; max allocation = 32 + 202 * 50 = 10132 bytes
+        const writer = new BytesWriter(32 + 202 * 50);
+        writer.writeU256(actualCount);
+
+        let i: u256 = u256.Zero;
+        while (u256.lt(i, actualCount)) {
+            const optionId = SafeMath.add(startId, i);
+            const opt = this.options.get(optionId);
+            writer.writeU256(opt.id);
+            writer.writeAddress(opt.writer);
+            writer.writeAddress(opt.buyer);
+            writer.writeU8(opt.optionType);
+            writer.writeU256(opt.strikePrice);
+            writer.writeU256(opt.underlyingAmount);
+            writer.writeU256(opt.premium);
+            writer.writeU64(opt.expiryBlock);
+            writer.writeU8(opt.status);
+            i = SafeMath.add(i, u256.One);
+        }
+
+        return writer;
+    }
+
     public feeRecipientMethod(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(32);
         writer.writeAddress(this.feeRecipient.value);

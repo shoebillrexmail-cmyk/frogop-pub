@@ -50,6 +50,23 @@ export const OptionsFactoryAbi = [
         type: BitcoinAbiTypes.Function,
     },
     {
+        name: 'getPoolByIndex',
+        constant: true,
+        inputs: [{ name: 'index', type: ABIDataTypes.UINT256 }],
+        outputs: [{ name: 'poolAddress', type: ABIDataTypes.ADDRESS }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'registerPool',
+        inputs: [
+            { name: 'pool', type: ABIDataTypes.ADDRESS },
+            { name: 'underlying', type: ABIDataTypes.ADDRESS },
+            { name: 'premiumToken', type: ABIDataTypes.ADDRESS },
+        ],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
         name: 'createPool',
         inputs: [
             { name: 'underlying', type: ABIDataTypes.ADDRESS },

@@ -89,6 +89,50 @@
             ]
         },
         {
+            "name": "getPoolByIndex",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "index",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "poolAddress",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "registerPool",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "pool",
+                    "type": "ADDRESS"
+                },
+                {
+                    "name": "underlying",
+                    "type": "ADDRESS"
+                },
+                {
+                    "name": "premiumToken",
+                    "type": "ADDRESS"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
             "name": "createPool",
             "type": "Function",
             "payable": false,

@@ -243,6 +243,19 @@ export function createPoolCalldata(
     return writer.getBuffer();
 }
 
+export function createRegisterPoolCalldata(
+    pool: Address,
+    underlying: Address,
+    premiumToken: Address
+): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(FACTORY_SELECTORS.registerPool);
+    writer.writeAddress(pool);
+    writer.writeAddress(underlying);
+    writer.writeAddress(premiumToken);
+    return writer.getBuffer();
+}
+
 export function createSetPoolTemplateCalldata(template: Address): Uint8Array {
     const writer = new BinaryWriter();
     writer.writeU32(FACTORY_SELECTORS.setPoolTemplate);

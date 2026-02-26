@@ -73,6 +73,26 @@ export type GetPoolCount = CallResult<
 >;
 
 /**
+ * @description Represents the result of the getPoolByIndex function call.
+ */
+export type GetPoolByIndex = CallResult<
+    {
+        poolAddress: Address;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
+ * @description Represents the result of the registerPool function call.
+ */
+export type RegisterPool = CallResult<
+    {
+        success: boolean;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
  * @description Represents the result of the createPool function call.
  */
 export type CreatePool = CallResult<
@@ -102,6 +122,8 @@ export interface IOptionsFactory extends IOP_NETContract {
     getTreasury(): Promise<GetTreasury>;
     setTreasury(treasury: Address): Promise<SetTreasury>;
     getPoolCount(): Promise<GetPoolCount>;
+    getPoolByIndex(index: bigint): Promise<GetPoolByIndex>;
+    registerPool(pool: Address, underlying: Address, premiumToken: Address): Promise<RegisterPool>;
     createPool(
         underlying: Address,
         premiumToken: Address,

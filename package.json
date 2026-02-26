@@ -22,6 +22,7 @@
     "test:integration:operations": "npx tsx tests/integration/04-option-operations.ts",
     "test:integration:pool": "npx tsx tests/integration/05-pool-creation.ts",
     "test:integration:full": "npx tsx tests/integration/06-full-lifecycle.ts",
+    "test:integration:query": "npx tsx tests/integration/07-query-methods.ts",
     "lint": "eslint src/**/*.ts tests/**/*.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf build tests/dist"

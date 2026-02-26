@@ -27,6 +27,8 @@
  * | 11 | poolTemplate | StoredAddress | Constructor |
  * | 12 | pools | MapOfMap<u256> | Constructor |
  * | 13 | treasury | StoredAddress | Lazy (set via setTreasury) |
+ * | 14 | poolCount | StoredU256 | Lazy (incremented by createPool/registerPool) |
+ * | 15 | poolList | SHA256-keyed raw storage | Lazy prefix for pool enumeration |
  * 
  * @author Frogop Team
  * @version 1.0.0
@@ -38,9 +40,12 @@ import {
     Blockchain,
     BytesWriter,
     Calldata,
+    EMPTY_BUFFER,
     MapOfMap,
     Revert,
+    SafeMath,
     StoredAddress,
+    StoredU256,
     OP_NET,
     encodeSelector,
     Selector,
@@ -52,6 +57,8 @@ const OWNER_POINTER: u16 = 10;
 const POOL_TEMPLATE_POINTER: u16 = 11;
 const POOLS_POINTER: u16 = 12;
 const TREASURY_POINTER: u16 = 13;
+const POOL_COUNT_POINTER: u16 = 14;
+const POOL_LIST_POINTER: u16 = 15;
 
 class PoolCreatedEvent extends NetEvent {
     constructor(data: BytesWriter) {
@@ -65,6 +72,7 @@ export class OptionsFactory extends OP_NET {
     private _poolTemplate: StoredAddress;
     private _pools: MapOfMap<u256>;
     private _treasury: StoredAddress | null = null;
+    private _poolCount: StoredU256 | null = null;
 
     public constructor() {
         super();
@@ -83,6 +91,36 @@ export class OptionsFactory extends OP_NET {
             this._treasury = new StoredAddress(TREASURY_POINTER);
         }
         return this._treasury!;
+    }
+
+    private get poolCount(): StoredU256 {
+        if (!this._poolCount) {
+            this._poolCount = new StoredU256(POOL_COUNT_POINTER, EMPTY_BUFFER);
+        }
+        return this._poolCount!;
+    }
+
+    /**
+     * Build a SHA256 storage key for the pool enumeration list.
+     * Slot 0 = poolAddress, slot 1 = underlying, slot 2 = premiumToken
+     */
+    private _getPoolListKey(index: u256, slot: u8): Uint8Array {
+        const writer = new BytesWriter(35); // 2 + 32 + 1
+        writer.writeU16(POOL_LIST_POINTER);
+        writer.writeU256(index);
+        writer.writeU8(slot);
+        return sha256(writer.getBuffer());
+    }
+
+    /**
+     * Write a pool entry into the enumerable list and increment pool count.
+     */
+    private _registerInList(pool: Address, underlying: Address, premiumToken: Address): void {
+        const idx = this.poolCount.value;
+        Blockchain.setStorageAt(this._getPoolListKey(idx, 0), pool);
+        Blockchain.setStorageAt(this._getPoolListKey(idx, 1), underlying);
+        Blockchain.setStorageAt(this._getPoolListKey(idx, 2), premiumToken);
+        this.poolCount.value = SafeMath.add(idx, u256.One);
     }
 
     private onlyOwner(): void {
@@ -151,7 +189,64 @@ export class OptionsFactory extends OP_NET {
     @returns({ name: 'count', type: ABIDataTypes.UINT256 })
     public getPoolCount(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(32);
-        writer.writeU256(u256.Zero);
+        writer.writeU256(this.poolCount.value);
+        return writer;
+    }
+
+    @view
+    @method({ name: 'index', type: ABIDataTypes.UINT256 })
+    @returns({ name: 'poolAddress', type: ABIDataTypes.ADDRESS })
+    public getPoolByIndex(calldata: Calldata): BytesWriter {
+        const index = calldata.readU256();
+        const count = this.poolCount.value;
+
+        if (!u256.lt(index, count)) {
+            throw new Revert('Index out of bounds');
+        }
+
+        const pool = Address.fromUint8Array(Blockchain.getStorageAt(this._getPoolListKey(index, 0)));
+        const underlying = Address.fromUint8Array(Blockchain.getStorageAt(this._getPoolListKey(index, 1)));
+        const premiumToken = Address.fromUint8Array(Blockchain.getStorageAt(this._getPoolListKey(index, 2)));
+
+        // Returns poolAddress (32) + underlying (32) + premiumToken (32) = 96 bytes
+        const writer = new BytesWriter(96);
+        writer.writeAddress(pool);
+        writer.writeAddress(underlying);
+        writer.writeAddress(premiumToken);
+        return writer;
+    }
+
+    @method(
+        { name: 'pool', type: ABIDataTypes.ADDRESS },
+        { name: 'underlying', type: ABIDataTypes.ADDRESS },
+        { name: 'premiumToken', type: ABIDataTypes.ADDRESS }
+    )
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    public registerPool(calldata: Calldata): BytesWriter {
+        this.onlyOwner();
+        const pool = calldata.readAddress();
+        const underlying = calldata.readAddress();
+        const premiumToken = calldata.readAddress();
+
+        if (pool.equals(Address.zero())) {
+            throw new Revert('Invalid pool address');
+        }
+        if (underlying.equals(Address.zero())) {
+            throw new Revert('Invalid underlying');
+        }
+        if (premiumToken.equals(Address.zero())) {
+            throw new Revert('Invalid premiumToken');
+        }
+        if (this._pools.has(underlying) && this._pools.get(underlying).has(premiumToken)) {
+            throw new Revert('Pool already registered');
+        }
+
+        const poolU256 = u256.fromBytes<Address>(pool, true);
+        this._pools.get(underlying).set(premiumToken, poolU256);
+        this._registerInList(pool, underlying, premiumToken);
+
+        const writer = new BytesWriter(1);
+        writer.writeBoolean(true);
         return writer;
     }
 
@@ -212,6 +307,7 @@ export class OptionsFactory extends OP_NET {
 
         const poolU256 = u256.fromBytes<Address>(poolAddress, true);
         this._pools.get(underlying).set(premiumToken, poolU256);
+        this._registerInList(poolAddress, underlying, premiumToken);
 
         const eventData = new BytesWriter(96);
         eventData.writeAddress(poolAddress);

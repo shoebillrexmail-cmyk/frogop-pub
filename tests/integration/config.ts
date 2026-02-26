@@ -199,6 +199,7 @@ export const POOL_SELECTORS = {
     underlying: computeSelector('underlying()'),
     premiumToken: computeSelector('premiumToken()'),
     optionCount: computeSelector('optionCount()'),
+    getOptionsBatch: computeSelector('getOptionsBatch(uint256,uint256)'),
     feeRecipient: computeSelector('feeRecipient()'),
     buyFeeBps: computeSelector('buyFeeBps()'),
     exerciseFeeBps: computeSelector('exerciseFeeBps()'),
@@ -217,9 +218,13 @@ export const POOL_SELECTORS = {
 
 /** OptionsFactory method selectors */
 export const FACTORY_SELECTORS = {
+    getOwner: computeSelector('getOwner()'),
     getPoolTemplate: computeSelector('getPoolTemplate()'),
     getPoolCount: computeSelector('getPoolCount()'),
     getPool: computeSelector('getPool(address,address)'),
+    getPoolByIndex: computeSelector('getPoolByIndex(uint256)'),
+    getTreasury: computeSelector('getTreasury()'),
     setPoolTemplate: computeSelectorU32('setPoolTemplate(address)'),
     createPool: computeSelectorU32('createPool(address,address,uint8,uint8)'),
+    registerPool: computeSelectorU32('registerPool(address,address,address)'),
 };
