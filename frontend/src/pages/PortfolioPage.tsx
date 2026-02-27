@@ -9,6 +9,7 @@ import { useWalletConnect } from '@btc-vision/walletconnect';
 import { usePool } from '../hooks/usePool.ts';
 import { useUserOptions } from '../hooks/useUserOptions.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
+import { PortfolioSkeleton } from '../components/LoadingSkeletons.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
 import { BalancesCard } from '../components/BalancesCard.tsx';
 import { CancelModal } from '../components/CancelModal.tsx';
@@ -114,6 +115,8 @@ export function PortfolioPage() {
     // -------------------------------------------------------------------------
     // Render
     // -------------------------------------------------------------------------
+    if (loading) return <PortfolioSkeleton />;
+
     return (
         <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
             {/* Grace period warning banner */}
@@ -131,16 +134,8 @@ export function PortfolioPage() {
                 </div>
             )}
 
-            {/* Loading skeleton */}
-            {loading && (
-                <div className="space-y-4">
-                    <div className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-5 h-24 animate-pulse" />
-                    <div className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-5 h-48 animate-pulse" />
-                </div>
-            )}
-
             {/* Error */}
-            {!loading && error && (
+            {error && (
                 <div className="bg-terminal-bg-elevated border border-rose-700 rounded-xl p-6 text-center">
                     <p className="text-rose-400 font-mono text-sm mb-3">{error}</p>
                     <button onClick={refetch} className="btn-secondary px-4 py-2 text-sm rounded">
@@ -149,7 +144,7 @@ export function PortfolioPage() {
                 </div>
             )}
 
-            {!loading && !error && (
+            {!error && (
                 <>
                     {/* Source badge */}
                     {source && (

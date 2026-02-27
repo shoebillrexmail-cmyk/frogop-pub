@@ -186,6 +186,19 @@ a:where(:not([class])):hover {
   color: #60a5fa;
 }
 
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #181818 25%, #242424 50%, #181818 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: 4px;
+}
+
 /* Neon divider */
 .neon-divider-green {
   height: 1px;
