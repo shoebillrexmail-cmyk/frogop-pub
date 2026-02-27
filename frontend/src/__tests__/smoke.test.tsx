@@ -6,15 +6,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
-// Mock the wallet store so tests don't rely on window.opwallet
-vi.mock('../stores/walletStore', () => ({
-    useWalletStore: vi.fn(() => ({
-        connected: false,
-        address: null,
-        publicKey: null,
+// Mock walletconnect so tests don't rely on window.opwallet / browser extension
+vi.mock('@btc-vision/walletconnect', () => ({
+    default: ({ children }: { children: unknown }) => children,
+    useWalletConnect: vi.fn(() => ({
+        walletAddress: null,
         connecting: false,
-        error: null,
-        connect: vi.fn(),
+        openConnectModal: vi.fn(),
         disconnect: vi.fn(),
     })),
 }));

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { useWalletStore } from '../stores/walletStore';
+import { useWalletConnect } from '@btc-vision/walletconnect';
 import { formatAddress } from '../config';
 
 export function Layout() {
   const location = useLocation();
-  const { connected, address, connecting, connect, disconnect } = useWalletStore();
+  const { walletAddress, connecting, openConnectModal, disconnect } = useWalletConnect();
+  const connected = !!walletAddress;
   const [menuOpen, setMenuOpen] = useState(false);
 
   const navLinks = [
@@ -43,10 +44,10 @@ export function Layout() {
 
           <div className="flex items-center gap-3">
             {/* Wallet button */}
-            {connected && address ? (
+            {connected && walletAddress ? (
               <div className="flex items-center gap-2">
                 <span className="hidden sm:block text-sm text-terminal-text-muted font-mono">
-                  {formatAddress(address)}
+                  {formatAddress(walletAddress)}
                 </span>
                 <button
                   onClick={disconnect}
@@ -57,7 +58,7 @@ export function Layout() {
               </div>
             ) : (
               <button
-                onClick={connect}
+                onClick={openConnectModal}
                 disabled={connecting}
                 className="btn-primary px-4 py-2 text-sm font-medium rounded-lg disabled:opacity-50"
               >
