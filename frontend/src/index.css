@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+/* Register custom colors as Tailwind v4 design tokens so bg-*, text-*, border-* utilities work */
+@theme {
+  --color-terminal-bg-primary:    #080808;
+  --color-terminal-bg-secondary:  #0a0a0a;
+  --color-terminal-bg-tertiary:   #0f0f0f;
+  --color-terminal-bg-elevated:   #111111;
+
+  --color-terminal-text-primary:   #e5e5e5;
+  --color-terminal-text-secondary: #b0b0b0;
+  --color-terminal-text-muted:     #6b7280;
+
+  --color-terminal-border:        #333333;
+  --color-terminal-border-subtle: #1f1f1f;
+
+  --color-accent:       #F7931A;
+  --color-accent-hover: #E8830C;
+}
+
 :root {
   --terminal-bg-primary: #080808;
   --terminal-bg-secondary: #0a0a0a;
