@@ -1091,12 +1091,220 @@ frogop/
 
 ---
 
-### Remaining
-- [ ] Contract service layer
-- [ ] Real wallet connection
-- [ ] Real data from contracts
-- [ ] Write/Buy option flows
-- [ ] Exercise/Cancel modals
+### Story 6.14: User Flows Documentation ✅ Done
+
+**As a** developer
+**I want** complete UI/UX design docs before implementation
+**So that** the frontend matches the intended option trading experience
+
+| # | Task | Status |
+|---|------|--------|
+| 6.14.1 | Write `docs/frontend/USER_FLOWS.md` — state machine + all 6 flows with ASCII sketches | ✅ Done |
+| 6.14.2 | Write `docs/frontend/PAGE_DESIGNS.md` — Pools and Portfolio page layout | ✅ Done |
+| 6.14.3 | Update README.md — frontend section, project structure, docs links | ✅ Done |
+
+---
+
+### Story 6.15: Wallet Connect Integration 📋
+
+**As a** user
+**I want** to connect my OPWallet to FroGop
+**So that** I can write, buy, and exercise options
+
+**Approach**: Replace manual `window.opwallet` `walletStore.ts` with `@btc-vision/walletconnect`
+
+| # | Task | Est. | Status |
+|---|------|------|--------|
+| 6.15.1 | Wrap `<App>` with `<WalletConnectProvider theme="dark">` in `main.tsx` | 0.5h | |
+| 6.15.2 | Replace `useWalletStore` with `useWalletConnect()` in `Layout.tsx` | 1h | |
+| 6.15.3 | Delete `src/stores/walletStore.ts` | 0.5h | |
+| 6.15.4 | Add connected address display + disconnect in header dropdown | 1h | |
+| 6.15.5 | Update Portfolio page: show `[Connect Wallet]` gate when disconnected | 0.5h | |
+| 6.15.6 | Write Vitest component tests for connect/disconnect states | 1h | |
+
+**Est.**: 4.5h | **Points**: 3
+
+**Done criteria**: Connect modal opens · address shown in header · disconnect works · tests pass
+
+---
+
+### Story 6.16: Contract Service Layer 📋
+
+**As a** developer
+**I want** typed React hooks for all contract interactions
+**So that** UI components don't contain raw RPC calls
+
+| # | Task | Est. | Status |
+|---|------|------|--------|
+| 6.16.1 | Create `src/types/contracts.ts` — `OptionType`, `OptionStatus`, `OptionData`, `PoolInfo` | 1h | |
+| 6.16.2 | Create `src/contracts/poolAbi.ts` — `IOptionsPoolContract extends BaseContractProperties` | 1h | |
+| 6.16.3 | Create `src/contracts/factoryAbi.ts` — `IOptionsFactoryContract` | 0.5h | |
+| 6.16.4 | Create `src/hooks/usePoolContract.ts` — pool reads (fetchPoolInfo, fetchOption, fetchAllOptions) | 2h | |
+| 6.16.5 | Create `src/hooks/useTokenContract.ts` — OP20 reads (balanceOf, allowance) + write (increaseAllowance) | 1.5h | |
+| 6.16.6 | Create `src/hooks/usePool.ts` — combined hook: state, auto-fetch on block, allowance-then-call flow | 2h | |
+| 6.16.7 | Update `frontend/src/config/index.ts` — add pool + token addresses to `CONTRACT_ADDRESSES` | 0.5h | |
+| 6.16.8 | Update `.env.testnet` — add `VITE_POOL_ADDRESS`, `VITE_FROG_U_ADDRESS`, `VITE_FROG_P_ADDRESS` | 0.5h | |
+| 6.16.9 | Write Vitest unit tests for hooks (mock provider) | 2h | |
+
+**Est.**: 11h | **Points**: 8
+
+**OPNet rules** (no exceptions):
+- `signer: null, mldsaSigner: null` in `sendTransaction()` — wallet handles signing
+- `getContract()` from `opnet` package — never raw RPC for contract calls
+- Provider + contract instances cached as singletons per network/address
+- Poll refresh triggered on block change via `provider.getBlockNumber()` subscription
+
+**Done criteria**: All hooks return typed data · mock-provider tests pass · no raw provider.call in components
+
+---
+
+### Story 6.17: Pools Page — Real Data 📋
+
+**As a** user
+**I want** to see all options in the MOTO/PILL pool with live data
+**So that** I can browse available options
+
+| # | Task | Est. | Status |
+|---|------|------|--------|
+| 6.17.1 | Replace PoolsPage placeholder with pool info card (tokens, fees, option count) | 1.5h | |
+| 6.17.2 | Add options table with status badges and type colors (see `PAGE_DESIGNS.md`) | 2h | |
+| 6.17.3 | Add filter controls: All / OPEN / PURCHASED / EXPIRED / CANCELLED | 1h | |
+| 6.17.4 | Show row actions per status + wallet role (see action visibility matrix) | 1.5h | |
+| 6.17.5 | Loading skeleton while fetching · error state if RPC fails | 1h | |
+| 6.17.6 | Network badge in footer (hide on mainnet) | 0.5h | |
+| 6.17.7 | Write Vitest + RTL tests: renders options, filter changes table rows, action visibility | 2h | |
+
+**Est.**: 9.5h | **Points**: 5
+
+**Done criteria**: Options table shows live data · filters work · actions shown correctly by wallet · tests pass
+
+---
+
+### Story 6.18: Write Option Panel 📋
+
+**As a** writer
+**I want** a form to create a CALL or PUT option
+**So that** I can lock collateral and earn premium
+
+| # | Task | Est. | Status |
+|---|------|------|--------|
+| 6.18.1 | Slide-in panel (right side) with CALL/PUT toggle, input fields, collateral calc | 2h | |
+| 6.18.2 | Real-time collateral preview using `calculateCollateral()` view call | 1h | |
+| 6.18.3 | Approval step: query allowance → show `[Approve MOTO]` or `[Write Option]` | 1.5h | |
+| 6.18.4 | Submit step: `writeOption()` + OPWallet sign + pending state | 1h | |
+| 6.18.5 | Validation: amount > 0, strike > 0, expiry 1-52560 blocks, sufficient balance | 1h | |
+| 6.18.6 | Post-submit: poll `optionCount()` until incremented, refresh table | 1h | |
+| 6.18.7 | Write Vitest + RTL tests: validation, approval flow, submission | 2h | |
+
+**Est.**: 9.5h | **Points**: 5
+
+**Done criteria**: Writer can write a CALL or PUT end-to-end · approval step works · new option appears in table · tests pass
+
+---
+
+### Story 6.19: Buy Option Flow 📋
+
+**As a** buyer
+**I want** a confirmation modal before purchasing an option
+**So that** I understand the cost and can approve PILL
+
+| # | Task | Est. | Status |
+|---|------|------|--------|
+| 6.19.1 | `[Buy ▶]` button in options table (hidden for writer of that option) | 0.5h | |
+| 6.19.2 | Confirmation modal: show premium + 1% fee breakdown, PILL balance check | 1.5h | |
+| 6.19.3 | Approval step: query PILL allowance → `[Approve PILL]` or `[Confirm Purchase]` | 1.5h | |
+| 6.19.4 | Submit `buyOption(id)` + pending state | 1h | |
+| 6.19.5 | Post-submit: poll `getOption(id)` until status = PURCHASED, refresh | 1h | |
+| 6.19.6 | Write Vitest + RTL tests: modal renders, approval flow, purchase success | 1.5h | |
+
+**Est.**: 7h | **Points**: 5
+
+**Done criteria**: Buyer sees modal with correct cost · approval + purchase flow works · option moves to PURCHASED · tests pass
+
+---
+
+### Story 6.20: Portfolio Page — Real Data 📋
+
+**As a** user
+**I want** to see my written and purchased options filtered by my wallet
+**So that** I can manage my positions
+
+| # | Task | Est. | Status |
+|---|------|------|--------|
+| 6.20.1 | Replace PortfolioPage placeholder with balances card (MOTO + PILL) | 1h | |
+| 6.20.2 | My Written Options table: filter `option.writer == walletAddress` | 1.5h | |
+| 6.20.3 | My Purchased Options table: filter `option.buyer == walletAddress` | 1.5h | |
+| 6.20.4 | Connected-wallet gate: show `[Connect Wallet]` when disconnected | 0.5h | |
+| 6.20.5 | Empty state messaging with `[Go to Pools →]` CTA | 0.5h | |
+| 6.20.6 | Grace period warning banner for active PURCHASED options | 1h | |
+| 6.20.7 | Write Vitest + RTL tests: filter logic, empty states, gate | 1.5h | |
+
+**Est.**: 7.5h | **Points**: 5
+
+**Done criteria**: Written + purchased options shown for connected wallet · balances correct · disconnected gate works · tests pass
+
+---
+
+### Story 6.21: Exercise / Cancel / Settle Modals 📋
+
+**As a** user
+**I want** action modals for exercise, cancel, and settle
+**So that** I can manage options through their full lifecycle
+
+| # | Task | Est. | Status |
+|---|------|------|--------|
+| 6.21.1 | Cancel modal: show collateral − fee (0% if expired) → `cancelOption()` | 2h | |
+| 6.21.2 | Exercise modal: show PILL cost + 0.1% fee, MOTO payout → approval + `exercise()` | 2.5h | |
+| 6.21.3 | Settle modal: show outcome + `[Confirm Settle]` → `settle()` (no approval) | 1h | |
+| 6.21.4 | Action buttons in table rows and Portfolio (per action visibility matrix) | 1h | |
+| 6.21.5 | Post-action poll until status changes, refresh both Pools and Portfolio | 1h | |
+| 6.21.6 | Write Vitest + RTL tests: all three modals render correctly, approval flows | 2h | |
+
+**Est.**: 9.5h | **Points**: 6
+
+**Done criteria**: All three actions work end-to-end · status updates after confirmation · tests pass
+
+---
+
+### Story 6.22: Frontend Test Infrastructure 📋
+
+**As a** developer
+**I want** a Vitest + React Testing Library test setup
+**So that** every UI feature has passing tests before being considered done
+
+> **Policy**: A story is NOT done until its tests pass. No exceptions.
+
+| # | Task | Est. | Status |
+|---|------|------|--------|
+| 6.22.1 | Install Vitest + `@testing-library/react` + `@testing-library/user-event` + `jsdom` in frontend | 0.5h | |
+| 6.22.2 | Configure `vitest.config.ts` with jsdom environment | 0.5h | |
+| 6.22.3 | Create mock provider + mock walletconnect utilities in `src/__tests__/mocks/` | 1.5h | |
+| 6.22.4 | Add `test` script to `frontend/package.json` and root test runner | 0.5h | |
+| 6.22.5 | Write smoke test: App renders without crashing | 0.5h | |
+| 6.22.6 | CI note: `npm test` in `frontend/` must pass before any PR merge | 0.5h | |
+
+**Est.**: 4h | **Points**: 3
+
+**Done criteria**: `cd frontend && npm test` runs all tests · 0 failures · mock utilities available for all feature stories
+
+---
+
+### Sprint 6 Contract Integration Summary
+
+| Story | Points | Est. | Status | Depends on |
+|-------|--------|------|--------|------------|
+| 6.14 User Flows Docs | 2 | 2h | ✅ Done | — |
+| 6.15 Wallet Connect | 3 | 4.5h | 📋 Planned | — |
+| 6.16 Contract Service Layer | 8 | 11h | 📋 Planned | 6.15 |
+| 6.17 Pools Page — Real Data | 5 | 9.5h | 📋 Planned | 6.16 |
+| 6.18 Write Option Panel | 5 | 9.5h | 📋 Planned | 6.16 |
+| 6.19 Buy Option Flow | 5 | 7h | 📋 Planned | 6.16 |
+| 6.20 Portfolio — Real Data | 5 | 7.5h | 📋 Planned | 6.16 |
+| 6.21 Exercise/Cancel/Settle | 6 | 9.5h | 📋 Planned | 6.19, 6.20 |
+| 6.22 Test Infrastructure | 3 | 4h | 📋 Planned | — (do first) |
+| **Total** | **42** | **64.5h** | | |
+
+**Implementation order**: 6.22 → 6.15 → 6.16 → 6.17 + 6.18 + 6.19 in parallel → 6.20 → 6.21
 
 ### Total Estimate: ~86 hours (11 days)
 

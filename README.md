@@ -44,12 +44,22 @@ frogop/
 │   └── contracts/          # Smart contracts (AssemblyScript)
 │       ├── factory/        # OptionsFactory contract
 │       └── pool/           # OptionsPool contract
+├── frontend/               # React 19 + Vite + Tailwind SPA
+│   ├── src/
+│   │   ├── components/     # Layout, shared UI
+│   │   ├── pages/          # Landing, Pools, Portfolio, About
+│   │   ├── hooks/          # Contract interaction hooks
+│   │   ├── services/       # Contract service layer
+│   │   └── config/         # Network config, utilities
+│   └── package.json
 ├── tests/                  # Unit tests (TypeScript)
 │   ├── runtime/            # Test runtime helpers
+│   ├── integration/        # Testnet integration tests
 │   ├── OptionsFactory.test.ts
 │   └── OptionsPool.test.ts
 ├── docs/                   # Documentation
 │   ├── contracts/          # Contract specs & best practices
+│   ├── frontend/           # Frontend design — user flows, page layouts
 │   ├── roadmap/            # Planning & milestones
 │   ├── security/           # Security documentation
 │   └── tests/              # Test documentation
@@ -182,6 +192,13 @@ See [SPRINTBOARD.md](SPRINTBOARD.md) for current development status.
 
 - **[docs/contracts/OptionsFactory.md](docs/contracts/OptionsFactory.md)** - Factory contract design
 - **[docs/contracts/OptionsPool.md](docs/contracts/OptionsPool.md)** - Pool contract design
+
+### Frontend Design
+
+- **[docs/frontend/USER_FLOWS.md](docs/frontend/USER_FLOWS.md)** - Option lifecycle state machine + all user flows with ASCII sketches
+- **[docs/frontend/PAGE_DESIGNS.md](docs/frontend/PAGE_DESIGNS.md)** - Pools and Portfolio page layout references
+- **[docs/frontend/FRONTEND_IMPLEMENTATION_PLAN.md](docs/frontend/FRONTEND_IMPLEMENTATION_PLAN.md)** - Phase-by-phase implementation guide
+- **[docs/frontend-integration-plan.md](docs/frontend-integration-plan.md)** - Contract ↔ UI integration reference
 
 ### Development
 
