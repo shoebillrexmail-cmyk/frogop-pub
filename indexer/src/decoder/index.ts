@@ -4,9 +4,9 @@
  * Receives block data, decodes OptionsPool events, returns D1PreparedStatements
  * for batching. Caller commits the batch atomically.
  *
- * NOTE: parseEventData() is a stub pending contract event ABI confirmation.
- * The contract encodes events with AssemblyScript BytesWriter. Once field order
- * is confirmed from the contract source, replace the stub with BytesReader decoding.
+ * Event data encoding: OPNet RPC returns event data as base64-encoded bytes
+ * written by AssemblyScript BytesWriter (big-endian, no padding).
+ * Field order is derived from contract source (src/contracts/pool/contract.ts).
  */
 import type { TxEvent, OptionRow, FeeEventRow } from '../types/index.js';
 import { OptionStatus, FeeEventType } from '../types/index.js';
@@ -84,8 +84,13 @@ function handleWritten(
     //   strikePrice U256, underlyingAmount U256, premium U256, expiryBlock U64]
     // Note: graceEndBlock is NOT emitted — it is derived (expiryBlock + GRACE_PERIOD_BLOCKS)
     const f = parseEventData(event.data, [
-        'optionId', 'writer', 'optionType', 'strikePrice',
-        'underlyingAmount', 'premium', 'expiryBlock',
+        { name: 'optionId',        type: 'u256'    },
+        { name: 'writer',          type: 'address' },
+        { name: 'optionType',      type: 'u8'      },
+        { name: 'strikePrice',     type: 'u256'    },
+        { name: 'underlyingAmount', type: 'u256'   },
+        { name: 'premium',         type: 'u256'    },
+        { name: 'expiryBlock',     type: 'u64'     },
     ]);
     if (!f) return [];
 
@@ -117,7 +122,12 @@ function handleCancelled(
     txId: string,
 ): D1PreparedStatement[] {
     // OptionCancelled: [optionId U256, writer Address, returnAmount U256, fee U256]
-    const f = parseEventData(event.data, ['optionId', 'writer', 'returnAmount', 'fee']);
+    const f = parseEventData(event.data, [
+        { name: 'optionId',     type: 'u256'    },
+        { name: 'writer',       type: 'address' },
+        { name: 'returnAmount', type: 'u256'    },
+        { name: 'fee',          type: 'u256'    },
+    ]);
     if (!f) return [];
     const optionId = Number(f['optionId']);
     const stmts = [
@@ -143,7 +153,14 @@ function handlePurchased(
     // OptionPurchased: [optionId U256, buyer Address, writer Address,
     //   premium U256, writerAmount U256, currentBlock U64]
     // protocolFee is not a dedicated field — compute as premium - writerAmount
-    const f = parseEventData(event.data, ['optionId', 'buyer', 'writer', 'premium', 'writerAmount', 'currentBlock']);
+    const f = parseEventData(event.data, [
+        { name: 'optionId',     type: 'u256'    },
+        { name: 'buyer',        type: 'address' },
+        { name: 'writer',       type: 'address' },
+        { name: 'premium',      type: 'u256'    },
+        { name: 'writerAmount', type: 'u256'    },
+        { name: 'currentBlock', type: 'u64'     },
+    ]);
     if (!f) return [];
     const optionId = Number(f['optionId']);
     const stmts = [
@@ -170,7 +187,15 @@ function handleExercised(
 ): D1PreparedStatement[] {
     // OptionExercised: [optionId U256, buyer Address, writer Address,
     //   optionType U8, underlyingAmount U256, strikeValue U256, exerciseFee U256]
-    const f = parseEventData(event.data, ['optionId', 'buyer', 'writer', 'optionType', 'underlyingAmount', 'strikeValue', 'exerciseFee']);
+    const f = parseEventData(event.data, [
+        { name: 'optionId',         type: 'u256'    },
+        { name: 'buyer',            type: 'address' },
+        { name: 'writer',           type: 'address' },
+        { name: 'optionType',       type: 'u8'      },
+        { name: 'underlyingAmount', type: 'u256'    },
+        { name: 'strikeValue',      type: 'u256'    },
+        { name: 'exerciseFee',      type: 'u256'    },
+    ]);
     if (!f) return [];
     const optionId = Number(f['optionId']);
     const stmts = [
@@ -194,21 +219,84 @@ function handleSettled(
     txId: string,
 ): D1PreparedStatement[] {
     // OptionExpired (from settle()): [optionId U256, writer Address, collateralAmount U256]
-    const f = parseEventData(event.data, ['optionId', 'writer', 'collateralAmount']);
+    const f = parseEventData(event.data, [
+        { name: 'optionId',        type: 'u256'    },
+        { name: 'writer',          type: 'address' },
+        { name: 'collateralAmount', type: 'u256'   },
+    ]);
     if (!f) return [];
     return [stmtUpdateOptionStatus(db, event.contractAddress, Number(f['optionId']), OptionStatus.SETTLED, null, blockNumber, txId)];
 }
 
 // ---------------------------------------------------------------------------
-// Hex decode stub
+// Binary reader (mirrors AssemblyScript BytesWriter — big-endian, no padding)
 // ---------------------------------------------------------------------------
-// TODO (Story 7.3): replace with BytesReader from @btc-vision/transaction.
-// Contract events are encoded with AssemblyScript BytesWriter in field order.
-// Once contract event source is confirmed, implement real decoding here.
-// Until then, returns null so handlers emit no DB writes (safe no-op).
+
+type FieldType = 'u8' | 'u64' | 'u256' | 'address';
+type FieldDef  = { name: string; type: FieldType };
+
+class Reader {
+    private pos = 0;
+    constructor(private readonly buf: Uint8Array) {}
+
+    private next(): number {
+        if (this.pos >= this.buf.length) throw new Error('Buffer underflow');
+        return this.buf[this.pos++] as number;
+    }
+
+    readU8(): number {
+        return this.next();
+    }
+
+    readU64(): bigint {
+        let v = 0n;
+        for (let i = 0; i < 8; i++) v = (v << 8n) | BigInt(this.next());
+        return v;
+    }
+
+    readU256(): bigint {
+        let v = 0n;
+        for (let i = 0; i < 32; i++) v = (v << 8n) | BigInt(this.next());
+        return v;
+    }
+
+    readAddress(): string {
+        const hex = Array.from(this.buf.slice(this.pos, this.pos + 32))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+        this.pos += 32;
+        return '0x' + hex;
+    }
+}
+
+/**
+ * Decode base64-encoded event data into a named-field map.
+ * Returns null on any parse error so callers can safely skip malformed events.
+ * OPNet RPC encodes event data as base64; fields are written big-endian by
+ * AssemblyScript BytesWriter in the order listed in `fields`.
+ */
 function parseEventData(
-    _data: string,
-    _fields: string[],
+    data: string,
+    fields: FieldDef[],
 ): Record<string, string | undefined> | null {
-    return null;
+    if (!data) return null;
+    try {
+        const binary = atob(data);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+        const reader = new Reader(bytes);
+        const result: Record<string, string> = {};
+        for (const field of fields) {
+            switch (field.type) {
+                case 'u256':    result[field.name] = reader.readU256().toString();   break;
+                case 'u64':     result[field.name] = reader.readU64().toString();    break;
+                case 'u8':      result[field.name] = String(reader.readU8());        break;
+                case 'address': result[field.name] = reader.readAddress();           break;
+            }
+        }
+        return result;
+    } catch {
+        return null;
+    }
 }
