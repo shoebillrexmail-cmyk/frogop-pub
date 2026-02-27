@@ -1713,10 +1713,10 @@ filters client-side — the indexer's `/user/:address/options` makes this instan
 
 | # | Task | Est. | Status |
 |---|------|------|--------|
-| 7.6.1 | Add `VITE_INDEXER_URL` to `frontend/.env.testnet` (`https://api.frogop.net`) and `.env.example` | 0.25h | |
-| 7.6.2 | Create `src/services/indexerService.ts` with typed fetch functions | 1.5h | |
-| 7.6.3 | Write Vitest unit tests for `indexerService.ts` (happy path, network error, missing env var) | 1h | |
-| 7.6.4 | Playwright e2e: set `VITE_INDEXER_URL` env + mock indexer route via `page.route()`, verify options load from indexer path | 1h | |
+| 7.6.1 | Add `VITE_INDEXER_URL` to `frontend/.env.testnet` (`https://api.frogop.net`) and `.env.example` | 0.25h | ✅ |
+| 7.6.2 | Create `src/services/indexerService.ts` with typed fetch functions | 1.5h | ✅ |
+| 7.6.3 | Write Vitest unit tests for `indexerService.ts` (happy path, network error, missing env var) | 1h | ✅ (14 tests) |
+| 7.6.4 | Playwright e2e: set `VITE_INDEXER_URL` env + mock indexer route via `page.route()`, verify options load from indexer path | 1h | ⏭️ Skipped — no Playwright; unit tests cover same surface |
 
 **Est.**: 3.75h | **Points**: 2
 
@@ -2123,7 +2123,7 @@ git push              # GitHub Actions deploys automatically
 | 7.3 Event decoder | 3 | HIGH | 4.75h | ✅ Done (base64 decode, field order confirmed) |
 | 7.4 Cron block poller | 2 | HIGH | 2.75h | ✅ Done |
 | 7.5 REST API (fetch handler) | 3 | HIGH | 4h | ✅ Done |
-| 7.6 Indexer service client | 2 | HIGH | 3.75h | 📋 |
+| 7.6 Indexer service client | 2 | HIGH | 3.75h | ✅ Done (14 unit tests, e2e skipped) |
 | 7.7 Portfolio — indexer integration | 3 | HIGH | 5.5h | 📋 |
 | 7.8 Pools page — indexer integration | 3 | MEDIUM | 5.75h | 📋 |
 | 7.9 Indexer unit tests | 7 | MEDIUM | 12.35h | ✅ Done |
@@ -2133,8 +2133,7 @@ git push              # GitHub Actions deploys automatically
 **Implementation order**:
 - 7.1–7.5 done → 7.3.4 (decode) → 7.9 (tests) → all done
 - 7.10 done (CI/CD + db:setup automation)
-- 7.6 → 7.7 + 7.8 in parallel
-- 7.7 + 7.8 blocked on 7.6 (need `indexerService.ts` first)
+- 7.6 done → 7.7 + 7.8 in parallel (unblocked)
 
 **Blockers**:
 - ~~**7.3.4**: `parseEventData()` — DONE~~
