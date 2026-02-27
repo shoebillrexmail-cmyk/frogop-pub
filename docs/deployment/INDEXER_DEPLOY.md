@@ -93,8 +93,28 @@ Go to **GitHub repo → Settings → Secrets and variables → Actions** and add
 
 | Secret | Where to get it |
 |--------|-----------------|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare Dashboard → My Profile → API Tokens → Create Token (use "Edit Cloudflare Workers" template) |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Dashboard → right sidebar on any Workers page |
+| `CLOUDFLARE_API_TOKEN` | See token creation steps below |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Dashboard → right sidebar on any Workers or Pages page |
+
+#### Creating the API token
+
+1. Cloudflare Dashboard → **My Profile → API Tokens → Create Token**
+2. Click **Use template** next to **"Edit Cloudflare Workers"**
+3. Under **Zone Resources** → set to `Include > Specific zone > frogop.net`
+4. Click **+ Add more** and add: `Zone > DNS > Edit` (same zone — required for wrangler to create the `api.frogop.net` DNS record on first deploy)
+5. Create and copy the token
+
+**Minimum permissions granted by this token:**
+
+| Permission | Level | Purpose |
+|---|---|---|
+| Workers Scripts: Edit | Account | deploy the Worker |
+| Workers Routes: Edit | Zone | configure routing |
+| Workers Tail: Read | Account | `wrangler tail` logs |
+| D1: Edit | Account | bind the D1 database |
+| DNS: Edit | Zone (`frogop.net`) | create `api.frogop.net` subdomain on first deploy |
+
+> The DNS permission is what most guides omit — without it, the `custom_domain = true` route in `wrangler.toml` will fail on first deploy.
 
 The custom domain `api.frogop.net` is declared in `wrangler.toml` — because `frogop.net` is already managed by Cloudflare, wrangler will automatically create the `api` DNS record and provision an SSL certificate on first deploy. No manual DNS config or dashboard click needed.
 
