@@ -1832,14 +1832,14 @@ function usePoolOptions(poolAddress: string | null, opts?: { page?: number; limi
 
 ---
 
-### Story 7.9: Indexer Unit Tests 📋
+### Story 7.9: Indexer Unit Tests ✅ Done
 
 **As a** developer
 **I want** a full unit + integration test suite for the indexer Worker
 **So that** every module can be verified locally without deploying to Cloudflare
 
-**Context**: No tests exist yet for the indexer. 7.3.4 is now complete — the full test suite
-is unblocked. Two test layers are used:
+**Context**: 78 tests passing across 4 test files. Uses `sql.js` (pure WASM) instead of
+`better-sqlite3` to avoid native compilation issues on Node 24. Two test layers:
 - **Pure Vitest** (`vitest@^2`) for the decoder and API router — both modules have no
   Workers-specific APIs that plain Node.js can't satisfy (`atob` is native since Node 16)
 - **`@cloudflare/vitest-pool-workers`** for DB queries and the poller — these need a real
@@ -2126,19 +2126,19 @@ git push              # GitHub Actions deploys automatically
 | 7.6 Indexer service client | 2 | HIGH | 3.75h | 📋 |
 | 7.7 Portfolio — indexer integration | 3 | HIGH | 5.5h | 📋 |
 | 7.8 Pools page — indexer integration | 3 | MEDIUM | 5.75h | 📋 |
-| 7.9 Indexer unit tests | 7 | MEDIUM | 12.35h | 📋 Unblocked (7.3.4 done) |
+| 7.9 Indexer unit tests | 7 | MEDIUM | 12.35h | ✅ Done |
 | 7.10 GitHub CI/CD (wrangler) | 2 | MEDIUM | 2h | ✅ Done |
 | **Total** | **29** | | **44.5h** | |
 
 **Implementation order**:
-- 7.1–7.5 done → 7.3.4 (decode) → 7.9 (tests)
+- 7.1–7.5 done → 7.3.4 (decode) → 7.9 (tests) → all done
 - 7.10 done (CI/CD + db:setup automation)
 - 7.6 → 7.7 + 7.8 in parallel
 - 7.7 + 7.8 blocked on 7.6 (need `indexerService.ts` first)
 
 **Blockers**:
-- ~~**7.3.4**: `parseEventData()` — DONE (base64 confirmed, inline Reader implemented, all field orders verified)~~
-- ~~**7.9**: Blocked on 7.3.4 — UNBLOCKED~~
+- ~~**7.3.4**: `parseEventData()` — DONE~~
+- ~~**7.9**: Blocked on 7.3.4 — DONE (78 tests passing)~~
 
 ---
 
@@ -2173,7 +2173,7 @@ VITE_INDEXER_URL=http://localhost:8787
 
 Then `cd frontend && npm run dev` — the Portfolio page will use your local indexer.
 
-**No integration tests exist yet** — that is Story 7.9, blocked on the decoder implementation (7.3.4).
+**78 tests** covering decoder, router, DB queries, and poller — run with `npm test` in `indexer/`.
 
 ---
 
