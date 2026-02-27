@@ -1615,33 +1615,36 @@ zero storage tax on users.
 
 ---
 
-### Story 7.3: Event Decoder 🔄 Scaffold Done — Decode Stub Pending
+### Story 7.3: Event Decoder ✅ Done
 
 **As a** developer
-**I want** typed event decoding from hex event data
+**I want** typed event decoding from base64 event data
 **So that** OptionsPool events are correctly persisted to D1
 
 | # | Task | Est. | Status |
 |---|------|------|--------|
 | 7.3.1 | Create `src/decoder/index.ts` — `decodeBlock()` returns `D1PreparedStatement[]` | 1h | ✅ |
-| 7.3.2 | Event dispatch for all 6 types (OptionWritten/Cancelled/Purchased/Exercised/Settled, FeeCollected) | 1h | ✅ |
+| 7.3.2 | Event dispatch for all 5 types (OptionWritten/Cancelled/Purchased/Exercised/Expired) | 1h | ✅ |
 | 7.3.3 | Filter events by hex pool address | 0.25h | ✅ |
-| 7.3.4 | **Implement `parseEventData()`** — BytesReader decode of contract event hex | 2h | 📋 |
-| 7.3.5 | Verify field order against contract source (AssemblyScript BytesWriter encoding) | 0.5h | 📋 |
+| 7.3.4 | **Implement `parseEventData()`** — inline Reader decodes base64 contract events | 2h | ✅ |
+| 7.3.5 | Verify field order against contract source (AssemblyScript BytesWriter encoding) | 0.5h | ✅ |
 
 **Est.**: 4.75h | **Points**: 3
 
-> **Blocker for 7.3.4**: Contract event field encoding order must be confirmed from
-> contract source (`contracts/src/OptionsPool.ts`). Events use AssemblyScript `BytesWriter`.
-> `@btc-vision/transaction` has a `BytesReader` for decoding. Until confirmed, decoder
-> returns no-op (safe — no writes, no crashes).
+**Implementation notes** (2026-02-27):
+- OPNet RPC returns `event.data` as **base64** (confirmed via live testnet block query)
+- No `FeeCollected` event exists — fee data is embedded inline in each action event
+- `settle()` emits `OptionExpiredEvent` with type string `'OptionExpired'`, not `'OptionSettled'`
+- `grace_end_block` is NOT emitted — derived locally: `expiryBlock + GRACE_PERIOD_BLOCKS`
+- Inline `Reader` class replaces `BinaryReader` import (no external dep, Workers-safe)
+- `parseEventData()` uses typed `FieldDef[]` (`u8`/`u64`/`u256`/`address`) for each event
 
 **Acceptance Criteria**:
-- [x] All 6 event types dispatch correctly
+- [x] All 5 event types dispatch correctly
 - [x] Malformed events log + skip (no crash)
 - [x] Returns `D1PreparedStatement[]` for batching (not fire-and-forget writes)
-- [ ] `parseEventData()` decodes real hex with BytesReader
-- [ ] All event fields confirmed against contract source
+- [x] `parseEventData()` decodes base64 data with inline Reader (big-endian, BytesWriter-compatible)
+- [x] All event fields confirmed against contract source (`src/contracts/pool/contract.ts`)
 
 ---
 
@@ -1832,42 +1835,248 @@ function usePoolOptions(poolAddress: string | null, opts?: { page?: number; limi
 ### Story 7.9: Indexer Unit Tests 📋
 
 **As a** developer
-**I want** unit tests for the indexer Worker
-**So that** the decoder, poller, and API routes can be verified without deploying
+**I want** a full unit + integration test suite for the indexer Worker
+**So that** every module can be verified locally without deploying to Cloudflare
 
-**Context**: No tests exist yet for the indexer. The `@cloudflare/vitest-pool-workers`
-package provides a Vitest environment that runs tests inside a real Workers runtime with
-a local D1 instance — same approach as frontend Vitest tests, no mocking of D1 APIs needed.
+**Context**: No tests exist yet for the indexer. 7.3.4 is now complete — the full test suite
+is unblocked. Two test layers are used:
+- **Pure Vitest** (`vitest@^2`) for the decoder and API router — both modules have no
+  Workers-specific APIs that plain Node.js can't satisfy (`atob` is native since Node 16)
+- **`@cloudflare/vitest-pool-workers`** for DB queries and the poller — these need a real
+  local D1 instance and Workers globals
 
-> **Blocked by Story 7.3.4** — `parseEventData()` must be implemented before decoder tests
-> are meaningful. API and query tests can proceed independently.
+---
+
+#### 7.9.1 — Test Infrastructure Setup
 
 | # | Task | Est. | Status |
 |---|------|------|--------|
-| 7.9.1 | Add `vitest.config.ts` + `@cloudflare/vitest-pool-workers` to `indexer/` | 1h | |
-| 7.9.2 | Test `src/db/queries.ts` — insert, update, read, batch atomicity | 2h | |
-| 7.9.3 | Test `src/api/router.ts` — all routes, CORS headers, 404 paths | 1.5h | |
-| 7.9.4 | Test `src/decoder/index.ts` — event dispatch, malformed event skip (blocked on 7.3.4) | 1.5h | |
-| 7.9.5 | Test `src/poller/index.ts` — block gap calc, MAX_BLOCKS_PER_RUN cap (mock provider) | 1h | |
+| 7.9.1.1 | Add `vitest@^2` to `indexer/devDependencies` | 0.25h | |
+| 7.9.1.2 | Add `@cloudflare/vitest-pool-workers@^0.5` to `indexer/devDependencies` | 0.25h | |
+| 7.9.1.3 | Create `indexer/vitest.config.ts` — two projects: `node` pool for decoder/router, `workers` pool for db/poller | 0.5h | |
+| 7.9.1.4 | Add `"test": "vitest run"` script to `indexer/package.json` | 0.1h | |
+| 7.9.1.5 | Create `indexer/src/__tests__/helpers/` — shared fixtures: `buildEventData(type, fields)` base64 encoder, mock D1 builder | 0.75h | |
 
-**Est.**: 7h | **Points**: 5
+**Est.**: 1.85h
+
+**`vitest.config.ts` sketch**:
+```typescript
+import { defineConfig } from 'vitest/config';
+export default defineConfig({
+    test: {
+        projects: [
+            // Decoder + router: plain Node environment (atob available, no D1 needed)
+            { test: { name: 'node', environment: 'node',
+                      include: ['src/__tests__/{decoder,api}/**/*.test.ts'] } },
+            // DB + poller: real Workers runtime with local D1
+            { test: { name: 'workers',
+                      pool: '@cloudflare/vitest-pool-workers',
+                      poolOptions: { wrangler: { configPath: './wrangler.toml' } },
+                      include: ['src/__tests__/{db,poller}/**/*.test.ts'] } },
+        ],
+    },
+});
+```
+
+**`buildEventData()` test helper** — encodes fields to base64 the same way BytesWriter does:
+```typescript
+// indexer/src/__tests__/helpers/eventData.ts
+function writeU256(buf: number[], v: bigint) {
+    for (let i = 31; i >= 0; i--) { buf.push(Number((v >> BigInt(i * 8)) & 0xffn)); }
+}
+function writeU64(buf: number[], v: bigint) {
+    for (let i = 7; i >= 0; i--) { buf.push(Number((v >> BigInt(i * 8)) & 0xffn)); }
+}
+function writeU8(buf: number[], v: number) { buf.push(v & 0xff); }
+function writeAddress(buf: number[], hex: string) {
+    const clean = hex.replace(/^0x/, '');
+    for (let i = 0; i < 32; i++) buf.push(parseInt(clean.slice(i * 2, i * 2 + 2), 16));
+}
+export function buildEventData(writes: Array<{ type: 'u256' | 'u64' | 'u8' | 'address'; value: bigint | number | string }>): string {
+    const buf: number[] = [];
+    for (const w of writes) {
+        if (w.type === 'u256') writeU256(buf, w.value as bigint);
+        else if (w.type === 'u64') writeU64(buf, w.value as bigint);
+        else if (w.type === 'u8') writeU8(buf, w.value as number);
+        else writeAddress(buf, w.value as string);
+    }
+    return btoa(String.fromCharCode(...buf));
+}
+```
+
+---
+
+#### 7.9.2 — Decoder Tests (`src/__tests__/decoder/decoder.test.ts`)
+
+Tests run in the `node` pool — no D1 needed; D1 calls are intercepted via a mock db object.
+
+| # | Test Case | Est. |
+|---|-----------|------|
+| **parseEventData / Reader** | | |
+| 7.9.2.1 | Returns `null` for empty string | 0.1h |
+| 7.9.2.2 | Returns `null` for invalid base64 | 0.1h |
+| 7.9.2.3 | Returns `null` when buffer too short (underflow) | 0.1h |
+| 7.9.2.4 | Decodes `u256` field correctly (zero, max, mid-range values) | 0.2h |
+| 7.9.2.5 | Decodes `u64` field correctly | 0.15h |
+| 7.9.2.6 | Decodes `u8` field correctly | 0.1h |
+| 7.9.2.7 | Decodes `address` field → `0x` + 64-char hex | 0.15h |
+| 7.9.2.8 | Decodes multiple mixed fields in correct order | 0.2h |
+| **handleWritten** | | |
+| 7.9.2.9 | Valid OptionWritten event → 1 insert statement, correct OptionRow fields | 0.25h |
+| 7.9.2.10 | `grace_end_block` = `expiryBlock + 144` (GRACE_PERIOD_BLOCKS constant) | 0.15h |
+| 7.9.2.11 | `status` = `OptionStatus.OPEN` (0) | 0.1h |
+| 7.9.2.12 | Empty data → returns `[]` (no statements) | 0.1h |
+| **handleCancelled** | | |
+| 7.9.2.13 | `fee > 0` → 2 statements (status update + fee event) | 0.2h |
+| 7.9.2.14 | `fee == 0` → 1 statement (status update only, no fee event) | 0.15h |
+| 7.9.2.15 | Status set to `OptionStatus.CANCELLED` (3) | 0.1h |
+| **handlePurchased** | | |
+| 7.9.2.16 | `fee = premium - writerAmount` computed correctly | 0.2h |
+| 7.9.2.17 | `premium < writerAmount` (impossible but defensive) → fee clamps to `'0'` | 0.15h |
+| 7.9.2.18 | Buyer address set on status update | 0.15h |
+| 7.9.2.19 | Status set to `OptionStatus.PURCHASED` (1) | 0.1h |
+| **handleExercised** | | |
+| 7.9.2.20 | `exerciseFee > 0` → 2 statements | 0.15h |
+| 7.9.2.21 | `exerciseFee == 0` → 1 statement | 0.1h |
+| 7.9.2.22 | Status set to `OptionStatus.EXERCISED` (2) | 0.1h |
+| **handleSettled** | | |
+| 7.9.2.23 | OptionExpired event (not 'OptionSettled') → 1 update statement | 0.15h |
+| 7.9.2.24 | Status set to `OptionStatus.SETTLED` (4) | 0.1h |
+| **decodeBlock** | | |
+| 7.9.2.25 | Events from non-tracked pool address are skipped | 0.15h |
+| 7.9.2.26 | Events from tracked pool are decoded and returned | 0.15h |
+| 7.9.2.27 | Unknown event type returns `null` → excluded from results | 0.1h |
+| 7.9.2.28 | Malformed event data (bad base64) → logged + skipped, others proceed | 0.2h |
+| 7.9.2.29 | Multiple txs, multiple events → all decoded and accumulated | 0.2h |
+| 7.9.2.30 | Empty txs array → returns `[]` | 0.05h |
+
+**Est.**: ~3h
+
+---
+
+#### 7.9.3 — API Router Tests (`src/__tests__/api/router.test.ts`)
+
+Tests run in the `node` pool with a mock D1 (simple object with vitest spies).
+
+| # | Test Case | Est. |
+|---|-----------|------|
+| **CORS** | | |
+| 7.9.3.1 | `OPTIONS` from `https://frogop.net` → 204, correct CORS headers | 0.1h |
+| 7.9.3.2 | `OPTIONS` from `https://abc.pages.dev` → 204, wildcard pages.dev allowed | 0.1h |
+| 7.9.3.3 | `OPTIONS` from `https://evil.com` → 403, no CORS headers | 0.1h |
+| 7.9.3.4 | `GET` from allowed origin → CORS headers on response | 0.1h |
+| 7.9.3.5 | `GET` from unknown origin → no `Access-Control-Allow-Origin` header | 0.1h |
+| 7.9.3.6 | `POST /health` → 405 Method Not Allowed | 0.1h |
+| **Routes** | | |
+| 7.9.3.7 | `GET /health` → `{ status: 'ok', lastBlock: N, network: 'testnet' }` | 0.15h |
+| 7.9.3.8 | `GET /pools` → array of pools | 0.1h |
+| 7.9.3.9 | `GET /pools/:address` found → pool object, 200 | 0.1h |
+| 7.9.3.10 | `GET /pools/:address` not found → `{ error: 'Pool not found' }`, 404 | 0.1h |
+| 7.9.3.11 | `GET /pools/:address/options` → options array (default limit=50) | 0.1h |
+| 7.9.3.12 | `GET /pools/:address/options?status=0` → only OPEN options | 0.15h |
+| 7.9.3.13 | `GET /pools/:address/options?writer=0x...` → only writer's options | 0.1h |
+| 7.9.3.14 | `GET /pools/:address/options?buyer=0x...` → only buyer's options | 0.1h |
+| 7.9.3.15 | `GET /pools/:address/options?page=1&limit=10` → paginated (offset=10) | 0.15h |
+| 7.9.3.16 | `GET /pools/:address/options?limit=500` → clamped to 200 | 0.1h |
+| 7.9.3.17 | `GET /pools/:address/options/:id` found → option object, 200 | 0.1h |
+| 7.9.3.18 | `GET /pools/:address/options/:id` not found → 404 | 0.1h |
+| 7.9.3.19 | `GET /pools/:address/options/abc` (non-numeric id) → 400 | 0.1h |
+| 7.9.3.20 | `GET /user/:address/options` → user's options across all pools | 0.1h |
+| 7.9.3.21 | `GET /unknown/path` → 404 | 0.05h |
+| 7.9.3.22 | Trailing slash stripped: `GET /pools/` behaves same as `GET /pools` | 0.1h |
+
+**Est.**: ~2.25h
+
+---
+
+#### 7.9.4 — DB Query Tests (`src/__tests__/db/queries.test.ts`)
+
+Tests run in the `workers` pool with a real local D1 instance (schema applied before each test).
+
+| # | Test Case | Est. |
+|---|-----------|------|
+| **Cursor** | | |
+| 7.9.4.1 | `getLastIndexedBlock` on empty DB → 0 | 0.1h |
+| 7.9.4.2 | `stmtSetLastIndexedBlock` + batch commit → `getLastIndexedBlock` returns new value | 0.15h |
+| 7.9.4.3 | Multiple updates → last wins (INSERT OR REPLACE) | 0.1h |
+| **Pool helpers** | | |
+| 7.9.4.4 | `upsertPool` inserts a pool row | 0.15h |
+| 7.9.4.5 | `upsertPool` is idempotent (INSERT OR IGNORE — duplicate silently skipped) | 0.1h |
+| 7.9.4.6 | `getAllPools` returns all pools ordered by `created_block` | 0.15h |
+| 7.9.4.7 | `getPool` returns correct pool by address | 0.1h |
+| 7.9.4.8 | `getPool` returns `null` for unknown address | 0.1h |
+| **Option write stmts** | | |
+| 7.9.4.9 | `stmtInsertOption` → option row readable via `getOption` | 0.15h |
+| 7.9.4.10 | `stmtInsertOption` with duplicate (same pool+id) → INSERT OR IGNORE, no error | 0.1h |
+| 7.9.4.11 | `stmtUpdateOptionStatus` updates status + updated_block + updated_tx | 0.15h |
+| 7.9.4.12 | `stmtUpdateOptionStatus` with non-null buyer → sets buyer via COALESCE | 0.15h |
+| 7.9.4.13 | `stmtUpdateOptionStatus` with null buyer → existing buyer preserved (COALESCE) | 0.15h |
+| 7.9.4.14 | `stmtInsertFeeEvent` → fee event row persisted | 0.1h |
+| **Option read queries** | | |
+| 7.9.4.15 | `getOption` returns correct row | 0.1h |
+| 7.9.4.16 | `getOption` returns `null` for unknown option | 0.1h |
+| 7.9.4.17 | `getOptionsByPool` returns all options for that pool | 0.15h |
+| 7.9.4.18 | `getOptionsByPool` with `status` filter returns only matching options | 0.15h |
+| 7.9.4.19 | `getOptionsByPool` pagination: `limit=2, offset=2` returns correct slice | 0.15h |
+| 7.9.4.20 | `getOptionsByPool` excludes options from other pools | 0.1h |
+| 7.9.4.21 | `getOptionsByWriter` returns only options for that writer | 0.1h |
+| 7.9.4.22 | `getOptionsByBuyer` returns only options for that buyer | 0.1h |
+| 7.9.4.23 | `getOptionsByUser` returns options where `writer = addr OR buyer = addr` | 0.15h |
+| 7.9.4.24 | `getOptionsByUser` includes options from multiple pools | 0.1h |
+| **Batch atomicity** | | |
+| 7.9.4.25 | `db.batch([insertStmt, cursorStmt])` → both visible in one query after commit | 0.15h |
+| 7.9.4.26 | Batch with bad statement → all-or-nothing (D1 transactional batch semantics) | 0.15h |
+
+**Est.**: ~3.5h
+
+---
+
+#### 7.9.5 — Poller Tests (`src/__tests__/poller/poller.test.ts`)
+
+Tests run in the `workers` pool. `JSONRpcProvider` is replaced with a vitest mock factory.
+
+| # | Test Case | Est. |
+|---|-----------|------|
+| **pollNewBlocks** | | |
+| 7.9.5.1 | `latestBlock <= lastIndexed` → no `getBlock` calls, logs "up to date" | 0.15h |
+| 7.9.5.2 | Gap of 3 blocks → exactly 3 `processBlock` calls | 0.15h |
+| 7.9.5.3 | Gap > `MAX_BLOCKS_PER_RUN` (50) → capped at 50 calls | 0.15h |
+| 7.9.5.4 | `MAX_BLOCKS_PER_RUN` from env (`"10"`) → only 10 blocks processed | 0.1h |
+| 7.9.5.5 | Blocks processed in ascending order (from + 0, from + 1, …) | 0.1h |
+| **processBlock** | | |
+| 7.9.5.6 | Block not found (provider returns `null`) → warning logged, cursor NOT advanced | 0.15h |
+| 7.9.5.7 | Block with no events for tracked pool → cursor still updated (1 stmt in batch) | 0.15h |
+| 7.9.5.8 | Block with tracked events → event stmts + cursor in one `db.batch()` call | 0.2h |
+| 7.9.5.9 | Block with mixed pool events → only tracked pool events decoded | 0.15h |
+| **resolvePoolAddresses** | | |
+| 7.9.5.10 | Space-separated `POOL_ADDRESSES` → each resolved to hex via `getPublicKeyInfo` | 0.15h |
+| 7.9.5.11 | One address fails resolution → error logged, remaining addresses still tracked | 0.15h |
+| 7.9.5.12 | Empty `POOL_ADDRESSES` string → empty set, no RPC calls | 0.1h |
+
+**Est.**: ~1.75h
+
+---
+
+**Total est.**: ~12.35h | **Points**: 7
 
 **Test stack**:
 ```json
 {
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.5",
-    "vitest": "^2"
+    "vitest": "^2",
+    "@cloudflare/vitest-pool-workers": "^0.5"
   }
 }
 ```
 
 **Acceptance Criteria**:
-- [ ] `cd indexer && npm test` runs all tests
-- [ ] DB queries tested against real local D1 (not mocked)
-- [ ] API routes return correct status codes and CORS headers
-- [ ] Decoder skips malformed events without crashing
+- [ ] `cd indexer && npm test` runs all tests (both `node` and `workers` pools)
+- [ ] Decoder tests use `buildEventData()` helper to build real base64-encoded fixtures (no magic strings)
+- [ ] DB query tests run against real local D1 (not mocked) — schema applied before each test
+- [ ] API route tests cover all 22 routes/cases including CORS and error paths
+- [ ] Poller tests mock `JSONRpcProvider` — no real network calls
 - [ ] All tests pass before any PR to `master`
+- [ ] Minimum coverage: decoder 100%, router 100%, queries 90%, poller 80%
 
 ---
 
@@ -1911,13 +2120,13 @@ git push              # GitHub Actions deploys automatically
 | 7.0 nginx CORS + docker stub | 2 | — | 2h | ✅ Superseded (kept as reference) |
 | 7.1 Workers scaffold | 2 | BLOCKING | 2.75h | ✅ Done |
 | 7.2 D1 schema + queries | 3 | HIGH | 5h | ✅ Done |
-| 7.3 Event decoder (scaffold + stub) | 3 | HIGH | 4.75h | 🔄 Scaffold done, decode pending |
+| 7.3 Event decoder | 3 | HIGH | 4.75h | ✅ Done (base64 decode, field order confirmed) |
 | 7.4 Cron block poller | 2 | HIGH | 2.75h | ✅ Done |
 | 7.5 REST API (fetch handler) | 3 | HIGH | 4h | ✅ Done |
 | 7.6 Indexer service client | 2 | HIGH | 3.75h | 📋 |
 | 7.7 Portfolio — indexer integration | 3 | HIGH | 5.5h | 📋 |
 | 7.8 Pools page — indexer integration | 3 | MEDIUM | 5.75h | 📋 |
-| 7.9 Indexer unit tests | 5 | MEDIUM | 7h | 📋 Blocked on 7.3.4 |
+| 7.9 Indexer unit tests | 7 | MEDIUM | 12.35h | 📋 Unblocked (7.3.4 done) |
 | 7.10 GitHub CI/CD (wrangler) | 2 | MEDIUM | 2h | ✅ Done |
 | **Total** | **29** | | **44.5h** | |
 
@@ -1928,8 +2137,8 @@ git push              # GitHub Actions deploys automatically
 - 7.7 + 7.8 blocked on 7.6 (need `indexerService.ts` first)
 
 **Blockers**:
-- **7.3.4**: `parseEventData()` BytesReader decode — requires confirming event field order in `contracts/src/OptionsPool.ts`
-- **7.9**: Indexer tests — blocked on 7.3.4 for decoder tests (API + DB tests can start independently)
+- ~~**7.3.4**: `parseEventData()` — DONE (base64 confirmed, inline Reader implemented, all field orders verified)~~
+- ~~**7.9**: Blocked on 7.3.4 — UNBLOCKED~~
 
 ---
 
