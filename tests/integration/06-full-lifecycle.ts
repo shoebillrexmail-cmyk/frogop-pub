@@ -378,10 +378,12 @@ async function main() {
         let existingOpenId: bigint | null = null;
 
         if (initialOptionCount > 0n) {
-            // Scan existing options (newest first) for an OPEN one
+            const nowBlock = await provider.getBlockNumber();
+            // Scan existing options (newest first) for an OPEN, non-expired one
             for (let i = initialOptionCount - 1n; i >= 0n; i--) {
                 const opt = await readOptionStatus(i);
-                if (opt && opt.status === 0) {
+                // Only reuse if status=OPEN AND not yet expired (cancel fee test expects 1% fee)
+                if (opt && opt.status === 0 && opt.expiryBlock > nowBlock) {
                     existingOpenId = i;
                     log.info(`  Found existing OPEN option: ID ${i}`);
                     break;
@@ -1181,7 +1183,9 @@ async function main() {
         // Writer writes CALL with short expiry (same params as buy-test)
         await runTest('Settle prep: Writer write CALL', async () => {
             currentBlock = await provider.getBlockNumber();
-            settleExpiryBlock = currentBlock + 3n;
+            // +3n too tight: approve (1 block) + buy (1 block) = expiry reached before buy lands
+            // +6n gives 3 blocks of slack — safe even if each TX takes 2 blocks to confirm
+            settleExpiryBlock = currentBlock + 6n;
             const calldata = createWriteOptionCalldata(0, BUY_STRIKE_PRICE, settleExpiryBlock, BUY_AMOUNT, BUY_PREMIUM);
             const result = await deployer.callContract(poolAddress!, calldata, 200_000n);
             log.info(`  Write TX: ${result.txId}`);
@@ -1342,6 +1346,210 @@ async function main() {
             log.info(`  Grace ends at block: ${settleGraceEnd} (current: ${currentBlock})`);
             log.info(`  Estimated wait: ~${Number(blocksRemaining) * 10} minutes`);
         }
+    }
+
+    // =====================================================================
+    // PHASE 9: Story 8.3 — Free reclaim for expired unsold options
+    //
+    // Verifies that cancelOption() charges 0% fee when the option has already
+    // expired without being purchased. Requires two runs:
+    //   Run 1: write option with minimal expiry, save expired-cancel-state.json
+    //   Run 2: (after expiry block) cancel and verify full collateral returned,
+    //          feeRecipient balance unchanged.
+    // =====================================================================
+
+    const expiredCancelStatePath = path.join(
+        process.cwd(), 'tests', 'integration', 'expired-cancel-state.json',
+    );
+
+    if (fs.existsSync(expiredCancelStatePath)) {
+        const ecState = JSON.parse(fs.readFileSync(expiredCancelStatePath, 'utf-8'));
+        const ecOptionId = BigInt(ecState.optionId);
+        const ecExpiryBlock = BigInt(ecState.expiryBlock);
+        const ecCollateralAmount = BigInt(ecState.collateralAmount);
+        currentBlock = await provider.getBlockNumber();
+
+        if (currentBlock >= ecExpiryBlock) {
+            log.info('\n=== Phase 9: Expired cancel (Story 8.3) ===');
+            log.info(`Option ID: ${ecOptionId}, expired at block ${ecExpiryBlock}, current: ${currentBlock}`);
+
+            // Capture feeRecipient MOTO balance before cancel — should not change
+            let feeRecipMotoBeforeExpiredCancel = 0n;
+            let writerMotoBeforeExpiredCancel = 0n;
+
+            await runTest('Expired cancel: Capture pre-cancel balances', async () => {
+                const feeQueryHex = poolFeeRecipientHex || walletHex;
+
+                const [feeBalResult, writerBalResult] = await Promise.all([
+                    provider.call(deployed.tokens.frogU, TOKEN_SELECTORS.balanceOf + buildBalanceOfCalldata(feeQueryHex)),
+                    provider.call(deployed.tokens.frogU, TOKEN_SELECTORS.balanceOf + buildBalanceOfCalldata(walletHex)),
+                ]);
+
+                if (!isCallError(feeBalResult) && !feeBalResult.revert) {
+                    feeRecipMotoBeforeExpiredCancel = feeBalResult.result.readU256();
+                }
+                if (!isCallError(writerBalResult) && !writerBalResult.revert) {
+                    writerMotoBeforeExpiredCancel = writerBalResult.result.readU256();
+                }
+
+                log.info(`  Fee recipient MOTO before: ${formatBigInt(feeRecipMotoBeforeExpiredCancel)}`);
+                log.info(`  Writer MOTO before:        ${formatBigInt(writerMotoBeforeExpiredCancel)}`);
+                log.info(`  Expected collateral return: ${formatBigInt(ecCollateralAmount)} (100%, no fee)`);
+                return {
+                    feeRecipBefore: feeRecipMotoBeforeExpiredCancel.toString(),
+                    writerBefore: writerMotoBeforeExpiredCancel.toString(),
+                };
+            });
+
+            await runTest('Expired cancel: Call cancelOption on expired option', async () => {
+                const calldata = createCancelOptionCalldata(ecOptionId);
+                currentBlock = await provider.getBlockNumber();
+                const result = await deployer.callContract(poolAddress!, calldata, 200_000n);
+                log.info(`  Expired cancel TX: ${result.txId}`);
+                try {
+                    currentBlock = await waitForBlock(provider, currentBlock, 3);
+                } catch {
+                    log.warn('  Block timeout — TX broadcast OK, may confirm later');
+                }
+                return { txId: result.txId, optionId: ecOptionId.toString() };
+            });
+
+            await runTest('Expired cancel: Verify status = CANCELLED', async () => {
+                for (let attempt = 0; attempt < 24; attempt++) {
+                    const opt = await readOptionStatus(ecOptionId);
+                    if (!opt) throw new Error('Failed to read option');
+                    if (opt.status === 4) {
+                        log.info(`  Status: ${opt.status} (CANCELLED) ✓`);
+                        return { status: opt.status };
+                    }
+                    if (attempt < 23) {
+                        log.info(`  Status still ${opt.status}, polling... (${attempt + 1}/24)`);
+                        await new Promise((r) => setTimeout(r, 30_000));
+                    }
+                }
+                throw new Error('Expired cancel not confirmed after polling. Re-run later.');
+            });
+
+            await runTest('Expired cancel: Verify writer received 100% collateral (no fee)', async () => {
+                const writerBalResult = await provider.call(
+                    deployed.tokens.frogU,
+                    TOKEN_SELECTORS.balanceOf + buildBalanceOfCalldata(walletHex),
+                );
+                if (isCallError(writerBalResult)) throw new Error(`Call error: ${writerBalResult.error}`);
+                if (writerBalResult.revert) throw new Error(`Revert: ${Buffer.from(writerBalResult.revert, 'base64').toString()}`);
+
+                const writerMotoAfter = writerBalResult.result.readU256();
+                const received = writerMotoAfter - writerMotoBeforeExpiredCancel;
+                log.info(`  Writer MOTO before: ${formatBigInt(writerMotoBeforeExpiredCancel)}`);
+                log.info(`  Writer MOTO after:  ${formatBigInt(writerMotoAfter)}`);
+                log.info(`  Received: ${formatBigInt(received)} (expected: ${formatBigInt(ecCollateralAmount)})`);
+
+                if (received !== ecCollateralAmount) {
+                    throw new Error(`Expected full collateral ${ecCollateralAmount}, got ${received}. Fee was charged on expired option!`);
+                }
+                log.info('  ✓ 100% collateral returned — 0% fee on expired cancel confirmed');
+
+                // Clean up state file on success
+                fs.unlinkSync(expiredCancelStatePath);
+                log.info('  Expired cancel state file cleaned up.');
+                return { received: received.toString(), expected: ecCollateralAmount.toString() };
+            });
+
+            await runTest('Expired cancel: Verify feeRecipient balance unchanged', async () => {
+                const feeQueryHex = poolFeeRecipientHex || walletHex;
+                const feeBalResult = await provider.call(
+                    deployed.tokens.frogU,
+                    TOKEN_SELECTORS.balanceOf + buildBalanceOfCalldata(feeQueryHex),
+                );
+                if (isCallError(feeBalResult)) throw new Error(`Call error: ${feeBalResult.error}`);
+                if (feeBalResult.revert) throw new Error(`Revert: ${Buffer.from(feeBalResult.revert, 'base64').toString()}`);
+
+                const feeRecipMotoAfter = feeBalResult.result.readU256();
+                const feeReceived = feeRecipMotoAfter - feeRecipMotoBeforeExpiredCancel;
+                log.info(`  Fee recipient MOTO before: ${formatBigInt(feeRecipMotoBeforeExpiredCancel)}`);
+                log.info(`  Fee recipient MOTO after:  ${formatBigInt(feeRecipMotoAfter)}`);
+                log.info(`  Fee received: ${formatBigInt(feeReceived)} (expected: 0)`);
+
+                const isSeparate = feeQueryHex.toLowerCase() !== walletHex.toLowerCase();
+                if (isSeparate && feeReceived !== 0n) {
+                    throw new Error(`feeRecipient received ${feeReceived} — expected 0 for expired cancel!`);
+                } else if (!isSeparate) {
+                    log.info('  Note: writer == feeRecipient — net balance change covers refund');
+                } else {
+                    log.info('  ✓ feeRecipient balance unchanged — no fee on expired cancel confirmed');
+                }
+                return { feeReceived: feeReceived.toString(), expected: '0', separateRecipient: isSeparate };
+            });
+
+        } else {
+            const blocksRemaining = ecExpiryBlock - currentBlock;
+            log.info(`\n=== Phase 9: Expired cancel pending (${blocksRemaining} blocks until expiry) ===`);
+            log.info(`  Option ID: ${ecOptionId}, expires at block ${ecExpiryBlock} (current: ${currentBlock})`);
+            log.info(`  Estimated wait: ~${Number(blocksRemaining) * 10} minutes`);
+            log.info('  Re-run after expiry to complete Phase 9.');
+        }
+
+    } else if (poolAddress && motoBalance >= 1n * 10n ** 18n) {
+        // Phase 9 — Part 1: Write option with minimum expiry block, save state for next run
+        log.info('\n=== Phase 9: Story 8.3 setup — writing option with min expiry ===');
+
+        const EC_AMOUNT = 1n * 10n ** 18n;    // 1 MOTO collateral
+        const EC_STRIKE = 50n;                  // 50 raw (same pattern as buy-test)
+        const EC_PREMIUM = 1n * 10n ** 18n;    // 1 PILL premium
+
+        let ecOptionId: bigint | null = null;
+
+        // Read count BEFORE writing so we can poll for count+1 and derive the correct 0-indexed ID
+        let preEcCount = 0n;
+        {
+            const r = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
+            if (!isCallError(r) && !r.revert) preEcCount = r.result.readU256();
+        }
+
+        await runTest('Expired cancel setup: Approve MOTO for pool', async () => {
+            const poolAddr = Address.fromString(poolCallAddr);
+            const calldata = createIncreaseAllowanceCalldata(poolAddr, EC_AMOUNT);
+            const result = await deployer.callContract(deployed.tokens.frogU, calldata, 100_000n);
+            log.info(`  Approve TX: ${result.txId}`);
+            return { txId: result.txId };
+        });
+
+        await runTest('Expired cancel setup: Write CALL option (expiry = currentBlock + 1)', async () => {
+            currentBlock = await provider.getBlockNumber();
+            const expiry = currentBlock + 1n;
+            const calldata = createWriteOptionCalldata(0, EC_STRIKE, expiry, EC_AMOUNT, EC_PREMIUM);
+            const result = await deployer.callContract(poolAddress!, calldata, 200_000n);
+            log.info(`  Write TX: ${result.txId}`);
+
+            // Poll for count to reach preEcCount+1 — ensures TX confirmed before reading ID
+            const expectedCount = preEcCount + 1n;
+            for (let attempt = 0; attempt < 24; attempt++) {
+                const r = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
+                if (!isCallError(r) && !r.revert) {
+                    const count = r.result.readU256();
+                    if (count >= expectedCount) {
+                        ecOptionId = preEcCount; // 0-indexed: ID = preCount (the just-written option)
+                        log.info(`  New option ID: ${ecOptionId}, expiryBlock: ${expiry}`);
+
+                        fs.writeFileSync(expiredCancelStatePath, JSON.stringify({
+                            optionId: ecOptionId.toString(),
+                            expiryBlock: expiry.toString(),
+                            collateralAmount: EC_AMOUNT.toString(),
+                            writerHex: walletHex,
+                        }, null, 2));
+                        log.info(`  State saved to expired-cancel-state.json. Re-run after block ${expiry} to complete.`);
+                        break;
+                    }
+                }
+                if (attempt < 23) {
+                    log.info(`  Waiting for option to confirm (count still ${preEcCount})... (${attempt + 1}/24)`);
+                    await new Promise((r) => setTimeout(r, 30_000));
+                }
+            }
+            return { txId: result.txId, expiryBlock: expiry.toString() };
+        });
+    } else {
+        log.info('\n=== Phase 9: Expired cancel setup skipped (no pool or insufficient MOTO) ===');
     }
 
     printSummary();
