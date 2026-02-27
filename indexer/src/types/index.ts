@@ -21,12 +21,13 @@ export interface Env {
 
 // ── Option domain enums ─────────────────────────────────────────────────────
 
-export const enum OptionType {
+// Regular enums (not const enum) — required for esbuild/vitest cross-file inlining
+export enum OptionType {
     CALL = 0,
     PUT  = 1,
 }
 
-export const enum OptionStatus {
+export enum OptionStatus {
     OPEN      = 0,
     PURCHASED = 1,
     EXERCISED = 2,
@@ -34,7 +35,7 @@ export const enum OptionStatus {
     SETTLED   = 4,
 }
 
-export const enum FeeEventType {
+export enum FeeEventType {
     CANCEL   = 'CANCEL',
     BUY      = 'BUY',
     EXERCISE = 'EXERCISE',
