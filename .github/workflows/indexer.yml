@@ -1,0 +1,63 @@
+name: Indexer CI/CD
+
+on:
+  push:
+    branches: [master]
+    paths: ["indexer/**", ".github/workflows/indexer.yml"]
+  pull_request:
+    paths: ["indexer/**", ".github/workflows/indexer.yml"]
+
+jobs:
+  # ── CI: type-check (+ tests when 7.9 is done) ──────────────────────────────
+  ci:
+    name: Type-check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: indexer
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: indexer/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run type-check
+
+      # Uncomment when Story 7.9 (indexer unit tests) is implemented:
+      # - name: Run tests
+      #   run: npm test
+
+  # ── Deploy: runs only on push to master ────────────────────────────────────
+  deploy:
+    name: Deploy to Cloudflare Workers
+    needs: ci
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: indexer
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: indexer/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy via Wrangler
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: indexer

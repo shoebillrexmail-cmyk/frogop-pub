@@ -1,0 +1,27 @@
+{
+    "name": "@frogop/indexer",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "wrangler dev",
+        "deploy": "wrangler deploy",
+        "type-check": "tsc --noEmit",
+        "db:setup": "bash scripts/setup-db.sh",
+        "db:create": "wrangler d1 create frogop-indexer",
+        "db:migrate": "wrangler d1 execute frogop-indexer --file=./src/db/schema.sql",
+        "db:migrate:local": "wrangler d1 execute frogop-indexer --local --file=./src/db/schema.sql"
+    },
+    "dependencies": {
+        "@btc-vision/bitcoin": "rc",
+        "@btc-vision/transaction": "rc",
+        "opnet": "rc"
+    },
+    "devDependencies": {
+        "@cloudflare/workers-types": "^4",
+        "typescript": "^5",
+        "wrangler": "^3"
+    },
+    "overrides": {
+        "@noble/hashes": "2.0.1"
+    }
+}
