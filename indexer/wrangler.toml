@@ -23,7 +23,7 @@ crons = ["* * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "frogop-indexer"
-database_id = "REPLACE_AFTER_wrangler_d1_create"
+database_id = "2a80cb38-da06-438b-9224-3cc1c71c5f2b"
 
 # ---------------------------------------------------------------------------
 # Non-secret config (committed). Secrets go via `wrangler secret put`.
