@@ -27,7 +27,6 @@ import {
 } from './config.js';
 import { DeploymentHelper, createPoolCalldata, getWasmPath } from './deployment.js';
 import * as fs from 'fs';
-import * as path from 'path';
 
 const log = getLogger('deploy-motoswap-pool');
 

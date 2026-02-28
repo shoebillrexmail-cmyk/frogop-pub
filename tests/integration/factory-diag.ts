@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { JSONRpcProvider } from 'opnet';
-import { Address, BinaryWriter } from '@btc-vision/transaction';
-import { getConfig, loadDeployedContracts, computeSelector, computeSelectorU32, FACTORY_SELECTORS } from './config.js';
+import { BinaryWriter } from '@btc-vision/transaction';
+import { getConfig, loadDeployedContracts, computeSelectorU32, FACTORY_SELECTORS } from './config.js';
 
 async function main() {
     const config = getConfig();
