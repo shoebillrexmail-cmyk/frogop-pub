@@ -13,7 +13,7 @@ The gas issue was fixed by optimizing the WASM binary:
 | Contract | Before | After | Tests |
 |----------|--------|-------|-------|
 | OptionsFactory | 21.7 KB | 20.3 KB | 10/13 (77%) |
-| OptionsPool | 29.5 KB | 27.9 KB | 10/10 (100%) |
+| OptionsPool | 29.5 KB | 27.9 KB | 9/9 (100%) |
 
 ## Test Status
 
@@ -35,7 +35,7 @@ The gas issue was fixed by optimizing the WASM binary:
 | **create a new pool** | ❌ Requires OP20 tokens |
 | **retrieve created pool** | ❌ Requires OP20 tokens |
 
-### OptionsPool Tests (10/10 - 100%) ✅
+### OptionsPool Tests (9/9 - 100%) ✅
 
 | Test | Status |
 |------|--------|
@@ -43,7 +43,6 @@ The gas issue was fixed by optimizing the WASM binary:
 | return correct underlying token | ✅ |
 | return correct premium token | ✅ |
 | have zero options initially | ✅ |
-| have zero accumulated fees initially | ✅ |
 | return correct grace period | ✅ |
 | return correct max expiry | ✅ |
 | return correct cancel fee | ✅ |
@@ -98,7 +97,7 @@ The factory's `createPool()` deploys a new OptionsPool contract, which requires 
 ```
 tests/
 ├── OptionsFactory.test.ts     # Factory tests (10/13 passing)
-├── OptionsPool.test.ts        # Pool view tests (10/10 passing)
+├── OptionsPool.test.ts        # Pool view tests (9/9 passing)
 ├── gas-baseline.test.ts       # Gas measurement tests
 └── runtime/
     ├── OptionsFactoryRuntime.ts

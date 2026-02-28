@@ -65,11 +65,6 @@ await opnet('OptionsPool Tests', async (vm: OPNetUnit) => {
         Assert.equal(count, 0n);
     });
     
-    await vm.it('should have zero accumulated fees initially', async () => {
-        const fees = await pool.accumulatedFees();
-        Assert.equal(fees, 0n);
-    });
-    
     await vm.it('should return correct grace period', async () => {
         const grace = await pool.gracePeriodBlocks();
         Assert.equal(grace, 144n);

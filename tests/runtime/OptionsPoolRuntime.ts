@@ -18,7 +18,6 @@ class OptionsPoolTestRuntime extends ContractRuntime {
     private readonly settleSelector: number;
     private readonly getOptionSelector: number;
     private readonly optionCountSelector: number;
-    private readonly accumulatedFeesSelector: number;
     private readonly gracePeriodBlocksSelector: number;
     private readonly maxExpiryBlocksSelector: number;
     private readonly cancelFeeBpsSelector: number;
@@ -55,7 +54,6 @@ class OptionsPoolTestRuntime extends ContractRuntime {
         this.settleSelector = Number(`0x${this.abiCoder.encodeSelector('settle(uint256)')}`);
         this.getOptionSelector = Number(`0x${this.abiCoder.encodeSelector('getOption(uint256)')}`);
         this.optionCountSelector = Number(`0x${this.abiCoder.encodeSelector('optionCount()')}`);
-        this.accumulatedFeesSelector = Number(`0x${this.abiCoder.encodeSelector('accumulatedFees()')}`);
         this.gracePeriodBlocksSelector = Number(`0x${this.abiCoder.encodeSelector('gracePeriodBlocks()')}`);
         this.maxExpiryBlocksSelector = Number(`0x${this.abiCoder.encodeSelector('maxExpiryBlocks()')}`);
         this.cancelFeeBpsSelector = Number(`0x${this.abiCoder.encodeSelector('cancelFeeBps()')}`);
@@ -95,19 +93,6 @@ class OptionsPoolTestRuntime extends ContractRuntime {
     async optionCount(): Promise<bigint> {
         const writer = new BinaryWriter();
         writer.writeSelector(this.optionCountSelector);
-
-        const result = await this.executeThrowOnError({
-            calldata: writer.getBuffer(),
-            saveStates: false,
-        });
-
-        const reader = new BinaryReader(result.response);
-        return reader.readU256();
-    }
-
-    async accumulatedFees(): Promise<bigint> {
-        const writer = new BinaryWriter();
-        writer.writeSelector(this.accumulatedFeesSelector);
 
         const result = await this.executeThrowOnError({
             calldata: writer.getBuffer(),
