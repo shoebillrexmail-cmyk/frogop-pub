@@ -5,7 +5,7 @@
  * One RPC call per block: getBlock(n, prefetchTxs=true) returns all events embedded
  * on tx.events[] — confirmed via live testnet RPC. No per-tx getTransactionReceipt.
  */
-import { JSONRpcProvider } from 'opnet';
+import { JSONRpcProvider, CallResult } from 'opnet';
 import { networks, type Network } from '@btc-vision/bitcoin';
 import type { Env, BlockTx, TxEvent, PriceCandleRow } from '../types/index.js';
 
@@ -205,12 +205,6 @@ function encodeGetQuoteCalldata(tokenHex: string, satoshis: bigint): string {
     return '0x' + GET_QUOTE_SELECTOR + addrPadded + satsHex;
 }
 
-function decodeU256FromHex(hex: string): bigint {
-    const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
-    if (clean.length === 0) return 0n;
-    return BigInt('0x' + clean);
-}
-
 async function pollPrices(
     env: Env,
     provider: JSONRpcProvider,
@@ -229,8 +223,8 @@ async function pollPrices(
         try {
             const calldata = encodeGetQuoteCalldata(tokenHex, 100_000n);
             const result = await provider.call(swapConfig.routerHex, calldata);
-            if (result) {
-                const price = decodeU256FromHex(String(result)).toString();
+            if (result && result instanceof CallResult && result.result) {
+                const price = result.result.readU256().toString();
                 prices[label] = price;
                 stmts.push(stmtInsertPriceSnapshot(env.DB, {
                     token: label,
