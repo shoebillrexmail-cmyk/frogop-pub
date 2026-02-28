@@ -5,6 +5,7 @@ import { formatAddress } from '../config';
 import { TransactionToast } from './TransactionToast';
 import { useTransactionPoller } from '../hooks/useTransactionPoller';
 import { useTransactionContext } from '../contexts/TransactionContext';
+import { useWebSocketProvider, WsBlockContext } from '../hooks/useWebSocketProvider';
 
 export function Layout() {
   const location = useLocation();
@@ -13,8 +14,11 @@ export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { pendingCount } = useTransactionContext();
 
-  // Global TX receipt polling
-  useTransactionPoller(provider ?? null);
+  // WebSocket provider for real-time block subscriptions
+  const { connected: wsConnected, currentBlock: wsBlock } = useWebSocketProvider();
+
+  // TX receipt checks — triggered by WS block events, falls back to 15s polling
+  useTransactionPoller(provider ?? null, wsBlock);
 
   const navLinks = [
     { path: '/', label: 'Home' },
@@ -111,7 +115,9 @@ export function Layout() {
       </header>
 
       <main className="flex-1">
-        <Outlet />
+        <WsBlockContext.Provider value={wsBlock}>
+          <Outlet />
+        </WsBlockContext.Provider>
       </main>
       <TransactionToast />
 
@@ -147,6 +153,12 @@ export function Layout() {
               <span className="flex items-center gap-1.5 font-mono">
                 Built on <img src="/opnet_logo.svg" alt="OPNet" className="h-4 inline-block" />
               </span>
+              {wsBlock !== null && (
+                <span className="flex items-center gap-1.5 font-mono text-terminal-text-muted" title="WebSocket live">
+                  <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-green-400' : 'bg-rose-400'}`} />
+                  #{wsBlock.toString()}
+                </span>
+              )}
             </div>
           </div>
         </div>

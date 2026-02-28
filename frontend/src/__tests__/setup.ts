@@ -52,3 +52,20 @@ vi.mock('../hooks/usePriceCandles.ts', () => ({
 vi.mock('../components/PriceChart.tsx', () => ({
     PriceChart: () => null,
 }));
+
+// Global mock for useWebSocketProvider — used by Layout and pages.
+vi.mock('../hooks/useWebSocketProvider.ts', () => {
+    const { createContext, useContext } = require('react');
+    const ctx = createContext(null);
+    return {
+        useWebSocketProvider: vi.fn(() => ({
+            wsProvider: null,
+            connectionState: 0, // DISCONNECTED
+            connected: false,
+            currentBlock: null,
+            latestBlockHash: null,
+        })),
+        useWsBlock: vi.fn(() => null),
+        WsBlockContext: ctx,
+    };
+});

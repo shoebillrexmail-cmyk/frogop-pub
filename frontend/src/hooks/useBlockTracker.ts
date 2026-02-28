@@ -1,5 +1,8 @@
 /**
- * useBlockTracker — polls provider.getBlockNumber() every 15s.
+ * useBlockTracker — provides the current block number.
+ *
+ * Primary: uses WebSocket block from useWebSocketProvider (real-time).
+ * Fallback: polls provider.getBlockNumber() every 15s when WS is unavailable.
  */
 import { useState, useEffect, useCallback } from 'react';
 import type { AbstractRpcProvider } from 'opnet';
@@ -11,16 +14,20 @@ export interface UseBlockTrackerResult {
 
 export function useBlockTracker(
     provider: AbstractRpcProvider | null,
+    wsBlock?: bigint | null,
     pollIntervalMs = 15_000,
 ): UseBlockTrackerResult {
-    const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
+    const [polledBlock, setPolledBlock] = useState<bigint | null>(null);
     const [tick, setTick] = useState(0);
 
     const refreshBlock = useCallback(() => setTick((t) => t + 1), []);
 
+    // If WS provides a block, use it directly — no polling needed
+    const hasWsBlock = wsBlock !== undefined && wsBlock !== null;
+
     useEffect(() => {
-        if (!provider) {
-            setCurrentBlock(null);
+        // Skip polling when WS is providing blocks
+        if (hasWsBlock || !provider) {
             return;
         }
 
@@ -29,7 +36,7 @@ export function useBlockTracker(
         async function fetch() {
             try {
                 const block = await provider!.getBlockNumber();
-                if (!cancelled) setCurrentBlock(BigInt(block));
+                if (!cancelled) setPolledBlock(BigInt(block));
             } catch {
                 // silent — keep last known value
             }
@@ -42,7 +49,9 @@ export function useBlockTracker(
             cancelled = true;
             clearInterval(id);
         };
-    }, [provider, pollIntervalMs, tick]);
+    }, [provider, pollIntervalMs, tick, hasWsBlock]);
+
+    const currentBlock = hasWsBlock ? wsBlock : polledBlock;
 
     return { currentBlock, refreshBlock };
 }
