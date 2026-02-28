@@ -28,7 +28,7 @@ database_id = "2a80cb38-da06-438b-9224-3cc1c71c5f2b"
 # Non-secret config (committed). Secrets go via `wrangler secret put`.
 # ---------------------------------------------------------------------------
 [vars]
-OPNET_NETWORK    = "testnet"
+OPNET_NETWORK    = "opnetTestnet"
 OPNET_RPC_URL    = "https://testnet.opnet.org"
 # Space-separated bech32 pool addresses to track
 POOL_ADDRESSES   = "opt1sqzd8x7u53eyw4k8y9pnsaup4j0tntxt7pyncp3t9"
