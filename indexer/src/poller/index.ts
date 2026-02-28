@@ -15,10 +15,10 @@ export async function pollNewBlocks(env: Env): Promise<void> {
     const poolHexSet      = await resolvePoolAddresses(env);
 
     // JSONRpcProvider uses fetch() — browser polyfill active in Workers
-    const provider = new JSONRpcProvider(env.OPNET_RPC_URL, env.OPNET_NETWORK as never);
+    const provider = new JSONRpcProvider({ url: env.OPNET_RPC_URL, network: env.OPNET_NETWORK as never });
 
     const lastIndexed = await getLastIndexedBlock(env.DB);
-    const latestBlock = await provider.getBlockNumber();
+    const latestBlock = Number(await provider.getBlockNumber());
 
     if (latestBlock <= lastIndexed) {
         console.log(`[poller] Already up to date at block ${lastIndexed}`);
@@ -40,7 +40,7 @@ async function processBlock(
     blockNumber: number,
     trackedPools: Set<string>,
 ): Promise<void> {
-    const block = await provider.getBlockByNumber(BigInt(blockNumber), true);
+    const block = await provider.getBlock(BigInt(blockNumber), true);
     if (!block) {
         console.warn(`[poller] Block ${blockNumber} not found, skipping`);
         return;
@@ -85,7 +85,7 @@ async function processBlock(
 // TODO: cache resolved hex in D1 `indexer_state` to avoid repeated RPC calls.
 async function resolvePoolAddresses(env: Env): Promise<Set<string>> {
     const bech32Addresses = env.POOL_ADDRESSES.split(' ').filter(Boolean);
-    const provider = new JSONRpcProvider(env.OPNET_RPC_URL, env.OPNET_NETWORK as never);
+    const provider = new JSONRpcProvider({ url: env.OPNET_RPC_URL, network: env.OPNET_NETWORK as never });
     const hexSet   = new Set<string>();
 
     for (const addr of bech32Addresses) {

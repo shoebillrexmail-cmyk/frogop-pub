@@ -37,7 +37,7 @@ const MockJSONRpcProvider        = vi.mocked(JSONRpcProvider);
 // ---- Shared provider mock instance ----------------------------------------
 let mockProvider: {
     getBlockNumber:   ReturnType<typeof vi.fn>;
-    getBlockByNumber: ReturnType<typeof vi.fn>;
+    getBlock:         ReturnType<typeof vi.fn>;
     getPublicKeyInfo: ReturnType<typeof vi.fn>;
 };
 
@@ -64,7 +64,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     mockProvider = {
         getBlockNumber:   vi.fn(),
-        getBlockByNumber: vi.fn(),
+        getBlock:         vi.fn(),
         getPublicKeyInfo: vi.fn(),
     };
     // getPublicKeyInfo resolves pool address to a hex string
@@ -81,26 +81,26 @@ describe('pollNewBlocks — block range logic', () => {
         mockGetLastIndexedBlock.mockResolvedValue(100);
         mockProvider.getBlockNumber.mockResolvedValue(100);
         await pollNewBlocks(mockEnv);
-        expect(mockProvider.getBlockByNumber).not.toHaveBeenCalled();
+        expect(mockProvider.getBlock).not.toHaveBeenCalled();
         expect(mockBatch).not.toHaveBeenCalled();
     });
 
     it('processes one new block', async () => {
         mockGetLastIndexedBlock.mockResolvedValue(99);
         mockProvider.getBlockNumber.mockResolvedValue(100);
-        mockProvider.getBlockByNumber.mockResolvedValue(fakeBlock());
+        mockProvider.getBlock.mockResolvedValue(fakeBlock());
         await pollNewBlocks(mockEnv);
-        expect(mockProvider.getBlockByNumber).toHaveBeenCalledOnce();
-        expect(mockProvider.getBlockByNumber).toHaveBeenCalledWith(100n, true);
+        expect(mockProvider.getBlock).toHaveBeenCalledOnce();
+        expect(mockProvider.getBlock).toHaveBeenCalledWith(100n, true);
     });
 
     it('processes multiple blocks in order', async () => {
         mockGetLastIndexedBlock.mockResolvedValue(97);
         mockProvider.getBlockNumber.mockResolvedValue(100);
-        mockProvider.getBlockByNumber.mockResolvedValue(fakeBlock());
+        mockProvider.getBlock.mockResolvedValue(fakeBlock());
         await pollNewBlocks(mockEnv);
-        expect(mockProvider.getBlockByNumber).toHaveBeenCalledTimes(3);
-        const calls = mockProvider.getBlockByNumber.mock.calls.map(c => Number(c[0]));
+        expect(mockProvider.getBlock).toHaveBeenCalledTimes(3);
+        const calls = mockProvider.getBlock.mock.calls.map(c => Number(c[0]));
         expect(calls).toEqual([98, 99, 100]);
     });
 
@@ -108,9 +108,9 @@ describe('pollNewBlocks — block range logic', () => {
         // MAX_BLOCKS_PER_RUN = 5; gap is 20 → only 5 processed
         mockGetLastIndexedBlock.mockResolvedValue(80);
         mockProvider.getBlockNumber.mockResolvedValue(100);
-        mockProvider.getBlockByNumber.mockResolvedValue(fakeBlock());
+        mockProvider.getBlock.mockResolvedValue(fakeBlock());
         await pollNewBlocks(mockEnv);
-        expect(mockProvider.getBlockByNumber).toHaveBeenCalledTimes(5);
+        expect(mockProvider.getBlock).toHaveBeenCalledTimes(5);
     });
 });
 
@@ -123,7 +123,7 @@ describe('pollNewBlocks — per-block behaviour', () => {
 
     it('calls decodeBlock with block number and txs', async () => {
         const txs = [{ id: '0xtx', events: [] }];
-        mockProvider.getBlockByNumber.mockResolvedValue(fakeBlock(txs));
+        mockProvider.getBlock.mockResolvedValue(fakeBlock(txs));
         await pollNewBlocks(mockEnv);
         expect(mockDecodeBlock).toHaveBeenCalledOnce();
         const [, blockNumber, decodedTxs] = mockDecodeBlock.mock.calls[0]!;
@@ -134,7 +134,7 @@ describe('pollNewBlocks — per-block behaviour', () => {
     it('commits event stmts + cursor together in one batch', async () => {
         const fakeStmt = { _t: 'fake_event_stmt' };
         mockDecodeBlock.mockReturnValueOnce([fakeStmt] as never);
-        mockProvider.getBlockByNumber.mockResolvedValue(fakeBlock());
+        mockProvider.getBlock.mockResolvedValue(fakeBlock());
         await pollNewBlocks(mockEnv);
         expect(mockBatch).toHaveBeenCalledOnce();
         const [batchArgs] = mockBatch.mock.calls[0]!;
@@ -145,7 +145,7 @@ describe('pollNewBlocks — per-block behaviour', () => {
 
     it('still commits cursor when block has no events', async () => {
         mockDecodeBlock.mockReturnValueOnce([]);
-        mockProvider.getBlockByNumber.mockResolvedValue(fakeBlock());
+        mockProvider.getBlock.mockResolvedValue(fakeBlock());
         await pollNewBlocks(mockEnv);
         expect(mockBatch).toHaveBeenCalledOnce();
         const [batchArgs] = mockBatch.mock.calls[0]!;
@@ -154,8 +154,8 @@ describe('pollNewBlocks — per-block behaviour', () => {
         expect((batchArgs[0] as Record<string, unknown>)['_cursor']).toBe(100);
     });
 
-    it('skips block gracefully when getBlockByNumber returns null', async () => {
-        mockProvider.getBlockByNumber.mockResolvedValue(null);
+    it('skips block gracefully when getBlock returns null', async () => {
+        mockProvider.getBlock.mockResolvedValue(null);
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         await pollNewBlocks(mockEnv);
         // batch should NOT have been called (block was skipped)
@@ -169,7 +169,7 @@ describe('resolvePoolAddresses', () => {
     it('resolves bech32 pool addresses to hex for event matching', async () => {
         mockGetLastIndexedBlock.mockResolvedValue(99);
         mockProvider.getBlockNumber.mockResolvedValue(100);
-        mockProvider.getBlockByNumber.mockResolvedValue(fakeBlock());
+        mockProvider.getBlock.mockResolvedValue(fakeBlock());
         await pollNewBlocks(mockEnv);
         // getPublicKeyInfo should have been called for 'opt1abc'
         expect(mockProvider.getPublicKeyInfo).toHaveBeenCalledWith('opt1abc', true);
@@ -182,7 +182,7 @@ describe('resolvePoolAddresses', () => {
         mockProvider.getPublicKeyInfo.mockRejectedValueOnce(new Error('RPC fail'));
         mockGetLastIndexedBlock.mockResolvedValue(99);
         mockProvider.getBlockNumber.mockResolvedValue(100);
-        mockProvider.getBlockByNumber.mockResolvedValue(fakeBlock());
+        mockProvider.getBlock.mockResolvedValue(fakeBlock());
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         await expect(pollNewBlocks(mockEnv)).resolves.not.toThrow();
         errorSpy.mockRestore();

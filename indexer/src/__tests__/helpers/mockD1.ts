@@ -24,7 +24,7 @@ async function getSqlJs(): Promise<SqlJsStatic> {
 }
 
 // Parameter types accepted by sql.js
-type SqlParam = string | number | null | boolean | Uint8Array;
+type SqlParam = string | number | null | Uint8Array;
 
 // ---------------------------------------------------------------------------
 // MockD1Statement — stores db + sql + bound args; all ops are synchronous

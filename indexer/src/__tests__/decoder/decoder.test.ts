@@ -103,7 +103,7 @@ describe('OptionWritten', () => {
 
         expect(mockInsertOption).toHaveBeenCalledOnce();
         const [, row] = mockInsertOption.mock.calls[0]!;
-        const r = row as Record<string, unknown>;
+        const r = row as unknown as Record<string, unknown>;
         expect(r['pool_address']).toBe(POOL_HEX);
         expect(r['option_id']).toBe(Number(OPTION_ID));
         expect(r['writer']).toBe(WRITER_HEX);
@@ -122,7 +122,7 @@ describe('OptionWritten', () => {
         const tx = singleEventTx('OptionWritten', buildWrittenData());
         decodeBlock(mockDb, BLOCK, tx, new Set([POOL_HEX]));
         const [, row] = mockInsertOption.mock.calls[0]!;
-        const r = row as Record<string, unknown>;
+        const r = row as unknown as Record<string, unknown>;
         expect(r['grace_end_block']).toBe(Number(EXPIRY_BLOCK) + GRACE_PERIOD);
     });
 

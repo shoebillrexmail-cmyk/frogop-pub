@@ -151,6 +151,9 @@ async function handlePoolOptions(
     if (writer) return json(await getOptionsByWriter(db, poolAddress, writer));
     if (buyer)  return json(await getOptionsByBuyer(db, poolAddress, buyer));
 
-    const statusNum = status !== null ? parseInt(status, 10) : undefined;
-    return json(await getOptionsByPool(db, poolAddress, { status: statusNum, limit, offset }));
+    if (status !== null) {
+        const statusNum = parseInt(status, 10);
+        return json(await getOptionsByPool(db, poolAddress, { status: statusNum, limit, offset }));
+    }
+    return json(await getOptionsByPool(db, poolAddress, { limit, offset }));
 }

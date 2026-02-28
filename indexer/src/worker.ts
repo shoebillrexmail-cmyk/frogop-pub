@@ -24,7 +24,7 @@ export default {
         return handleFetch(request, env);
     },
 
-    async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
         // waitUntil keeps the Worker alive until polling completes,
         // even if the cron invocation would otherwise time out
         ctx.waitUntil(pollNewBlocks(env));
