@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
-import type { Address } from '@btc-vision/transaction';
+import { Address } from '@btc-vision/transaction';
 import type { PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
@@ -127,7 +127,7 @@ export function WriteOptionPanel({
                 address,
             ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
-            const callResult = await tokenContract['increaseAllowance'](poolHex, collateral);
+            const callResult = await tokenContract['increaseAllowance'](Address.fromString(poolHex), collateral);
             const receipt = await callResult.sendTransaction({
                 signer: null,
                 mldsaSigner: null,

@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
-import type { Address } from '@btc-vision/transaction';
+import { Address } from '@btc-vision/transaction';
 import type { OptionData, PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
@@ -107,7 +107,7 @@ export function ExerciseModal({
                 address,
             ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
-            const call = await tokenContract['increaseAllowance'](poolHex, payAmount);
+            const call = await tokenContract['increaseAllowance'](Address.fromString(poolHex), payAmount);
             const receipt = await call.sendTransaction({
                 signer: null,
                 mldsaSigner: null,
