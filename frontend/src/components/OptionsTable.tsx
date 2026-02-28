@@ -3,7 +3,7 @@
  */
 import { useState } from 'react';
 import { type OptionData, OptionStatus, OptionType } from '../services/types.ts';
-import { formatTokenAmount } from '../config/index.ts';
+import { formatTokenAmount, blocksToCountdown } from '../config/index.ts';
 
 type FilterStatus = 'ALL' | 'OPEN' | 'PURCHASED' | 'EXPIRED' | 'CANCELLED';
 
@@ -11,10 +11,12 @@ interface OptionsTableProps {
     options: OptionData[];
     /** Connected wallet hex address (0x...) or null if disconnected */
     walletHex: string | null;
-    /** Current block number (for grace period calc) */
+    /** Current block number (for grace period calc + expiry countdown) */
     currentBlock?: bigint;
     /** Grace period in blocks */
     gracePeriodBlocks?: bigint;
+    /** MOTO/PILL price ratio for strike equivalent display */
+    motoPillRatio?: number | null;
     /** Show the status filter bar (default: true) */
     showFilter?: boolean;
     onBuy?: (option: OptionData) => void;
@@ -155,11 +157,31 @@ function RowAction({
     return null;
 }
 
+function calcBreakeven(option: OptionData): bigint | null {
+    if (option.status !== OptionStatus.OPEN && option.status !== OptionStatus.PURCHASED) return null;
+    if (option.optionType === OptionType.CALL) return option.strikePrice + option.premium;
+    // PUT: strikePrice - premium (clamped to 0)
+    return option.strikePrice > option.premium ? option.strikePrice - option.premium : 0n;
+}
+
+function calcYield(option: OptionData): number | null {
+    if (option.premium <= 0n || option.underlyingAmount <= 0n) return null;
+    if (option.optionType === OptionType.CALL) {
+        // premium PILL earned per MOTO locked
+        return Number(option.premium) / Number(option.underlyingAmount) * 100;
+    }
+    // PUT: premium PILL earned per PILL locked (strikePrice * underlyingAmount)
+    const collateral = option.strikePrice * option.underlyingAmount;
+    if (collateral <= 0n) return null;
+    return Number(option.premium) / Number(collateral) * 100;
+}
+
 export function OptionsTable({
     options,
     walletHex,
     currentBlock,
     gracePeriodBlocks,
+    motoPillRatio,
     showFilter = true,
     onBuy,
     onCancel,
@@ -213,8 +235,11 @@ export function OptionsTable({
                                 <th className="text-left py-2 pr-4">#</th>
                                 <th className="text-left py-2 pr-4">Type</th>
                                 <th className="text-left py-2 pr-4">Strike</th>
+                                <th className="text-left py-2 pr-4">Premium</th>
                                 <th className="text-left py-2 pr-4">Expiry</th>
                                 <th className="text-left py-2 pr-4">Amount</th>
+                                <th className="text-left py-2 pr-4">Breakeven</th>
+                                <th className="text-left py-2 pr-4">Yield</th>
                                 <th className="text-left py-2 pr-4">Status</th>
                                 <th className="text-left py-2">Action</th>
                             </tr>
@@ -234,12 +259,40 @@ export function OptionsTable({
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary">
                                         {formatTokenAmount(option.strikePrice)} PILL
+                                        {motoPillRatio != null && motoPillRatio > 0 && (
+                                            <span className="block text-[10px] text-terminal-text-muted">
+                                                ~{(Number(option.strikePrice) / 1e18 / motoPillRatio).toFixed(4)} MOTO eq.
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary">
-                                        blk {option.expiryBlock.toString()}
+                                        {formatTokenAmount(option.premium)} PILL
+                                    </td>
+                                    <td className="py-2 pr-4 text-terminal-text-secondary">
+                                        {currentBlock !== undefined
+                                            ? (() => {
+                                                const left = option.expiryBlock - currentBlock;
+                                                return left > 0n
+                                                    ? <span>{blocksToCountdown(left)}</span>
+                                                    : <span className="text-terminal-text-muted">Expired</span>;
+                                            })()
+                                            : <>blk {option.expiryBlock.toString()}</>
+                                        }
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary">
                                         {formatTokenAmount(option.underlyingAmount)} MOTO
+                                    </td>
+                                    <td className="py-2 pr-4 text-terminal-text-secondary text-xs">
+                                        {(() => {
+                                            const be = calcBreakeven(option);
+                                            return be !== null ? <>{formatTokenAmount(be)} PILL</> : <span className="text-terminal-text-muted">—</span>;
+                                        })()}
+                                    </td>
+                                    <td className="py-2 pr-4 text-terminal-text-secondary text-xs">
+                                        {(() => {
+                                            const y = calcYield(option);
+                                            return y !== null ? <>{y.toFixed(2)}%</> : <span className="text-terminal-text-muted">—</span>;
+                                        })()}
                                     </td>
                                     <td className="py-2 pr-4">
                                         <StatusBadge status={option.status} />

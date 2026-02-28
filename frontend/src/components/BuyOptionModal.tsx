@@ -14,6 +14,7 @@ import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { formatTokenAmount } from '../config/index.ts';
+import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface BuyOptionModalProps {
@@ -56,6 +57,8 @@ export function BuyOptionModal({
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
 
+    const { trackApproval, trackAction, approvalConfirmed } = useTransactionFlow(poolAddress, option.id.toString());
+
     // Resolve pool bech32 → hex
     useEffect(() => {
         if (poolAddress.startsWith('0x')) {
@@ -82,7 +85,7 @@ export function BuyOptionModal({
     const pillBalance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
     const hasBalance = pillBalance !== null && pillBalance >= totalCost;
-    const needsApproval = allowance !== null && allowance < totalCost;
+    const needsApproval = !approvalConfirmed && allowance !== null && allowance < totalCost;
     const busy = txStatus === 'approving' || txStatus === 'buying';
 
     async function handleApprove() {
@@ -107,6 +110,7 @@ export function BuyOptionModal({
                 network,
             });
             setTxId(receipt.transactionId);
+            trackApproval(receipt.transactionId, `Approve PILL for Buy #${option.id}`);
             refetchToken();
             setTxStatus('idle');
         } catch (err) {
@@ -137,6 +141,7 @@ export function BuyOptionModal({
                 network,
             });
             setTxId(receipt.transactionId);
+            trackAction(receipt.transactionId, 'buyOption', `Buy Option #${option.id}`);
             setTxStatus('done');
         } catch (err) {
             setTxError(err instanceof Error ? err.message : 'Purchase failed');
@@ -151,6 +156,7 @@ export function BuyOptionModal({
         <div
             className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
             data-testid="buy-modal-backdrop"
+            onClick={busy ? undefined : onClose}
         >
             <div
                 className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl w-full max-w-sm shadow-2xl"
@@ -197,6 +203,17 @@ export function BuyOptionModal({
                             <span className="text-terminal-text-muted">Expiry block</span>
                             <span className="text-terminal-text-secondary">
                                 {option.expiryBlock.toString()}
+                            </span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">Breakeven</span>
+                            <span className="text-cyan-300 text-xs">
+                                {fmt(option.optionType === OptionType.CALL
+                                    ? option.strikePrice + option.premium
+                                    : option.strikePrice > option.premium
+                                        ? option.strikePrice - option.premium
+                                        : 0n
+                                )} PILL
                             </span>
                         </div>
                     </div>

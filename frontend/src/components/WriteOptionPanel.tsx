@@ -13,8 +13,18 @@ import type { PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
-import { formatTokenAmount } from '../config/index.ts';
+import { formatTokenAmount, BLOCK_CONSTANTS } from '../config/index.ts';
+import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
+
+const DAY_PRESETS = [
+    { label: '1d', days: 1 },
+    { label: '3d', days: 3 },
+    { label: '7d', days: 7 },
+    { label: '14d', days: 14 },
+    { label: '30d', days: 30 },
+    { label: '90d', days: 90 },
+] as const;
 
 interface WriteOptionPanelProps {
     poolAddress: string;
@@ -28,8 +38,6 @@ interface WriteOptionPanelProps {
     onSuccess: () => void;
 }
 
-const MAX_EXPIRY = 52560;
-const MIN_EXPIRY = 1;
 const MAX_SAT = 10_000_000n; // 0.1 BTC for fees
 
 function parseBigIntTokens(value: string, decimals = 18): bigint | null {
@@ -63,11 +71,14 @@ export function WriteOptionPanel({
     const [amountStr, setAmountStr] = useState('1');
     const [strikeStr, setStrikeStr] = useState('');
     const [premiumStr, setPremiumStr] = useState('');
-    const [expiryStr, setExpiryStr] = useState('144');
+    const [selectedDays, setSelectedDays] = useState<number>(7);
+    const expiryBlocks = selectedDays * BLOCK_CONSTANTS.BLOCKS_PER_DAY;
     const [validationError, setValidationError] = useState<string | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'writing' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
+
+    const { trackApproval, trackAction } = useTransactionFlow(poolAddress);
 
     const amount = parseBigIntTokens(amountStr);
     const collateral = amount; // 1:1 collateral for CALL; same simplified for PUT
@@ -104,10 +115,7 @@ export function WriteOptionPanel({
         if (!strike || strike <= 0n) return 'Strike price must be greater than 0';
         const premium = parseBigIntTokens(premiumStr);
         if (!premium || premium < 0n) return 'Premium must be 0 or greater';
-        const expiry = parseInt(expiryStr, 10);
-        if (isNaN(expiry) || expiry < MIN_EXPIRY || expiry > MAX_EXPIRY) {
-            return `Expiry must be between ${MIN_EXPIRY} and ${MAX_EXPIRY} blocks`;
-        }
+        if (selectedDays < 1 || selectedDays > 365) return 'Expiry must be between 1 and 365 days';
         if (balance !== null && amount > balance) return 'Insufficient MOTO balance';
         return null;
     }
@@ -137,6 +145,7 @@ export function WriteOptionPanel({
             });
 
             setTxId(receipt.transactionId);
+            trackApproval(receipt.transactionId, `Approve MOTO for Write`, { amount: amountStr });
             refetchToken();
             setTxStatus('idle');
         } catch (err) {
@@ -155,7 +164,7 @@ export function WriteOptionPanel({
 
         const strike = parseBigIntTokens(strikeStr)!;
         const premium = parseBigIntTokens(premiumStr)!;
-        const duration = BigInt(parseInt(expiryStr, 10));
+        const duration = BigInt(expiryBlocks);
 
         setValidationError(null);
         setTxError(null);
@@ -189,6 +198,7 @@ export function WriteOptionPanel({
             });
 
             setTxId(receipt.transactionId);
+            trackAction(receipt.transactionId, 'writeOption', 'Write Option');
             setTxStatus('done');
         } catch (err) {
             setTxError(err instanceof Error ? err.message : 'Write option failed');
@@ -314,25 +324,28 @@ export function WriteOptionPanel({
 
                     {/* Expiry */}
                     <div>
-                        <label className="block text-xs text-terminal-text-muted font-mono mb-1">
-                            Expiry (blocks)
+                        <label className="block text-xs text-terminal-text-muted font-mono mb-2">
+                            Expiry Duration
                         </label>
-                        <div className="flex items-center gap-2 border border-terminal-border-subtle rounded px-3 py-2">
-                            <input
-                                type="number"
-                                min={MIN_EXPIRY}
-                                max={MAX_EXPIRY}
-                                step="1"
-                                value={expiryStr}
-                                onChange={(e) => setExpiryStr(e.target.value)}
-                                className="flex-1 bg-transparent text-terminal-text-primary font-mono text-sm outline-none"
-                                placeholder="144"
-                                data-testid="input-expiry"
-                            />
-                            <span className="text-terminal-text-muted text-xs font-mono">blocks</span>
+                        <div className="flex flex-wrap gap-2" data-testid="expiry-presets">
+                            {DAY_PRESETS.map(({ label, days }) => (
+                                <button
+                                    key={days}
+                                    type="button"
+                                    onClick={() => setSelectedDays(days)}
+                                    className={`px-3 py-1.5 text-xs font-mono rounded border transition-colors ${
+                                        selectedDays === days
+                                            ? 'bg-accent text-white border-accent'
+                                            : 'border-terminal-border-subtle text-terminal-text-muted hover:text-terminal-text-primary'
+                                    }`}
+                                    data-testid={`expiry-${label}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
                         </div>
-                        <p className="text-xs text-terminal-text-muted font-mono mt-1">
-                            ~{Math.round(parseInt(expiryStr || '0', 10) / 144)}d from now
+                        <p className="text-xs text-terminal-text-muted font-mono mt-1.5">
+                            {expiryBlocks.toLocaleString()} blocks
                         </p>
                     </div>
 

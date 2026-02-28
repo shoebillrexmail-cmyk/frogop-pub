@@ -17,6 +17,7 @@ vi.mock('../../db/queries.js', () => ({
             ({ _t: 'UPDATE_STATUS', pool, id, status, buyer, block, tx }),
     ),
     stmtInsertFeeEvent:    vi.fn((_db: unknown, ev: unknown) => ({ _t: 'INSERT_FEE', ev })),
+    stmtInsertSwapEvent:   vi.fn((_db: unknown, row: unknown) => ({ _t: 'INSERT_SWAP', row })),
 }));
 
 import { decodeBlock }            from '../../decoder/index.js';
@@ -28,6 +29,7 @@ import { OptionStatus, FeeEventType } from '../../types/index.js';
 const mockInsertOption      = vi.mocked(queries.stmtInsertOption);
 const mockUpdateStatus      = vi.mocked(queries.stmtUpdateOptionStatus);
 const mockInsertFee         = vi.mocked(queries.stmtInsertFeeEvent);
+const mockInsertSwap        = vi.mocked(queries.stmtInsertSwapEvent);
 
 const mockDb   = {} as D1Database;
 const POOL_HEX = '0xdeadbeef000000000000000000000000deadbeef000000000000000000000001';
@@ -291,5 +293,66 @@ describe('OptionExpired (settle)', () => {
         const stmts = decodeBlock(mockDb, BLOCK, tx, new Set([POOL_HEX]));
         expect(stmts).toHaveLength(1);
         expect(mockInsertFee).not.toHaveBeenCalled();
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('SwapExecuted (NativeSwap)', () => {
+    const SWAP_HEX = '0xswap00000000000000000000000000000000000000000000000000000000';
+    const AMOUNT_IN  = 50_000n;
+    const AMOUNT_OUT = 750_000_000_000_000_000_000n;
+    const TOTAL_FEES = 500n;
+
+    function buildSwapData() {
+        return buildEventData([
+            { type: 'address', value: BUYER_HEX  },
+            { type: 'u64',     value: AMOUNT_IN  },
+            { type: 'u256',    value: AMOUNT_OUT  },
+            { type: 'u256',    value: TOTAL_FEES  },
+        ]);
+    }
+
+    it('decodes SwapExecuted event from NativeSwap contract', () => {
+        const swapLabelMap = new Map([[SWAP_HEX, 'MOTO']]);
+        const tx = [{ id: TX_ID, events: [{ contractAddress: SWAP_HEX, type: 'SwapExecuted', data: buildSwapData() }] }];
+        const stmts = decodeBlock(mockDb, BLOCK, tx, new Set([POOL_HEX]), swapLabelMap);
+        expect(stmts).toHaveLength(1);
+        expect(mockInsertSwap).toHaveBeenCalledOnce();
+    });
+
+    it('parses swap fields correctly', () => {
+        const swapLabelMap = new Map([[SWAP_HEX, 'PILL']]);
+        const tx = [{ id: TX_ID, events: [{ contractAddress: SWAP_HEX, type: 'SwapExecuted', data: buildSwapData() }] }];
+        decodeBlock(mockDb, BLOCK, tx, new Set([POOL_HEX]), swapLabelMap);
+        const [, row] = mockInsertSwap.mock.calls[0]!;
+        const r = row as Record<string, unknown>;
+        expect(r['token']).toBe('PILL');
+        expect(r['block_number']).toBe(BLOCK);
+        expect(r['tx_id']).toBe(TX_ID);
+        expect(r['buyer']).toBe(BUYER_HEX);
+        expect(r['sats_in']).toBe(String(AMOUNT_IN));
+        expect(r['tokens_out']).toBe(String(AMOUNT_OUT));
+        expect(r['fees']).toBe(String(TOTAL_FEES));
+    });
+
+    it('ignores non-SwapExecuted events from NativeSwap contracts', () => {
+        const swapLabelMap = new Map([[SWAP_HEX, 'MOTO']]);
+        const data = buildEventData([{ type: 'u256', value: 1n }]);
+        const tx = [{ id: TX_ID, events: [{ contractAddress: SWAP_HEX, type: 'SomeOtherEvent', data }] }];
+        const stmts = decodeBlock(mockDb, BLOCK, tx, new Set([POOL_HEX]), swapLabelMap);
+        expect(stmts).toHaveLength(0);
+        expect(mockInsertSwap).not.toHaveBeenCalled();
+    });
+
+    it('does not emit swap statement for pool events (only pool stmts)', () => {
+        const swapLabelMap = new Map([[SWAP_HEX, 'MOTO']]);
+        const data = buildEventData([
+            { type: 'u256',    value: 1n },
+            { type: 'address', value: WRITER_HEX },
+            { type: 'u256',    value: 2_000_000n },
+        ]);
+        const tx = [{ id: TX_ID, events: [{ contractAddress: POOL_HEX, type: 'OptionExpired', data }] }];
+        decodeBlock(mockDb, BLOCK, tx, new Set([POOL_HEX]), swapLabelMap);
+        expect(mockInsertSwap).not.toHaveBeenCalled();
     });
 });

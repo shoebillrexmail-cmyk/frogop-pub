@@ -15,6 +15,7 @@ import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { formatTokenAmount } from '../config/index.ts';
+import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface ExerciseModalProps {
@@ -25,6 +26,7 @@ interface ExerciseModalProps {
     address: Address | null;
     provider: AbstractRpcProvider;
     network: WalletConnectNetwork;
+    motoPillRatio?: number | null;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -43,6 +45,7 @@ export function ExerciseModal({
     address,
     provider,
     network,
+    motoPillRatio,
     onClose,
     onSuccess,
 }: ExerciseModalProps) {
@@ -50,6 +53,8 @@ export function ExerciseModal({
     const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'exercising' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
+
+    const { trackApproval, trackAction, approvalConfirmed } = useTransactionFlow(poolAddress, option.id.toString());
 
     useEffect(() => {
         if (poolAddress.startsWith('0x')) {
@@ -91,7 +96,7 @@ export function ExerciseModal({
     const tokenBalance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
     const hasBalance = tokenBalance !== null && tokenBalance >= payAmount;
-    const needsApproval = allowance !== null && allowance < payAmount;
+    const needsApproval = !approvalConfirmed && allowance !== null && allowance < payAmount;
     const busy = txStatus === 'approving' || txStatus === 'exercising';
 
     async function handleApprove() {
@@ -116,6 +121,7 @@ export function ExerciseModal({
                 network,
             });
             setTxId(receipt.transactionId);
+            trackApproval(receipt.transactionId, `Approve ${payToken} for Exercise #${option.id}`);
             refetchToken();
             setTxStatus('idle');
         } catch (err) {
@@ -146,6 +152,7 @@ export function ExerciseModal({
                 network,
             });
             setTxId(receipt.transactionId);
+            trackAction(receipt.transactionId, 'exercise', `Exercise Option #${option.id}`);
             setTxStatus('done');
         } catch (err) {
             setTxError(err instanceof Error ? err.message : 'Exercise failed');
@@ -224,6 +231,56 @@ export function ExerciseModal({
                                 <span className={needsApproval ? 'text-yellow-400' : 'text-terminal-text-secondary'}>
                                     {fmt(allowance)} {payToken}{needsApproval ? ' ← req' : ''}
                                 </span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* PnL summary */}
+                    <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 text-xs font-mono space-y-1.5">
+                        <p className="text-terminal-text-muted font-semibold mb-1">PnL Estimate</p>
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">Premium paid</span>
+                            <span className="text-terminal-text-secondary">{fmt(option.premium)} PILL</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">Exercise cost</span>
+                            <span className="text-terminal-text-secondary">{fmt(payAmount)} {payToken}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">Fee</span>
+                            <span className="text-terminal-text-secondary">{fmt(exerciseFee)} {receiveToken}</span>
+                        </div>
+                        <hr className="border-terminal-border-subtle" />
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">You receive</span>
+                            <span className="text-terminal-text-primary font-semibold">
+                                {fmt(receiveAmount)} {receiveToken}
+                                {motoPillRatio && isCall && (
+                                    <span className="text-terminal-text-muted font-normal ml-1">
+                                        (~{(Number(receiveAmount) / 1e18 * motoPillRatio).toFixed(2)} PILL eq.)
+                                    </span>
+                                )}
+                            </span>
+                        </div>
+                        {motoPillRatio && (
+                            <div className="flex justify-between">
+                                <span className="text-terminal-text-muted">Est. PnL</span>
+                                {(() => {
+                                    // CALL: receive MOTO → convert to PILL, subtract premium + exercise cost (PILL)
+                                    // PUT: receive PILL, subtract premium (PILL) + exercise cost (MOTO → convert to PILL)
+                                    const receiveInPill = isCall
+                                        ? Number(receiveAmount) / 1e18 * motoPillRatio
+                                        : Number(receiveAmount) / 1e18;
+                                    const costInPill = isCall
+                                        ? Number(option.premium) / 1e18 + Number(payAmount) / 1e18
+                                        : Number(option.premium) / 1e18 + Number(payAmount) / 1e18 * motoPillRatio;
+                                    const pnl = receiveInPill - costInPill;
+                                    return (
+                                        <span className={pnl >= 0 ? 'text-green-400 font-semibold' : 'text-rose-400 font-semibold'}>
+                                            {pnl >= 0 ? '+' : ''}{pnl.toFixed(4)} PILL
+                                        </span>
+                                    );
+                                })()}
                             </div>
                         )}
                     </div>

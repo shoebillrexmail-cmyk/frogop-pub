@@ -232,3 +232,13 @@ a:where(:not([class])):hover {
   height: 1px;
   background: linear-gradient(90deg, transparent, #F7931A40, transparent);
 }
+
+/* Pulsing orange dot for pending transactions */
+@keyframes pulse-orange {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 #F7931A80; }
+  50% { opacity: 0.8; box-shadow: 0 0 0 6px #F7931A00; }
+}
+
+.pulse-orange {
+  animation: pulse-orange 2s ease-in-out infinite;
+}

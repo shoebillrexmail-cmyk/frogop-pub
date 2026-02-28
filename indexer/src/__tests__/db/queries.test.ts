@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MockD1Database } from '../helpers/mockD1.js';
-import type { PoolRow, OptionRow, FeeEventRow } from '../../types/index.js';
+import type { PoolRow, OptionRow, FeeEventRow, PriceSnapshotRow, SwapEventRow, PriceCandleRow } from '../../types/index.js';
 import {
     getLastIndexedBlock,
     stmtSetLastIndexedBlock,
@@ -21,6 +21,16 @@ import {
     getOptionsByWriter,
     getOptionsByBuyer,
     getOptionsByUser,
+    stmtInsertPriceSnapshot,
+    stmtInsertSwapEvent,
+    stmtUpsertCandle,
+    stmtPruneOldSnapshots,
+    stmtPruneOldSwapEvents,
+    getCandles,
+    getLatestPrice,
+    getPriceHistory,
+    getSnapshotsInRange,
+    getSwapEventsInBlockRange,
 } from '../../db/queries.js';
 
 // ---------------------------------------------------------------------------
@@ -257,5 +267,185 @@ describe('Options — reads', () => {
         const rows = await getOptionsByUser(d1(), '0xbuyer1');
         expect(rows).toHaveLength(1);
         expect(rows[0]?.option_id).toBe(2);
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('Price snapshots', () => {
+    it('stmtInsertPriceSnapshot inserts a row', async () => {
+        await db.batch([stmtInsertPriceSnapshot(d1(), {
+            token: 'MOTO', block_number: 1000,
+            timestamp: '2026-02-28T12:00:00Z', price: '150000000000000000000',
+        })]);
+        const row = db.queryFirst<PriceSnapshotRow>('SELECT * FROM price_snapshots WHERE token = ? AND block_number = ?', 'MOTO', 1000);
+        expect(row?.price).toBe('150000000000000000000');
+    });
+
+    it('stmtInsertPriceSnapshot is idempotent (INSERT OR REPLACE)', async () => {
+        await db.batch([stmtInsertPriceSnapshot(d1(), {
+            token: 'MOTO', block_number: 1000,
+            timestamp: '2026-02-28T12:00:00Z', price: '100',
+        })]);
+        await db.batch([stmtInsertPriceSnapshot(d1(), {
+            token: 'MOTO', block_number: 1000,
+            timestamp: '2026-02-28T12:00:00Z', price: '200',
+        })]);
+        const rows = db.queryAll('SELECT * FROM price_snapshots WHERE token = ? AND block_number = ?', 'MOTO', 1000);
+        expect(rows).toHaveLength(1);
+        expect((rows[0] as PriceSnapshotRow).price).toBe('200');
+    });
+
+    it('getLatestPrice returns most recent snapshot', async () => {
+        await db.batch([
+            stmtInsertPriceSnapshot(d1(), { token: 'MOTO', block_number: 100, timestamp: '2026-02-28T10:00:00Z', price: '100' }),
+            stmtInsertPriceSnapshot(d1(), { token: 'MOTO', block_number: 200, timestamp: '2026-02-28T11:00:00Z', price: '200' }),
+        ]);
+        const latest = await getLatestPrice(d1(), 'MOTO');
+        expect(latest?.block_number).toBe(200);
+        expect(latest?.price).toBe('200');
+    });
+
+    it('getLatestPrice returns null when no snapshots', async () => {
+        expect(await getLatestPrice(d1(), 'MOTO')).toBeNull();
+    });
+
+    it('getPriceHistory returns snapshots ordered by block_number ASC', async () => {
+        await db.batch([
+            stmtInsertPriceSnapshot(d1(), { token: 'PILL', block_number: 300, timestamp: '2026-02-28T12:00:00Z', price: '300' }),
+            stmtInsertPriceSnapshot(d1(), { token: 'PILL', block_number: 100, timestamp: '2026-02-28T10:00:00Z', price: '100' }),
+            stmtInsertPriceSnapshot(d1(), { token: 'PILL', block_number: 200, timestamp: '2026-02-28T11:00:00Z', price: '200' }),
+        ]);
+        const rows = await getPriceHistory(d1(), 'PILL');
+        expect(rows).toHaveLength(3);
+        expect(rows[0]?.block_number).toBe(100);
+        expect(rows[2]?.block_number).toBe(300);
+    });
+
+    it('getPriceHistory respects from/to filters', async () => {
+        await db.batch([
+            stmtInsertPriceSnapshot(d1(), { token: 'MOTO', block_number: 100, timestamp: '2026-02-28T10:00:00Z', price: '100' }),
+            stmtInsertPriceSnapshot(d1(), { token: 'MOTO', block_number: 200, timestamp: '2026-02-28T11:00:00Z', price: '200' }),
+            stmtInsertPriceSnapshot(d1(), { token: 'MOTO', block_number: 300, timestamp: '2026-02-28T12:00:00Z', price: '300' }),
+        ]);
+        const rows = await getPriceHistory(d1(), 'MOTO', { from: '2026-02-28T10:30:00Z', to: '2026-02-28T12:00:00Z' });
+        expect(rows).toHaveLength(2);
+    });
+
+    it('getSnapshotsInRange returns snapshots within time range', async () => {
+        await db.batch([
+            stmtInsertPriceSnapshot(d1(), { token: 'MOTO', block_number: 100, timestamp: '2026-02-28T10:00:00Z', price: '100' }),
+            stmtInsertPriceSnapshot(d1(), { token: 'MOTO', block_number: 200, timestamp: '2026-02-28T11:00:00Z', price: '200' }),
+            stmtInsertPriceSnapshot(d1(), { token: 'MOTO', block_number: 300, timestamp: '2026-02-28T13:00:00Z', price: '300' }),
+        ]);
+        const rows = await getSnapshotsInRange(d1(), 'MOTO', '2026-02-28T10:00:00Z', '2026-02-28T12:00:00Z');
+        expect(rows).toHaveLength(2);
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('Swap events', () => {
+    it('stmtInsertSwapEvent inserts a row', async () => {
+        await db.batch([stmtInsertSwapEvent(d1(), {
+            token: 'MOTO', block_number: 500, tx_id: '0xtx1',
+            buyer: '0xbuyer', sats_in: '100000', tokens_out: '5000000', fees: '500',
+        })]);
+        const row = db.queryFirst<SwapEventRow>('SELECT * FROM swap_events WHERE tx_id = ?', '0xtx1');
+        expect(row?.token).toBe('MOTO');
+        expect(row?.sats_in).toBe('100000');
+    });
+
+    it('getSwapEventsInBlockRange returns swaps in range', async () => {
+        await db.batch([
+            stmtInsertSwapEvent(d1(), { token: 'MOTO', block_number: 100, tx_id: '0xtx1', buyer: '0xa', sats_in: '1000', tokens_out: '5000', fees: '10' }),
+            stmtInsertSwapEvent(d1(), { token: 'MOTO', block_number: 200, tx_id: '0xtx2', buyer: '0xb', sats_in: '2000', tokens_out: '10000', fees: '20' }),
+            stmtInsertSwapEvent(d1(), { token: 'MOTO', block_number: 300, tx_id: '0xtx3', buyer: '0xc', sats_in: '3000', tokens_out: '15000', fees: '30' }),
+        ]);
+        const rows = await getSwapEventsInBlockRange(d1(), 'MOTO', 100, 250);
+        expect(rows).toHaveLength(2);
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('Price candles', () => {
+    it('stmtUpsertCandle inserts a candle', async () => {
+        await db.batch([stmtUpsertCandle(d1(), {
+            token: 'MOTO', interval: '1h', open_time: '2026-02-28T12:00:00Z',
+            open: '100', high: '110', low: '90', close: '105',
+            volume_sats: '500000', volume_tokens: '75000', trade_count: 3,
+        })]);
+        const row = db.queryFirst<PriceCandleRow>('SELECT * FROM price_candles WHERE token = ? AND interval = ?', 'MOTO', '1h');
+        expect(row?.open).toBe('100');
+        expect(row?.trade_count).toBe(3);
+    });
+
+    it('stmtUpsertCandle upserts (replaces) on same PK', async () => {
+        await db.batch([stmtUpsertCandle(d1(), {
+            token: 'MOTO', interval: '1h', open_time: '2026-02-28T12:00:00Z',
+            open: '100', high: '110', low: '90', close: '105',
+            volume_sats: '0', volume_tokens: '0', trade_count: 0,
+        })]);
+        await db.batch([stmtUpsertCandle(d1(), {
+            token: 'MOTO', interval: '1h', open_time: '2026-02-28T12:00:00Z',
+            open: '100', high: '120', low: '85', close: '115',
+            volume_sats: '50000', volume_tokens: '7500', trade_count: 5,
+        })]);
+        const rows = db.queryAll('SELECT * FROM price_candles WHERE token = ? AND interval = ? AND open_time = ?', 'MOTO', '1h', '2026-02-28T12:00:00Z');
+        expect(rows).toHaveLength(1);
+        expect((rows[0] as PriceCandleRow).high).toBe('120');
+        expect((rows[0] as PriceCandleRow).trade_count).toBe(5);
+    });
+
+    it('getCandles returns candles ordered by open_time ASC', async () => {
+        await db.batch([
+            stmtUpsertCandle(d1(), { token: 'MOTO', interval: '1d', open_time: '2026-02-27T00:00:00Z', open: '100', high: '110', low: '90', close: '105', volume_sats: '0', volume_tokens: '0', trade_count: 0 }),
+            stmtUpsertCandle(d1(), { token: 'MOTO', interval: '1d', open_time: '2026-02-28T00:00:00Z', open: '105', high: '115', low: '95', close: '110', volume_sats: '0', volume_tokens: '0', trade_count: 0 }),
+        ]);
+        const candles = await getCandles(d1(), 'MOTO', '1d');
+        expect(candles).toHaveLength(2);
+        expect(candles[0]?.open_time).toBe('2026-02-27T00:00:00Z');
+    });
+
+    it('getCandles filters by from/to', async () => {
+        await db.batch([
+            stmtUpsertCandle(d1(), { token: 'PILL', interval: '1h', open_time: '2026-02-28T10:00:00Z', open: '50', high: '55', low: '48', close: '52', volume_sats: '0', volume_tokens: '0', trade_count: 0 }),
+            stmtUpsertCandle(d1(), { token: 'PILL', interval: '1h', open_time: '2026-02-28T11:00:00Z', open: '52', high: '58', low: '50', close: '55', volume_sats: '0', volume_tokens: '0', trade_count: 0 }),
+            stmtUpsertCandle(d1(), { token: 'PILL', interval: '1h', open_time: '2026-02-28T12:00:00Z', open: '55', high: '60', low: '53', close: '57', volume_sats: '0', volume_tokens: '0', trade_count: 0 }),
+        ]);
+        const candles = await getCandles(d1(), 'PILL', '1h', { from: '2026-02-28T10:30:00Z' });
+        expect(candles).toHaveLength(2);
+    });
+
+    it('getCandles respects limit', async () => {
+        await db.batch([
+            stmtUpsertCandle(d1(), { token: 'MOTO', interval: '1h', open_time: '2026-02-28T10:00:00Z', open: '50', high: '55', low: '48', close: '52', volume_sats: '0', volume_tokens: '0', trade_count: 0 }),
+            stmtUpsertCandle(d1(), { token: 'MOTO', interval: '1h', open_time: '2026-02-28T11:00:00Z', open: '52', high: '58', low: '50', close: '55', volume_sats: '0', volume_tokens: '0', trade_count: 0 }),
+        ]);
+        const candles = await getCandles(d1(), 'MOTO', '1h', { limit: 1 });
+        expect(candles).toHaveLength(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('Pruning', () => {
+    it('stmtPruneOldSnapshots deletes snapshots before cutoff', async () => {
+        await db.batch([
+            stmtInsertPriceSnapshot(d1(), { token: 'MOTO', block_number: 100, timestamp: '2025-06-01T00:00:00Z', price: '100' }),
+            stmtInsertPriceSnapshot(d1(), { token: 'MOTO', block_number: 200, timestamp: '2026-02-28T00:00:00Z', price: '200' }),
+        ]);
+        await db.batch([stmtPruneOldSnapshots(d1(), '2026-01-01T00:00:00Z')]);
+        const rows = db.queryAll('SELECT * FROM price_snapshots');
+        expect(rows).toHaveLength(1);
+        expect((rows[0] as PriceSnapshotRow).block_number).toBe(200);
+    });
+
+    it('stmtPruneOldSwapEvents deletes swaps before cutoff block', async () => {
+        await db.batch([
+            stmtInsertSwapEvent(d1(), { token: 'MOTO', block_number: 50, tx_id: '0xtx1', buyer: '0xa', sats_in: '1000', tokens_out: '5000', fees: '10' }),
+            stmtInsertSwapEvent(d1(), { token: 'MOTO', block_number: 200, tx_id: '0xtx2', buyer: '0xb', sats_in: '2000', tokens_out: '10000', fees: '20' }),
+        ]);
+        await db.batch([stmtPruneOldSwapEvents(d1(), 100)]);
+        const rows = db.queryAll('SELECT * FROM swap_events');
+        expect(rows).toHaveLength(1);
+        expect((rows[0] as SwapEventRow).block_number).toBe(200);
     });
 });

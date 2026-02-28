@@ -13,8 +13,14 @@ vi.mock('opnet', () => ({
 }));
 
 vi.mock('../../db/queries.js', () => ({
-    getLastIndexedBlock:    vi.fn(),
+    getLastIndexedBlock:     vi.fn(),
     stmtSetLastIndexedBlock: vi.fn((_db: unknown, n: unknown) => ({ _cursor: n })),
+    stmtInsertPriceSnapshot: vi.fn((_db: unknown, row: unknown) => ({ _snapshot: row })),
+    stmtUpsertCandle:        vi.fn((_db: unknown, row: unknown) => ({ _candle: row })),
+    stmtPruneOldSnapshots:   vi.fn((_db: unknown, _c: unknown) => ({ _prune: 'snapshots' })),
+    stmtPruneOldSwapEvents:  vi.fn((_db: unknown, _c: unknown) => ({ _prune: 'swaps' })),
+    getSnapshotsInRange:     vi.fn().mockResolvedValue([]),
+    getSwapEventsInBlockRange: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('../../decoder/index.js', () => ({
@@ -39,6 +45,7 @@ let mockProvider: {
     getBlockNumber:   ReturnType<typeof vi.fn>;
     getBlock:         ReturnType<typeof vi.fn>;
     getPublicKeyInfo: ReturnType<typeof vi.fn>;
+    call:             ReturnType<typeof vi.fn>;
 };
 
 // ---- Shared mock DB --------------------------------------------------------
@@ -53,6 +60,8 @@ const mockEnv: Env = {
     POOL_ADDRESSES:   'opt1abc',
     FACTORY_ADDRESS:  '',
     MAX_BLOCKS_PER_RUN: '5',
+    NATIVESWAP_ADDRESSES: '',
+    NATIVESWAP_LABELS:    'MOTO,PILL',
 };
 
 /** Build a fake block with a transactions array */
@@ -66,6 +75,7 @@ beforeEach(() => {
         getBlockNumber:   vi.fn(),
         getBlock:         vi.fn(),
         getPublicKeyInfo: vi.fn(),
+        call:             vi.fn(),
     };
     // getPublicKeyInfo resolves pool address to a hex string
     mockProvider.getPublicKeyInfo.mockResolvedValue({
@@ -136,7 +146,8 @@ describe('pollNewBlocks — per-block behaviour', () => {
         mockDecodeBlock.mockReturnValueOnce([fakeStmt] as never);
         mockProvider.getBlock.mockResolvedValue(fakeBlock());
         await pollNewBlocks(mockEnv);
-        expect(mockBatch).toHaveBeenCalledOnce();
+        // First batch call = processBlock; additional calls from pruneOldData
+        expect(mockBatch).toHaveBeenCalled();
         const [batchArgs] = mockBatch.mock.calls[0]!;
         // Should contain the event stmt AND the cursor stmt
         expect(batchArgs).toContain(fakeStmt);
@@ -147,7 +158,8 @@ describe('pollNewBlocks — per-block behaviour', () => {
         mockDecodeBlock.mockReturnValueOnce([]);
         mockProvider.getBlock.mockResolvedValue(fakeBlock());
         await pollNewBlocks(mockEnv);
-        expect(mockBatch).toHaveBeenCalledOnce();
+        // First batch call = processBlock cursor; additional from pruneOldData
+        expect(mockBatch).toHaveBeenCalled();
         const [batchArgs] = mockBatch.mock.calls[0]!;
         // Only cursor stmt (no event stmts)
         expect(batchArgs).toHaveLength(1);
@@ -158,8 +170,10 @@ describe('pollNewBlocks — per-block behaviour', () => {
         mockProvider.getBlock.mockResolvedValue(null);
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         await pollNewBlocks(mockEnv);
-        // batch should NOT have been called (block was skipped)
-        expect(mockBatch).not.toHaveBeenCalled();
+        // processBlock batch should NOT have been called (block was skipped)
+        // but pruneOldData still runs — verify no cursor stmt in any batch call
+        const allBatchArgs = mockBatch.mock.calls.flatMap(c => c[0] as unknown[]);
+        expect(allBatchArgs.every((s: unknown) => (s as Record<string, unknown>)['_cursor'] === undefined)).toBe(true);
         warnSpy.mockRestore();
     });
 });
@@ -189,5 +203,27 @@ describe('resolvePoolAddresses', () => {
         // Pool not resolved → trackedPools is empty → decodeBlock gets empty Set
         const [, , , trackedPools] = mockDecodeBlock.mock.calls[0]!;
         expect((trackedPools as Set<string>).size).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('pollNewBlocks — passes swapLabelMap to decodeBlock', () => {
+    it('passes swap label map as 5th argument to decodeBlock', async () => {
+        const envWithSwap: Env = {
+            ...mockEnv,
+            NATIVESWAP_ADDRESSES: 'opt1swap1',
+            NATIVESWAP_LABELS: 'MOTO',
+        };
+        mockGetLastIndexedBlock.mockResolvedValue(99);
+        mockProvider.getBlockNumber.mockResolvedValue(100);
+        mockProvider.getBlock.mockResolvedValue(fakeBlock());
+        mockProvider.getPublicKeyInfo.mockResolvedValue({ toString: () => '0xpool_hex' });
+        // provider.call mock for getQuote
+        mockProvider.call.mockResolvedValue('0x' + '00'.repeat(32));
+        await pollNewBlocks(envWithSwap);
+        expect(mockDecodeBlock).toHaveBeenCalledOnce();
+        const args = mockDecodeBlock.mock.calls[0]!;
+        // 5th argument should be a Map (swapLabelMap)
+        expect(args[4]).toBeInstanceOf(Map);
     });
 });

@@ -3,12 +3,14 @@
  *
  * Requires wallet connection. Uses the same pool data as PoolsPage.
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { usePool } from '../hooks/usePool.ts';
 import { useUserOptions } from '../hooks/useUserOptions.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
+import { useBlockTracker } from '../hooks/useBlockTracker.ts';
+import { useTransactionContext } from '../contexts/TransactionContext.tsx';
 import { PortfolioSkeleton } from '../components/LoadingSkeletons.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
 import { BalancesCard } from '../components/BalancesCard.tsx';
@@ -26,6 +28,8 @@ export function PortfolioPage() {
 
     const walletHex = address ? address.toString() : null;
 
+    const { currentBlock } = useBlockTracker(provider ?? null);
+
     // Pool config only (fees, grace period, token addresses)
     const { poolInfo, loading: poolLoading, error: poolError, refetch: poolRefetch } = usePool(
         walletAddress && POOL_ADDRESS ? POOL_ADDRESS : null
@@ -41,6 +45,20 @@ export function PortfolioPage() {
     const loading = poolLoading || optLoading;
     const error   = poolError ?? optError;
     const refetch = useCallback(() => { poolRefetch(); optRefetch(); }, [poolRefetch, optRefetch]);
+
+    // Auto-refetch when a TX for this pool confirms
+    const { transactions } = useTransactionContext();
+    const confirmedCountRef = useRef(0);
+    useEffect(() => {
+        if (!POOL_ADDRESS) return;
+        const confirmed = transactions.filter(
+            (tx) => tx.poolAddress === POOL_ADDRESS && tx.status === 'confirmed',
+        ).length;
+        if (confirmed > confirmedCountRef.current) {
+            refetch();
+        }
+        confirmedCountRef.current = confirmed;
+    }, [transactions, refetch]);
 
     // Token balances (only when wallet connected)
     const { info: motoInfo, loading: motoLoading } = useTokenInfo({
@@ -195,6 +213,7 @@ export function PortfolioPage() {
                             <OptionsTable
                                 options={writtenOptions}
                                 walletHex={walletHex}
+                                currentBlock={currentBlock ?? undefined}
                                 gracePeriodBlocks={poolInfo?.gracePeriodBlocks}
                                 showFilter={false}
                                 onBuy={() => {}}
@@ -230,6 +249,7 @@ export function PortfolioPage() {
                             <OptionsTable
                                 options={purchasedOptions}
                                 walletHex={walletHex}
+                                currentBlock={currentBlock ?? undefined}
                                 gracePeriodBlocks={poolInfo?.gracePeriodBlocks}
                                 showFilter={false}
                                 onBuy={() => {}}

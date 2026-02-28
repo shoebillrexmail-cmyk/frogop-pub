@@ -14,6 +14,7 @@ import type { OptionData, PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount } from '../config/index.ts';
+import { useTransactionContext } from '../contexts/TransactionContext.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface CancelModalProps {
@@ -49,6 +50,7 @@ export function CancelModal({
     const [txStatus, setTxStatus] = useState<'idle' | 'cancelling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
+    const { addTransaction } = useTransactionContext();
 
     // Fetch current block to determine if expired (0% fee)
     useEffect(() => {
@@ -90,6 +92,11 @@ export function CancelModal({
                 network,
             });
             setTxId(receipt.transactionId);
+            addTransaction({
+                txId: receipt.transactionId, type: 'cancelOption', status: 'broadcast',
+                poolAddress, broadcastBlock: null,
+                label: `Cancel Option #${option.id}`, flowId: null, flowStep: null, meta: {},
+            });
             setTxStatus('done');
         } catch (err) {
             setTxError(err instanceof Error ? err.message : 'Cancel failed');
