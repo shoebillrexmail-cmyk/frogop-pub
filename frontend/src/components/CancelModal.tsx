@@ -70,7 +70,7 @@ export function CancelModal({
                 provider,
                 network,
                 address,
-            ) as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+            ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
             const call = await poolContract['cancelOption'](option.id);
             const receipt = await call.sendTransaction({

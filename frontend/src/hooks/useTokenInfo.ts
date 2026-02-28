@@ -5,7 +5,6 @@
  */
 import { useState, useEffect } from 'react';
 import type { AbstractRpcProvider } from 'opnet';
-import { BinaryWriter } from '@btc-vision/transaction';
 import type { Address } from '@btc-vision/transaction';
 import { TOKEN_VIEW_SELECTORS } from '../services/selectors.ts';
 

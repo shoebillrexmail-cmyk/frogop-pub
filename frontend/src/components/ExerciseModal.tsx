@@ -96,7 +96,7 @@ export function ExerciseModal({
                 provider,
                 network,
                 address,
-            ) as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+            ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
             const call = await tokenContract['increaseAllowance'](poolHex, pillCost);
             const receipt = await call.sendTransaction({
@@ -126,7 +126,7 @@ export function ExerciseModal({
                 provider,
                 network,
                 address,
-            ) as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+            ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
             const call = await poolContract['exercise'](option.id);
             const receipt = await call.sendTransaction({
