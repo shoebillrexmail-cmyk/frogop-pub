@@ -12,9 +12,8 @@ routes = [
 ]
 
 [triggers]
-# Testnet blocks ~10 min — poll every minute to stay fresh
-# Free plan minimum is */5; paid plan allows * * * * * (every minute)
-crons = ["* * * * *"]
+# Testnet blocks ~10 min — poll every 5 min (free tier minimum)
+crons = ["*/5 * * * *"]
 
 # ---------------------------------------------------------------------------
 # D1 — managed SQLite
