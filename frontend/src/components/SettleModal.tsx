@@ -9,6 +9,7 @@ import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import type { Address } from '@btc-vision/transaction';
 import type { OptionData } from '../services/types.ts';
+import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount } from '../config/index.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
@@ -43,6 +44,12 @@ export function SettleModal({
     const [txStatus, setTxStatus] = useState<'idle' | 'settling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
+
+    const isCall = option.optionType === OptionType.CALL;
+    const collateral = isCall
+        ? option.underlyingAmount
+        : option.strikePrice * option.underlyingAmount;
+    const collateralToken = isCall ? 'MOTO' : 'PILL';
 
     const busy = txStatus === 'settling';
 
@@ -108,7 +115,7 @@ export function SettleModal({
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Collateral to recover</span>
                             <span className="text-terminal-text-primary font-semibold">
-                                {fmt(option.underlyingAmount)} MOTO
+                                {fmt(collateral)} {collateralToken}
                             </span>
                         </div>
                         <div className="flex justify-between">

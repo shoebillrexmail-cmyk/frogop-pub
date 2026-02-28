@@ -1,7 +1,9 @@
 /**
  * CancelModal — lets a writer cancel an OPEN option and recover collateral.
  *
- * Cancel fee = cancelFeeBps % of underlyingAmount MOTO.
+ * CALL collateral = underlyingAmount MOTO.
+ * PUT  collateral = strikePrice × underlyingAmount PILL.
+ * Cancel fee = cancelFeeBps % of collateral (ceiling division to match contract).
  * If the option has expired (expiryBlock <= currentBlock), the fee drops to 0%.
  */
 import { useState, useEffect } from 'react';
@@ -9,6 +11,7 @@ import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import type { Address } from '@btc-vision/transaction';
 import type { OptionData, PoolInfo } from '../services/types.ts';
+import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount } from '../config/index.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
@@ -52,10 +55,16 @@ export function CancelModal({
         provider.getBlockNumber().then(setCurrentBlock).catch(() => setCurrentBlock(null));
     }, [provider]);
 
+    const isCall = option.optionType === OptionType.CALL;
+    const collateral = isCall
+        ? option.underlyingAmount
+        : option.strikePrice * option.underlyingAmount;
+    const collateralToken = isCall ? 'MOTO' : 'PILL';
+
     const isExpired = currentBlock !== null && currentBlock >= option.expiryBlock;
     const feeBps = isExpired ? 0n : poolInfo.cancelFeeBps;
-    const fee = (option.underlyingAmount * feeBps) / 10000n;
-    const returned = option.underlyingAmount - fee;
+    const fee = feeBps > 0n ? (collateral * feeBps + 9999n) / 10000n : 0n;
+    const returned = collateral - fee;
 
     const busy = txStatus === 'cancelling';
 
@@ -120,20 +129,20 @@ export function CancelModal({
                     <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 text-xs font-mono space-y-1.5">
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Collateral locked</span>
-                            <span className="text-terminal-text-secondary">{fmt(option.underlyingAmount)} MOTO</span>
+                            <span className="text-terminal-text-secondary">{fmt(collateral)} {collateralToken}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">
                                 Cancel fee ({isExpired ? '0%' : `${Number(poolInfo.cancelFeeBps) / 100}%`})
                             </span>
                             <span className={isExpired ? 'text-green-400' : 'text-terminal-text-secondary'}>
-                                {fmt(fee)} MOTO{isExpired ? ' (waived)' : ''}
+                                {fmt(fee)} {collateralToken}{isExpired ? ' (waived)' : ''}
                             </span>
                         </div>
                         <hr className="border-terminal-border-subtle" />
                         <div className="flex justify-between font-semibold">
                             <span className="text-terminal-text-muted">You receive</span>
-                            <span className="text-terminal-text-primary">{fmt(returned)} MOTO</span>
+                            <span className="text-terminal-text-primary">{fmt(returned)} {collateralToken}</span>
                         </div>
                     </div>
 

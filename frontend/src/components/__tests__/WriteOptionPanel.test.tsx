@@ -66,6 +66,7 @@ const DEFAULT_PROPS = {
     address: makeAddress(WALLET_HEX) as ReturnType<typeof import('@btc-vision/transaction').Address['fromString']>,
     provider: {
         getPublicKeyInfo: vi.fn().mockResolvedValue({ toString: () => POOL_ADDRESS }),
+        getBlockNumber: vi.fn().mockResolvedValue(5000n),
         call: vi.fn(),
     } as unknown as import('opnet').AbstractRpcProvider,
     network: {} as import('@btc-vision/walletconnect').WalletConnectNetwork,

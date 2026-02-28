@@ -63,42 +63,51 @@ export function ExerciseModal({
     }, [poolAddress, provider]);
 
     const isCall = option.optionType === OptionType.CALL;
+    const strikeValue = option.strikePrice * option.underlyingAmount;
 
-    // For CALL: PILL cost = strikePrice * underlyingAmount (raw strike × underlying wei = PILL wei)
-    // For PUT: buyer pays underlyingAmount MOTO, receives strikePrice * underlyingAmount PILL
-    // Exercise fee (MOTO) = underlyingAmount * exerciseFeeBps / 10000
-    const exerciseFee = (option.underlyingAmount * poolInfo.exerciseFeeBps) / 10000n;
-    const pillCost = isCall ? option.strikePrice * option.underlyingAmount : 0n;
-    const motoPayout = isCall ? option.underlyingAmount - exerciseFee : option.underlyingAmount;
+    // CALL: buyer pays strikeValue PILL, receives underlyingAmount MOTO (fee on MOTO)
+    // PUT:  buyer pays underlyingAmount MOTO, receives strikeValue PILL (fee on PILL)
+    const feeBase = isCall ? option.underlyingAmount : strikeValue;
+    const exerciseFee = poolInfo.exerciseFeeBps > 0n
+        ? (feeBase * poolInfo.exerciseFeeBps + 9999n) / 10000n
+        : 0n;
 
-    // For CALL, need PILL allowance = pillCost
+    // What the buyer pays to the writer
+    const payAmount = isCall ? strikeValue : option.underlyingAmount;
+    const payToken = isCall ? 'PILL' : 'MOTO';
+    // What the buyer receives (minus fee)
+    const receiveAmount = feeBase - exerciseFee;
+    const receiveToken = isCall ? 'MOTO' : 'PILL';
+
+    // Approval: CALL needs PILL allowance for strikeValue; PUT needs MOTO allowance for underlyingAmount
+    const approvalTokenAddress = isCall ? poolInfo.premiumToken : poolInfo.underlying;
     const { info: tokenInfo, loading: tokenLoading, refetch: refetchToken } = useTokenInfo({
-        tokenAddress: isCall ? poolInfo.premiumToken : null,
+        tokenAddress: approvalTokenAddress,
         spenderHex: poolHex,
         walletAddress: address,
         provider,
     });
 
-    const pillBalance = tokenInfo?.balance ?? null;
+    const tokenBalance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
-    const hasBalance = !isCall || (pillBalance !== null && pillBalance >= pillCost);
-    const needsApproval = isCall && allowance !== null && allowance < pillCost;
+    const hasBalance = tokenBalance !== null && tokenBalance >= payAmount;
+    const needsApproval = allowance !== null && allowance < payAmount;
     const busy = txStatus === 'approving' || txStatus === 'exercising';
 
     async function handleApprove() {
-        if (!address || !poolHex || !isCall) return;
+        if (!address || !poolHex) return;
         setTxError(null);
         setTxStatus('approving');
         try {
             const tokenContract = getContract(
-                poolInfo.premiumToken,
+                approvalTokenAddress,
                 TOKEN_APPROVE_ABI,
                 provider,
                 network,
                 address,
             ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
-            const call = await tokenContract['increaseAllowance'](poolHex, pillCost);
+            const call = await tokenContract['increaseAllowance'](poolHex, payAmount);
             const receipt = await call.sendTransaction({
                 signer: null,
                 mldsaSigner: null,
@@ -183,66 +192,46 @@ export function ExerciseModal({
 
                     {/* Cost / payout breakdown */}
                     <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 text-xs font-mono space-y-1.5">
-                        {isCall && (
-                            <>
-                                <div className="flex justify-between">
-                                    <span className="text-terminal-text-muted">PILL you pay</span>
-                                    <span className="text-terminal-text-secondary">{fmt(pillCost)} PILL</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-terminal-text-muted">
-                                        Exercise fee ({Number(poolInfo.exerciseFeeBps) / 100}%)
-                                    </span>
-                                    <span className="text-terminal-text-secondary">
-                                        {fmt(exerciseFee)} MOTO
-                                    </span>
-                                </div>
-                                <hr className="border-terminal-border-subtle" />
-                                <div className="flex justify-between font-semibold">
-                                    <span className="text-terminal-text-muted">MOTO you receive</span>
-                                    <span className="text-terminal-text-primary">{fmt(motoPayout)} MOTO</span>
-                                </div>
-                                {pillBalance !== null && (
-                                    <div className="flex justify-between mt-1">
-                                        <span className="text-terminal-text-muted">Your PILL balance</span>
-                                        <span className={hasBalance ? 'text-green-400' : 'text-rose-400'}>
-                                            {tokenLoading ? '…' : `${fmt(pillBalance)} PILL`}
-                                            {hasBalance ? ' ✓' : ' ✗'}
-                                        </span>
-                                    </div>
-                                )}
-                                {allowance !== null && (
-                                    <div className="flex justify-between">
-                                        <span className="text-terminal-text-muted">Allowance</span>
-                                        <span className={needsApproval ? 'text-yellow-400' : 'text-terminal-text-secondary'}>
-                                            {fmt(allowance)} PILL{needsApproval ? ' ← req' : ''}
-                                        </span>
-                                    </div>
-                                )}
-                            </>
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">{payToken} you pay</span>
+                            <span className="text-terminal-text-secondary">{fmt(payAmount)} {payToken}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">
+                                Exercise fee ({Number(poolInfo.exerciseFeeBps) / 100}%)
+                            </span>
+                            <span className="text-terminal-text-secondary">
+                                {fmt(exerciseFee)} {receiveToken}
+                            </span>
+                        </div>
+                        <hr className="border-terminal-border-subtle" />
+                        <div className="flex justify-between font-semibold">
+                            <span className="text-terminal-text-muted">{receiveToken} you receive</span>
+                            <span className="text-terminal-text-primary">{fmt(receiveAmount)} {receiveToken}</span>
+                        </div>
+                        {tokenBalance !== null && (
+                            <div className="flex justify-between mt-1">
+                                <span className="text-terminal-text-muted">Your {payToken} balance</span>
+                                <span className={hasBalance ? 'text-green-400' : 'text-rose-400'}>
+                                    {tokenLoading ? '…' : `${fmt(tokenBalance)} ${payToken}`}
+                                    {hasBalance ? ' ✓' : ' ✗'}
+                                </span>
+                            </div>
                         )}
-                        {!isCall && (
-                            <>
-                                <div className="flex justify-between">
-                                    <span className="text-terminal-text-muted">MOTO you receive</span>
-                                    <span className="text-terminal-text-primary">{fmt(motoPayout)} MOTO</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-terminal-text-muted">
-                                        Exercise fee ({Number(poolInfo.exerciseFeeBps) / 100}%)
-                                    </span>
-                                    <span className="text-terminal-text-secondary">
-                                        {fmt(exerciseFee)} MOTO
-                                    </span>
-                                </div>
-                            </>
+                        {allowance !== null && (
+                            <div className="flex justify-between">
+                                <span className="text-terminal-text-muted">Allowance</span>
+                                <span className={needsApproval ? 'text-yellow-400' : 'text-terminal-text-secondary'}>
+                                    {fmt(allowance)} {payToken}{needsApproval ? ' ← req' : ''}
+                                </span>
+                            </div>
                         )}
                     </div>
 
                     {/* Insufficient balance */}
-                    {isCall && !tokenLoading && pillBalance !== null && !hasBalance && (
+                    {!tokenLoading && tokenBalance !== null && !hasBalance && (
                         <p className="text-rose-400 text-xs font-mono" data-testid="balance-error">
-                            Insufficient PILL balance.
+                            Insufficient {payToken} balance.
                         </p>
                     )}
 
@@ -281,12 +270,12 @@ export function ExerciseModal({
                                     className="w-full btn-primary py-2.5 text-sm rounded disabled:opacity-50"
                                     data-testid="btn-approve"
                                 >
-                                    {txStatus === 'approving' ? 'Approving…' : 'Approve PILL'}
+                                    {txStatus === 'approving' ? 'Approving…' : `Approve ${payToken}`}
                                 </button>
                             ) : (
                                 <button
                                     onClick={handleExercise}
-                                    disabled={busy || (isCall && (tokenLoading || !hasBalance))}
+                                    disabled={busy || tokenLoading || !hasBalance}
                                     className="w-full btn-primary py-2.5 text-sm rounded disabled:opacity-50"
                                     data-testid="btn-exercise"
                                 >

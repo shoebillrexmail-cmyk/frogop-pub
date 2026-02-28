@@ -30,9 +30,10 @@ interface BuyOptionModalProps {
 
 const MAX_SAT = 10_000_000n;
 
-/** Total cost = premium + (premium * buyFeeBps / 10000) */
+/** Total cost = premium + ceil(premium * buyFeeBps / 10000) to match contract */
 function calcTotalCost(premium: bigint, buyFeeBps: bigint): bigint {
-    return premium + (premium * buyFeeBps) / 10000n;
+    const fee = buyFeeBps > 0n ? (premium * buyFeeBps + 9999n) / 10000n : 0n;
+    return premium + fee;
 }
 
 function fmt(v: bigint) {
