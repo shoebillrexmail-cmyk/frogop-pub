@@ -47,8 +47,9 @@ const mockEnv: Env = {
     POOL_ADDRESSES:   '',
     FACTORY_ADDRESS:  '',
     MAX_BLOCKS_PER_RUN: '50',
-    NATIVESWAP_ADDRESSES: '',
-    NATIVESWAP_LABELS:    'MOTO,PILL',
+    NATIVESWAP_CONTRACT:       '',
+    NATIVESWAP_TOKEN_ADDRESSES: '',
+    NATIVESWAP_LABELS:         'MOTO,PILL',
 };
 
 const POOL_ADDR = 'opt1pool000';

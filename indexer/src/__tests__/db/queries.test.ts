@@ -292,7 +292,7 @@ describe('Price snapshots', () => {
         })]);
         const rows = db.queryAll('SELECT * FROM price_snapshots WHERE token = ? AND block_number = ?', 'MOTO', 1000);
         expect(rows).toHaveLength(1);
-        expect((rows[0] as PriceSnapshotRow).price).toBe('200');
+        expect((rows[0] as unknown as PriceSnapshotRow).price).toBe('200');
     });
 
     it('getLatestPrice returns most recent snapshot', async () => {
@@ -391,8 +391,8 @@ describe('Price candles', () => {
         })]);
         const rows = db.queryAll('SELECT * FROM price_candles WHERE token = ? AND interval = ? AND open_time = ?', 'MOTO', '1h', '2026-02-28T12:00:00Z');
         expect(rows).toHaveLength(1);
-        expect((rows[0] as PriceCandleRow).high).toBe('120');
-        expect((rows[0] as PriceCandleRow).trade_count).toBe(5);
+        expect((rows[0] as unknown as PriceCandleRow).high).toBe('120');
+        expect((rows[0] as unknown as PriceCandleRow).trade_count).toBe(5);
     });
 
     it('getCandles returns candles ordered by open_time ASC', async () => {
@@ -435,7 +435,7 @@ describe('Pruning', () => {
         await db.batch([stmtPruneOldSnapshots(d1(), '2026-01-01T00:00:00Z')]);
         const rows = db.queryAll('SELECT * FROM price_snapshots');
         expect(rows).toHaveLength(1);
-        expect((rows[0] as PriceSnapshotRow).block_number).toBe(200);
+        expect((rows[0] as unknown as PriceSnapshotRow).block_number).toBe(200);
     });
 
     it('stmtPruneOldSwapEvents deletes swaps before cutoff block', async () => {
@@ -446,6 +446,6 @@ describe('Pruning', () => {
         await db.batch([stmtPruneOldSwapEvents(d1(), 100)]);
         const rows = db.queryAll('SELECT * FROM swap_events');
         expect(rows).toHaveLength(1);
-        expect((rows[0] as SwapEventRow).block_number).toBe(200);
+        expect((rows[0] as unknown as SwapEventRow).block_number).toBe(200);
     });
 });
