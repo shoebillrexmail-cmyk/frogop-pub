@@ -155,13 +155,16 @@ export function WriteOptionPanel({
 
         const strike = parseBigIntTokens(strikeStr)!;
         const premium = parseBigIntTokens(premiumStr)!;
-        const expiry = BigInt(parseInt(expiryStr, 10));
+        const duration = BigInt(parseInt(expiryStr, 10));
 
         setValidationError(null);
         setTxError(null);
         setTxStatus('writing');
 
         try {
+            // Contract expects absolute block number, not relative duration
+            const currentBlock = await provider.getBlockNumber();
+            const expiry = BigInt(currentBlock) + duration;
             const poolContract = getContract(
                 poolAddress,
                 POOL_WRITE_ABI,
@@ -173,9 +176,9 @@ export function WriteOptionPanel({
             const callResult = await poolContract['writeOption'](
                 optionType,
                 strike,
+                expiry,
                 amount!,
                 premium,
-                expiry,
             );
             const receipt = await callResult.sendTransaction({
                 signer: null,

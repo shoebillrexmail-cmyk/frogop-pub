@@ -16,9 +16,9 @@ export const POOL_WRITE_ABI: BitcoinInterfaceAbi = [
         inputs: [
             { name: 'optionType', type: ABIDataTypes.UINT8 },
             { name: 'strikePrice', type: ABIDataTypes.UINT256 },
+            { name: 'expiryBlock', type: ABIDataTypes.UINT64 },
             { name: 'underlyingAmount', type: ABIDataTypes.UINT256 },
             { name: 'premium', type: ABIDataTypes.UINT256 },
-            { name: 'expiryBlock', type: ABIDataTypes.UINT256 },
         ],
         outputs: [{ name: 'optionId', type: ABIDataTypes.UINT256 }],
     },
