@@ -5,7 +5,7 @@
  * current block number via React context. Pages call useWsBlock() to get
  * the latest block without needing to prop-drill.
  */
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import {
     WebSocketRpcProvider,
     ConnectionState,
@@ -49,12 +49,13 @@ export function useWebSocketProvider(): UseWebSocketProviderResult {
     const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.DISCONNECTED);
     const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
     const [latestBlockHash, setLatestBlockHash] = useState<string | null>(null);
-    const providerRef = useRef<WebSocketRpcProvider | null>(null);
 
-    useEffect(() => {
-        if (!wsUrl) return;
-
-        const provider = new WebSocketRpcProvider({
+    // Create provider once via lazy state initializer (avoids synchronous
+    // setState inside useEffect, which the react-hooks/set-state-in-effect
+    // rule forbids).
+    const [wsProvider] = useState<WebSocketRpcProvider | null>(() => {
+        if (!wsUrl) return null;
+        return new WebSocketRpcProvider({
             url: wsUrl,
             network: currentNetwork as never,
             websocketConfig: {
@@ -65,8 +66,12 @@ export function useWebSocketProvider(): UseWebSocketProviderResult {
                 pingInterval: 30000,
             },
         });
+    });
 
-        providerRef.current = provider;
+    useEffect(() => {
+        if (!wsProvider) return;
+        // Local alias so TS narrows to non-null across callbacks
+        const provider = wsProvider;
 
         function onConnected() {
             setConnectionState(ConnectionState.READY);
@@ -104,14 +109,13 @@ export function useWebSocketProvider(): UseWebSocketProviderResult {
             provider.off(WebSocketClientEvent.DISCONNECTED, onDisconnected);
             provider.off(WebSocketClientEvent.ERROR, onError);
             provider.disconnect();
-            providerRef.current = null;
         };
-    }, []); // single instance for app lifetime
+    }, [wsProvider]); // single instance for app lifetime
 
     const connected = connectionState === ConnectionState.READY;
 
     return {
-        wsProvider: providerRef.current,
+        wsProvider,
         connectionState,
         connected,
         currentBlock,

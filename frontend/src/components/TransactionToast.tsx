@@ -5,7 +5,8 @@
  * Auto-dismisses confirmed notifications after 10s.
  */
 import { useState, useEffect, useCallback } from 'react';
-import { useTransactionContext, type TrackedTransaction, type TxStatus } from '../contexts/TransactionContext.tsx';
+import { useTransactionContext } from '../hooks/useTransactionContext.ts';
+import type { TrackedTransaction, TxStatus } from '../contexts/TransactionContext.tsx';
 
 function statusIcon(status: TxStatus): string {
     switch (status) {

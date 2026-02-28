@@ -3,31 +3,18 @@
  *
  * Provides: transactions list, pendingCount, add/update/find helpers.
  * Trims to 20 entries; warns on beforeunload when TXs pending.
+ *
+ * Types + context value live in transactionDefs.ts so this file only
+ * exports the TransactionProvider component (React Fast Refresh).
  */
-import { createContext, useContext, useReducer, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import { useReducer, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useWalletConnect } from '@btc-vision/walletconnect';
+import { TransactionContext } from './transactionDefs.ts';
+import type { TrackedTransaction, TransactionContextValue } from './transactionDefs.ts';
 
 // ---------------------------------------------------------------------------
-// Types
+// Internal types
 // ---------------------------------------------------------------------------
-
-export type TxType = 'approve' | 'writeOption' | 'buyOption' | 'cancelOption' | 'exercise' | 'settle';
-export type TxStatus = 'broadcast' | 'pending' | 'confirmed' | 'failed';
-
-export interface TrackedTransaction {
-    txId: string;
-    type: TxType;
-    status: TxStatus;
-    poolAddress: string;
-    createdAt: string;
-    confirmedAt: string | null;
-    broadcastBlock: number | null;
-    confirmedBlock: number | null;
-    label: string;
-    flowId: string | null;
-    flowStep: number | null;
-    meta: Record<string, string>;
-}
 
 interface TransactionState {
     transactions: TrackedTransaction[];
@@ -64,23 +51,6 @@ function reducer(state: TransactionState, action: TransactionAction): Transactio
             return state;
     }
 }
-
-// ---------------------------------------------------------------------------
-// Context
-// ---------------------------------------------------------------------------
-
-interface TransactionContextValue {
-    transactions: TrackedTransaction[];
-    pendingCount: number;
-    recentTransactions: TrackedTransaction[];
-    addTransaction: (tx: Omit<TrackedTransaction, 'createdAt' | 'confirmedAt' | 'confirmedBlock'>) => void;
-    updateTransaction: (txId: string, updates: Partial<TrackedTransaction>) => void;
-    getFlowTransaction: (flowId: string, step: number) => TrackedTransaction | undefined;
-    findResumableApproval: (poolAddress: string, optionId?: string) => TrackedTransaction | undefined;
-    clearOld: () => void;
-}
-
-const TransactionContext = createContext<TransactionContextValue | null>(null);
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -204,8 +174,5 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     return <TransactionContext.Provider value={value}>{children}</TransactionContext.Provider>;
 }
 
-export function useTransactionContext(): TransactionContextValue {
-    const ctx = useContext(TransactionContext);
-    if (!ctx) throw new Error('useTransactionContext must be used within TransactionProvider');
-    return ctx;
-}
+// Re-export types for backward compatibility.
+export type { TxType, TxStatus, TrackedTransaction, TransactionContextValue } from './transactionDefs.ts';

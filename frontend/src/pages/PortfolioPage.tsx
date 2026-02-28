@@ -11,7 +11,7 @@ import { useUserOptions } from '../hooks/useUserOptions.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { useBlockTracker } from '../hooks/useBlockTracker.ts';
 import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
-import { useTransactionContext } from '../contexts/TransactionContext.tsx';
+import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { PortfolioSkeleton } from '../components/LoadingSkeletons.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
 import { BalancesCard } from '../components/BalancesCard.tsx';
