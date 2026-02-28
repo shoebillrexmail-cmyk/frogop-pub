@@ -23,6 +23,7 @@
     "test:integration:pool": "npx tsx tests/integration/05-pool-creation.ts",
     "test:integration:full": "npx tsx tests/integration/06-full-lifecycle.ts",
     "test:integration:query": "npx tsx tests/integration/07-query-methods.ts",
+    "deploy:motoswap-pool": "npx tsx tests/integration/deploy-motoswap-pool.ts",
     "lint": "eslint src/**/*.ts tests/**/*.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf build tests/dist",
