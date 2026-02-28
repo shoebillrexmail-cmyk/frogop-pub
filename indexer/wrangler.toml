@@ -43,3 +43,16 @@ NATIVESWAP_CONTRACT = "0xb056ba05448cf4a5468b3e1190b0928443981a93c3aff568467f101
 NATIVESWAP_TOKEN_ADDRESSES = "0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd 0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb"
 # Token labels matching NATIVESWAP_TOKEN_ADDRESSES order (comma-separated)
 NATIVESWAP_LABELS = "MOTO,PILL"
+
+# ---------------------------------------------------------------------------
+# Observability — logs, traces
+# ---------------------------------------------------------------------------
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
