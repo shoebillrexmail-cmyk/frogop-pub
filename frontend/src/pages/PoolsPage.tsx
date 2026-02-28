@@ -2,7 +2,7 @@
  * PoolsPage — on-chain pool view with factory discovery, options table,
  * write panel, and action modals.
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
@@ -10,7 +10,7 @@ import { usePool } from '../hooks/usePool.ts';
 import { useBlockTracker } from '../hooks/useBlockTracker.ts';
 import { usePriceRatio } from '../hooks/usePriceRatio.ts';
 import { usePriceCandles } from '../hooks/usePriceCandles.ts';
-import { useTransactionContext } from '../contexts/TransactionContext.tsx';
+import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { PoolInfoCard } from '../components/PoolInfoCard.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
 import { PriceChart } from '../components/PriceChart.tsx';
@@ -36,18 +36,16 @@ export function PoolsPage() {
         refetch: refetchPools,
     } = useDiscoverPools();
 
-    const [selectedPoolAddr, setSelectedPoolAddr] = useState<string | null>(null);
+    const [userSelectedPool, setUserSelectedPool] = useState<string | null>(null);
 
-    // Auto-select first pool when pools change
-    useEffect(() => {
-        if (pools.length > 0 && !selectedPoolAddr) {
-            setSelectedPoolAddr(pools[0].address);
+    // Derive effective selected pool: user choice if valid, else first pool
+    const selectedPoolAddr = useMemo(() => {
+        if (pools.length === 0) return null;
+        if (userSelectedPool && pools.some((p) => p.address === userSelectedPool)) {
+            return userSelectedPool;
         }
-        // If selected pool is no longer in the list, reset
-        if (selectedPoolAddr && pools.length > 0 && !pools.some((p) => p.address === selectedPoolAddr)) {
-            setSelectedPoolAddr(pools[0].address);
-        }
-    }, [pools, selectedPoolAddr]);
+        return pools[0].address;
+    }, [pools, userSelectedPool]);
 
     const { poolInfo, options, loading: poolLoading, error: poolError, refetch: refetchPool } =
         usePool(selectedPoolAddr);
@@ -154,7 +152,7 @@ export function PoolsPage() {
                         <button
                             key={p.address}
                             data-testid={`pool-selector-${p.address}`}
-                            onClick={() => setSelectedPoolAddr(p.address)}
+                            onClick={() => setUserSelectedPool(p.address)}
                             className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
                                 selectedPoolAddr === p.address
                                     ? 'bg-accent text-terminal-bg-primary'

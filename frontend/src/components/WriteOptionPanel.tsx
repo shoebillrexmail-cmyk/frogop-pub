@@ -60,7 +60,6 @@ export function WriteOptionPanel({
     poolAddress,
     poolInfo,
     walletAddress,
-    walletHex: _walletHex,
     address,
     provider,
     network,

@@ -1,9 +1,22 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { createContext } from 'react';
 
-// Global mock for TransactionContext — used by most modal/page components.
-// Individual tests can override with vi.mocked() if needed.
+// Pre-create the mock context so vi.mock can reference it (vi.mock is hoisted).
+const MockWsBlockContext = createContext<bigint | null>(null);
+
+// Global mock for transactionDefs — the context creation used by hooks/components.
+vi.mock('../contexts/transactionDefs.ts', () => ({
+    TransactionContext: createContext(null),
+}));
+
+// Global mock for TransactionProvider — the wrapper component in App.
 vi.mock('../contexts/TransactionContext.tsx', () => ({
+    TransactionProvider: ({ children }: { children: unknown }) => children,
+}));
+
+// Global mock for useTransactionContext — extracted hook.
+vi.mock('../hooks/useTransactionContext.ts', () => ({
     useTransactionContext: vi.fn(() => ({
         transactions: [],
         pendingCount: 0,
@@ -14,7 +27,6 @@ vi.mock('../contexts/TransactionContext.tsx', () => ({
         clearOld: vi.fn(),
         recentTransactions: [],
     })),
-    TransactionProvider: ({ children }: { children: unknown }) => children,
 }));
 
 // Global mock for useTransactionFlow — used by BuyOptionModal, ExerciseModal, WriteOptionPanel.
@@ -54,18 +66,14 @@ vi.mock('../components/PriceChart.tsx', () => ({
 }));
 
 // Global mock for useWebSocketProvider — used by Layout and pages.
-vi.mock('../hooks/useWebSocketProvider.ts', () => {
-    const { createContext, useContext } = require('react');
-    const ctx = createContext(null);
-    return {
-        useWebSocketProvider: vi.fn(() => ({
-            wsProvider: null,
-            connectionState: 0, // DISCONNECTED
-            connected: false,
-            currentBlock: null,
-            latestBlockHash: null,
-        })),
-        useWsBlock: vi.fn(() => null),
-        WsBlockContext: ctx,
-    };
-});
+vi.mock('../hooks/useWebSocketProvider.ts', () => ({
+    useWebSocketProvider: vi.fn(() => ({
+        wsProvider: null,
+        connectionState: 0, // DISCONNECTED
+        connected: false,
+        currentBlock: null,
+        latestBlockHash: null,
+    })),
+    useWsBlock: vi.fn(() => null),
+    WsBlockContext: MockWsBlockContext,
+}));

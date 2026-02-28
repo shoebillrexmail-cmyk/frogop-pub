@@ -4,8 +4,9 @@
  * On mount, checks for a resumable confirmed approval (step 1) that has no step 2 yet.
  * If found, reuses that flowId and sets approvalConfirmed = true.
  */
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useTransactionContext, type TxType } from '../contexts/TransactionContext.tsx';
+import { useState, useCallback, useMemo } from 'react';
+import { useTransactionContext } from './useTransactionContext.ts';
+import type { TxType } from '../contexts/transactionDefs.ts';
 
 export interface UseTransactionFlowResult {
     flowId: string;
@@ -28,15 +29,8 @@ export function useTransactionFlow(
         [findResumableApproval, poolAddress, optionId],
     );
 
-    const [activeFlowId, setActiveFlowId] = useState<string>(flowId);
-    const [approvalConfirmed, setApprovalConfirmed] = useState(false);
-
-    useEffect(() => {
-        if (resumable) {
-            setActiveFlowId(resumable.flowId!);
-            setApprovalConfirmed(true);
-        }
-    }, [resumable]);
+    const activeFlowId = resumable?.flowId ?? flowId;
+    const approvalConfirmed = !!resumable;
 
     const trackApproval = useCallback(
         (txId: string, label: string, meta?: Record<string, string>) => {

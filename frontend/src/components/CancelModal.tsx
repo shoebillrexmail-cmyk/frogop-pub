@@ -14,7 +14,7 @@ import type { OptionData, PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount } from '../config/index.ts';
-import { useTransactionContext } from '../contexts/TransactionContext.tsx';
+import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface CancelModalProps {

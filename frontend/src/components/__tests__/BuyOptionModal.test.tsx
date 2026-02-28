@@ -58,9 +58,6 @@ const OPEN_OPTION: OptionData = {
     status: OptionStatus.OPEN,
 };
 
-// totalCost = 5 + (5 * 100 / 10000) = 5.05 PILL = 5050000000000000000n
-const TOTAL_COST = OPEN_OPTION.premium + (OPEN_OPTION.premium * 100n) / 10000n;
-
 const makeAddress = (hex: string) => ({ toString: () => hex });
 const WALLET_HEX = '0xbeef000000000000000000000000000000000000000000000000000000000002';
 

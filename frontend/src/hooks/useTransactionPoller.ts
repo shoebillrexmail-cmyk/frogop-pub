@@ -9,7 +9,7 @@
  * - Confirmed TXs older than 24 hours are pruned from state.
  */
 import { useEffect, useRef } from 'react';
-import { useTransactionContext } from '../contexts/TransactionContext.tsx';
+import { useTransactionContext } from './useTransactionContext.ts';
 import type { AbstractRpcProvider } from 'opnet';
 
 const FALLBACK_POLL_MS = 15_000;

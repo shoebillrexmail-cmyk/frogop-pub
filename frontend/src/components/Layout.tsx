@@ -4,7 +4,7 @@ import { useWalletConnect } from '@btc-vision/walletconnect';
 import { formatAddress } from '../config';
 import { TransactionToast } from './TransactionToast';
 import { useTransactionPoller } from '../hooks/useTransactionPoller';
-import { useTransactionContext } from '../contexts/TransactionContext';
+import { useTransactionContext } from '../hooks/useTransactionContext';
 import { useWebSocketProvider, WsBlockContext } from '../hooks/useWebSocketProvider';
 
 export function Layout() {

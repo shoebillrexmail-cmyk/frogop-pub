@@ -34,12 +34,7 @@ export function useDiscoverPools(): UseDiscoverPoolsResult {
     }, []);
 
     useEffect(() => {
-        if (!provider) {
-            setPools([]);
-            setError(null);
-            setSource(null);
-            return;
-        }
+        if (!provider) return;
 
         let cancelled = false;
 
@@ -88,6 +83,11 @@ export function useDiscoverPools(): UseDiscoverPoolsResult {
             cancelled = true;
         };
     }, [provider, fetchCount]);
+
+    // When provider is absent, return empty defaults (derived, no setState needed)
+    if (!provider) {
+        return { pools: [], loading: false, error: null, source: null, refetch };
+    }
 
     return { pools, loading, error, source, refetch };
 }
