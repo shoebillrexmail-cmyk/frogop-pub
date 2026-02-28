@@ -10,6 +10,7 @@ import {
     getAllPools, getPool, getOptionsByPool,
     getOption, getOptionsByWriter, getOptionsByBuyer, getOptionsByUser,
     getLastIndexedBlock,
+    getCandles, getLatestPrice, getPriceHistory,
 } from '../db/queries.js';
 
 // ---------------------------------------------------------------------------
@@ -133,7 +134,56 @@ async function route(
         return json(await getOptionsByUser(env.DB, addr));
     }
 
+    // GET /prices/:token/candles?interval=1h|4h|1d|1w&from=ISO&to=ISO&limit=500
+    const candlesMatch = path.match(/^\/prices\/([^/]+)\/candles$/);
+    if (candlesMatch) {
+        const token = normalizeToken(candlesMatch[1] ?? '');
+        if (!token) return badRequest('Invalid token. Use MOTO, PILL, or MOTO_PILL');
+        const interval = params.get('interval') ?? '1d';
+        if (!['1h', '4h', '1d', '1w'].includes(interval)) {
+            return badRequest('Invalid interval. Use 1h, 4h, 1d, or 1w');
+        }
+        const limit = Math.min(1000, Math.max(1, parseInt(params.get('limit') ?? '500', 10)));
+        const candles = await getCandles(env.DB, token, interval, {
+            from: params.get('from') ?? undefined,
+            to:   params.get('to') ?? undefined,
+            limit,
+        });
+        return json(candles);
+    }
+
+    // GET /prices/:token/latest
+    const latestMatch = path.match(/^\/prices\/([^/]+)\/latest$/);
+    if (latestMatch) {
+        const token = normalizeToken(latestMatch[1] ?? '');
+        if (!token) return badRequest('Invalid token. Use MOTO, PILL, or MOTO_PILL');
+        const price = await getLatestPrice(env.DB, token);
+        return price ? json(price) : notFound('No price data');
+    }
+
+    // GET /prices/:token/history?from=ISO&to=ISO&limit=200
+    const historyMatch = path.match(/^\/prices\/([^/]+)\/history$/);
+    if (historyMatch) {
+        const token = normalizeToken(historyMatch[1] ?? '');
+        if (!token) return badRequest('Invalid token. Use MOTO, PILL, or MOTO_PILL');
+        const limit = Math.min(1000, Math.max(1, parseInt(params.get('limit') ?? '200', 10)));
+        const history = await getPriceHistory(env.DB, token, {
+            from: params.get('from') ?? undefined,
+            to:   params.get('to') ?? undefined,
+            limit,
+        });
+        return json(history);
+    }
+
     return notFound();
+}
+
+const VALID_TOKENS = new Set(['MOTO', 'PILL', 'MOTO_PILL']);
+
+function normalizeToken(raw: string): string | null {
+    const decoded = decodeURIComponent(raw);
+    const upper = decoded.toUpperCase().replace('/', '_');
+    return VALID_TOKENS.has(upper) ? upper : null;
 }
 
 async function handlePoolOptions(

@@ -8,12 +8,13 @@
  * written by AssemblyScript BytesWriter (big-endian, no padding).
  * Field order is derived from contract source (src/contracts/pool/contract.ts).
  */
-import type { TxEvent, OptionRow, FeeEventRow } from '../types/index.js';
+import type { TxEvent, OptionRow, FeeEventRow, SwapEventRow } from '../types/index.js';
 import { OptionStatus, FeeEventType } from '../types/index.js';
 import {
     stmtInsertOption,
     stmtUpdateOptionStatus,
     stmtInsertFeeEvent,
+    stmtInsertSwapEvent,
 } from '../db/queries.js';
 
 const EV_WRITTEN   = 'OptionWritten';
@@ -23,21 +24,42 @@ const EV_EXERCISED = 'OptionExercised';
 // settle() emits OptionExpiredEvent with type string 'OptionExpired', not 'OptionSettled'
 const EV_SETTLED   = 'OptionExpired';
 // There is no FeeCollected event — fee data is embedded inline in each action event
+const EV_SWAP_EXECUTED = 'SwapExecuted';
 
 // Mirror of GRACE_PERIOD_BLOCKS in src/contracts/pool/contract.ts
 const GRACE_PERIOD_BLOCKS = 144;
 
-/** Decode all events for a single block into an array of D1 statements to batch. */
+/**
+ * Decode all events for a single block into an array of D1 statements to batch.
+ * @param swapLabelMap - hex address → token label ("MOTO", "PILL") for NativeSwap contracts.
+ *   Events from these addresses are decoded as SwapExecuted. Optional for backwards compat.
+ */
 export function decodeBlock(
     db: D1Database,
     blockNumber: number,
     txs: Array<{ id: string; events: TxEvent[] }>,
     trackedPools: Set<string>,
+    swapLabelMap: Map<string, string> = new Map(),
 ): D1PreparedStatement[] {
     const stmts: D1PreparedStatement[] = [];
 
     for (const tx of txs) {
         for (const event of tx.events) {
+            // Check NativeSwap contracts (SwapExecuted events)
+            const tokenLabel = swapLabelMap.get(event.contractAddress);
+            if (tokenLabel && event.type === EV_SWAP_EXECUTED) {
+                try {
+                    const s = handleSwapExecuted(db, event, blockNumber, tx.id, tokenLabel);
+                    if (s) stmts.push(s);
+                } catch (err) {
+                    console.warn(
+                        `[decoder] Skipping malformed SwapExecuted block=${blockNumber} tx=${tx.id}:`,
+                        err,
+                    );
+                }
+                continue;
+            }
+
             if (!trackedPools.has(event.contractAddress)) continue;
             try {
                 const s = decodeEvent(db, event, blockNumber, tx.id);
@@ -226,6 +248,37 @@ function handleSettled(
     ]);
     if (!f) return [];
     return [stmtUpdateOptionStatus(db, event.contractAddress, Number(f['optionId']), OptionStatus.SETTLED, null, blockNumber, txId)];
+}
+
+// ---------------------------------------------------------------------------
+// NativeSwap event handler
+// ---------------------------------------------------------------------------
+
+function handleSwapExecuted(
+    db: D1Database,
+    event: TxEvent,
+    blockNumber: number,
+    txId: string,
+    tokenLabel: string,
+): D1PreparedStatement | null {
+    // SwapExecuted: [buyer ADDRESS, amountIn U64, amountOut U256, totalFees U256]
+    const f = parseEventData(event.data, [
+        { name: 'buyer',     type: 'address' },
+        { name: 'amountIn',  type: 'u64'     },
+        { name: 'amountOut', type: 'u256'    },
+        { name: 'totalFees', type: 'u256'    },
+    ]);
+    if (!f) return null;
+
+    return stmtInsertSwapEvent(db, {
+        token:       tokenLabel,
+        block_number: blockNumber,
+        tx_id:       txId,
+        buyer:       f['buyer'] ?? '',
+        sats_in:     f['amountIn'] ?? '0',
+        tokens_out:  f['amountOut'] ?? '0',
+        fees:        f['totalFees'] ?? '0',
+    });
 }
 
 // ---------------------------------------------------------------------------

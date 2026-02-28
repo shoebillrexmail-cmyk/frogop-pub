@@ -2,12 +2,19 @@ import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { formatAddress } from '../config';
+import { TransactionToast } from './TransactionToast';
+import { useTransactionPoller } from '../hooks/useTransactionPoller';
+import { useTransactionContext } from '../contexts/TransactionContext';
 
 export function Layout() {
   const location = useLocation();
-  const { walletAddress, connecting, openConnectModal, disconnect } = useWalletConnect();
+  const { walletAddress, connecting, openConnectModal, disconnect, provider } = useWalletConnect();
   const connected = !!walletAddress;
   const [menuOpen, setMenuOpen] = useState(false);
+  const { pendingCount } = useTransactionContext();
+
+  // Global TX receipt polling
+  useTransactionPoller(provider ?? null);
 
   const navLinks = [
     { path: '/', label: 'Home' },
@@ -46,6 +53,9 @@ export function Layout() {
             {/* Wallet button */}
             {connected && walletAddress ? (
               <div className="flex items-center gap-2">
+                {pendingCount > 0 && (
+                  <span className="w-2.5 h-2.5 rounded-full bg-orange-400 pulse-orange" title={`${pendingCount} pending TX`} />
+                )}
                 <span className="hidden sm:block text-sm text-terminal-text-muted font-mono">
                   {formatAddress(walletAddress)}
                 </span>
@@ -103,6 +113,7 @@ export function Layout() {
       <main className="flex-1">
         <Outlet />
       </main>
+      <TransactionToast />
 
       <footer className="bg-terminal-bg-elevated border-t border-terminal-border-subtle py-8">
         <div className="max-w-7xl mx-auto px-4">

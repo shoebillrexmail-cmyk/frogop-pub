@@ -17,6 +17,10 @@ export interface Env {
     FACTORY_ADDRESS: string;
     /** Max blocks to process per cron invocation */
     MAX_BLOCKS_PER_RUN: string;
+    /** Space-separated bech32 NativeSwap contract addresses (one per token pool) */
+    NATIVESWAP_ADDRESSES: string;
+    /** Comma-separated token labels matching NATIVESWAP_ADDRESSES order, e.g. "MOTO,PILL" */
+    NATIVESWAP_LABELS: string;
 }
 
 // ── Option domain enums ─────────────────────────────────────────────────────
@@ -104,3 +108,39 @@ export interface TxEvent {
 
 /** Decoded field map from a contract event's data bytes. */
 export type EventFields = Record<string, string | undefined>;
+
+// ── Price tracking row shapes ─────────────────────────────────────────────
+
+/** One row in the `price_snapshots` table. */
+export interface PriceSnapshotRow {
+    token:        string;
+    block_number: number;
+    timestamp:    string;
+    price:        string;
+}
+
+/** One row in the `swap_events` table. */
+export interface SwapEventRow {
+    id?:         number;  // auto-increment, omitted on insert
+    token:       string;
+    block_number: number;
+    tx_id:       string;
+    buyer:       string;
+    sats_in:     string;
+    tokens_out:  string;
+    fees:        string;
+}
+
+/** One row in the `price_candles` table. */
+export interface PriceCandleRow {
+    token:         string;
+    interval:      string;
+    open_time:     string;
+    open:          string;
+    high:          string;
+    low:           string;
+    close:         string;
+    volume_sats:   string;
+    volume_tokens: string;
+    trade_count:   number;
+}

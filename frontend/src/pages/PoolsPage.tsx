@@ -2,12 +2,17 @@
  * PoolsPage — on-chain pool view with factory discovery, options table,
  * write panel, and action modals.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
 import { usePool } from '../hooks/usePool.ts';
+import { useBlockTracker } from '../hooks/useBlockTracker.ts';
+import { usePriceRatio } from '../hooks/usePriceRatio.ts';
+import { usePriceCandles } from '../hooks/usePriceCandles.ts';
+import { useTransactionContext } from '../contexts/TransactionContext.tsx';
 import { PoolInfoCard } from '../components/PoolInfoCard.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
+import { PriceChart } from '../components/PriceChart.tsx';
 import { WriteOptionPanel } from '../components/WriteOptionPanel.tsx';
 import { BuyOptionModal } from '../components/BuyOptionModal.tsx';
 import { CancelModal } from '../components/CancelModal.tsx';
@@ -16,6 +21,8 @@ import { SettleModal } from '../components/SettleModal.tsx';
 import { CONTRACT_ADDRESSES, currentNetwork, formatAddress } from '../config/index.ts';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
 import type { OptionData } from '../services/types.ts';
+
+const NATIVESWAP_ADDRESS = import.meta.env.VITE_NATIVESWAP_ADDRESS || '';
 
 export function PoolsPage() {
     const { walletAddress, address, provider, network } = useWalletConnect();
@@ -42,6 +49,35 @@ export function PoolsPage() {
 
     const { poolInfo, options, loading: poolLoading, error: poolError, refetch: refetchPool } =
         usePool(selectedPoolAddr);
+
+    const { currentBlock } = useBlockTracker(provider ?? null);
+
+    const { motoPillRatio } = usePriceRatio(
+        NATIVESWAP_ADDRESS || null,
+        poolInfo?.underlying ?? null,
+        poolInfo?.premiumToken ?? null,
+        provider ?? null,
+        network ?? null,
+    );
+
+    // Price chart state
+    const [chartToken, setChartToken] = useState('MOTO_PILL');
+    const [chartInterval, setChartInterval] = useState('1d');
+    const { candles } = usePriceCandles(chartToken, chartInterval);
+
+    // Auto-refetch when a TX for this pool confirms
+    const { transactions } = useTransactionContext();
+    const confirmedCountRef = useRef(0);
+    useEffect(() => {
+        if (!selectedPoolAddr) return;
+        const confirmed = transactions.filter(
+            (tx) => tx.poolAddress === selectedPoolAddr && tx.status === 'confirmed',
+        ).length;
+        if (confirmed > confirmedCountRef.current) {
+            refetchPool();
+        }
+        confirmedCountRef.current = confirmed;
+    }, [transactions, selectedPoolAddr, refetchPool]);
 
     const [writeOpen, setWriteOpen] = useState(false);
     const [buyTarget, setBuyTarget] = useState<OptionData | null>(null);
@@ -135,12 +171,24 @@ export function PoolsPage() {
                     <PoolInfoCard
                         poolInfo={poolInfo}
                         poolAddress={selectedPoolAddr}
+                        motoPillRatio={motoPillRatio}
                         onWriteOption={() => setWriteOpen(true)}
                     />
+                    {candles.length > 0 && (
+                        <PriceChart
+                            candles={candles}
+                            token={chartToken}
+                            interval={chartInterval}
+                            onIntervalChange={setChartInterval}
+                            onTokenChange={setChartToken}
+                        />
+                    )}
                     <OptionsTable
                         options={options}
                         walletHex={walletHex}
+                        currentBlock={currentBlock ?? undefined}
                         gracePeriodBlocks={poolInfo.gracePeriodBlocks}
+                        motoPillRatio={motoPillRatio}
                         onBuy={handleBuy}
                         onCancel={handleCancel}
                         onExercise={handleExercise}
@@ -208,6 +256,7 @@ export function PoolsPage() {
                     address={address}
                     provider={provider}
                     network={network}
+                    motoPillRatio={motoPillRatio}
                     onClose={() => setExerciseTarget(null)}
                     onSuccess={() => {
                         setExerciseTarget(null);

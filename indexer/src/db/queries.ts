@@ -9,7 +9,7 @@
  *   - .run()      → D1Result (for writes)
  *   - db.batch([stmt1, stmt2]) → atomic transaction
  */
-import type { OptionRow, PoolRow, FeeEventRow } from '../types/index.js';
+import type { OptionRow, PoolRow, FeeEventRow, PriceSnapshotRow, SwapEventRow, PriceCandleRow } from '../types/index.js';
 
 // ---------------------------------------------------------------------------
 // Indexer state (cursor)
@@ -184,5 +184,174 @@ export async function getOptionsByUser(
         .prepare('SELECT * FROM options WHERE writer = ? OR buyer = ? ORDER BY pool_address, option_id')
         .bind(userAddress, userAddress)
         .all<OptionRow>();
+    return results;
+}
+
+// ---------------------------------------------------------------------------
+// Price snapshots — write statements
+// ---------------------------------------------------------------------------
+
+export function stmtInsertPriceSnapshot(
+    db: D1Database,
+    row: PriceSnapshotRow,
+): D1PreparedStatement {
+    return db
+        .prepare(`
+            INSERT OR REPLACE INTO price_snapshots (token, block_number, timestamp, price)
+            VALUES (?, ?, ?, ?)
+        `)
+        .bind(row.token, row.block_number, row.timestamp, row.price);
+}
+
+// ---------------------------------------------------------------------------
+// Swap events — write statements
+// ---------------------------------------------------------------------------
+
+export function stmtInsertSwapEvent(
+    db: D1Database,
+    row: Omit<SwapEventRow, 'id'>,
+): D1PreparedStatement {
+    return db
+        .prepare(`
+            INSERT INTO swap_events (token, block_number, tx_id, buyer, sats_in, tokens_out, fees)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `)
+        .bind(row.token, row.block_number, row.tx_id, row.buyer, row.sats_in, row.tokens_out, row.fees);
+}
+
+// ---------------------------------------------------------------------------
+// Price candles — write statements
+// ---------------------------------------------------------------------------
+
+export function stmtUpsertCandle(
+    db: D1Database,
+    row: PriceCandleRow,
+): D1PreparedStatement {
+    return db
+        .prepare(`
+            INSERT OR REPLACE INTO price_candles
+                (token, interval, open_time, open, high, low, close,
+                 volume_sats, volume_tokens, trade_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .bind(
+            row.token, row.interval, row.open_time,
+            row.open, row.high, row.low, row.close,
+            row.volume_sats, row.volume_tokens, row.trade_count,
+        );
+}
+
+// ---------------------------------------------------------------------------
+// Pruning — write statements
+// ---------------------------------------------------------------------------
+
+export function stmtPruneOldSnapshots(
+    db: D1Database,
+    cutoffIso: string,
+): D1PreparedStatement {
+    return db
+        .prepare('DELETE FROM price_snapshots WHERE timestamp < ?')
+        .bind(cutoffIso);
+}
+
+export function stmtPruneOldSwapEvents(
+    db: D1Database,
+    cutoffBlock: number,
+): D1PreparedStatement {
+    return db
+        .prepare('DELETE FROM swap_events WHERE block_number < ?')
+        .bind(cutoffBlock);
+}
+
+// ---------------------------------------------------------------------------
+// Price data — read queries
+// ---------------------------------------------------------------------------
+
+export async function getCandles(
+    db: D1Database,
+    token: string,
+    interval: string,
+    opts: { from?: string; to?: string; limit?: number } = {},
+): Promise<PriceCandleRow[]> {
+    const { limit = 500 } = opts;
+    let sql = 'SELECT * FROM price_candles WHERE token = ? AND interval = ?';
+    const params: (string | number)[] = [token, interval];
+
+    if (opts.from) {
+        sql += ' AND open_time >= ?';
+        params.push(opts.from);
+    }
+    if (opts.to) {
+        sql += ' AND open_time <= ?';
+        params.push(opts.to);
+    }
+    sql += ' ORDER BY open_time ASC LIMIT ?';
+    params.push(limit);
+
+    const { results } = await db.prepare(sql).bind(...params).all<PriceCandleRow>();
+    return results;
+}
+
+export async function getLatestPrice(
+    db: D1Database,
+    token: string,
+): Promise<PriceSnapshotRow | null> {
+    return db
+        .prepare('SELECT * FROM price_snapshots WHERE token = ? ORDER BY block_number DESC LIMIT 1')
+        .bind(token)
+        .first<PriceSnapshotRow>();
+}
+
+export async function getPriceHistory(
+    db: D1Database,
+    token: string,
+    opts: { from?: string; to?: string; limit?: number } = {},
+): Promise<PriceSnapshotRow[]> {
+    const { limit = 200 } = opts;
+    let sql = 'SELECT * FROM price_snapshots WHERE token = ?';
+    const params: (string | number)[] = [token];
+
+    if (opts.from) {
+        sql += ' AND timestamp >= ?';
+        params.push(opts.from);
+    }
+    if (opts.to) {
+        sql += ' AND timestamp <= ?';
+        params.push(opts.to);
+    }
+    sql += ' ORDER BY block_number ASC LIMIT ?';
+    params.push(limit);
+
+    const { results } = await db.prepare(sql).bind(...params).all<PriceSnapshotRow>();
+    return results;
+}
+
+// ---------------------------------------------------------------------------
+// Snapshots within a time range (for candle rollup)
+// ---------------------------------------------------------------------------
+
+export async function getSnapshotsInRange(
+    db: D1Database,
+    token: string,
+    fromIso: string,
+    toIso: string,
+): Promise<PriceSnapshotRow[]> {
+    const { results } = await db
+        .prepare('SELECT * FROM price_snapshots WHERE token = ? AND timestamp >= ? AND timestamp < ? ORDER BY block_number ASC')
+        .bind(token, fromIso, toIso)
+        .all<PriceSnapshotRow>();
+    return results;
+}
+
+export async function getSwapEventsInBlockRange(
+    db: D1Database,
+    token: string,
+    fromBlock: number,
+    toBlock: number,
+): Promise<SwapEventRow[]> {
+    const { results } = await db
+        .prepare('SELECT * FROM swap_events WHERE token = ? AND block_number >= ? AND block_number < ? ORDER BY block_number ASC')
+        .bind(token, fromBlock, toBlock)
+        .all<SwapEventRow>();
     return results;
 }

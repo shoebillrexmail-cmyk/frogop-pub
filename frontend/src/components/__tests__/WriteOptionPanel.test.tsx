@@ -100,7 +100,7 @@ describe('WriteOptionPanel', () => {
         expect(screen.getByTestId('input-amount')).toBeInTheDocument();
         expect(screen.getByTestId('input-strike')).toBeInTheDocument();
         expect(screen.getByTestId('input-premium')).toBeInTheDocument();
-        expect(screen.getByTestId('input-expiry')).toBeInTheDocument();
+        expect(screen.getByTestId('expiry-presets')).toBeInTheDocument();
     });
 
     it('has CALL/PUT type toggle', () => {
@@ -157,18 +157,13 @@ describe('WriteOptionPanel', () => {
         expect(screen.getByTestId('validation-error').textContent).toMatch(/strike/i);
     });
 
-    it('shows validation error when expiry is out of range', async () => {
+    it('renders day preset buttons for expiry', () => {
         render(<WriteOptionPanel {...DEFAULT_PROPS} />);
 
-        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
-        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
-        fireEvent.change(screen.getByTestId('input-expiry'), { target: { value: '999999' } });
-        fireEvent.click(screen.getByTestId('btn-write'));
-
-        await waitFor(() => {
-            expect(screen.getByTestId('validation-error')).toBeInTheDocument();
-        });
-        expect(screen.getByTestId('validation-error').textContent).toMatch(/expiry/i);
+        expect(screen.getByTestId('expiry-1d')).toBeInTheDocument();
+        expect(screen.getByTestId('expiry-7d')).toBeInTheDocument();
+        expect(screen.getByTestId('expiry-30d')).toBeInTheDocument();
+        expect(screen.getByTestId('expiry-90d')).toBeInTheDocument();
     });
 
     it('calls getContract and sendTransaction on Write submit', async () => {
@@ -200,7 +195,8 @@ describe('WriteOptionPanel', () => {
         fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '1' } });
         fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
         fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
-        fireEvent.change(screen.getByTestId('input-expiry'), { target: { value: '144' } });
+        // Select 1d preset (144 blocks)
+        fireEvent.click(screen.getByTestId('expiry-1d'));
         fireEvent.click(screen.getByTestId('btn-write'));
 
         await waitFor(() => {

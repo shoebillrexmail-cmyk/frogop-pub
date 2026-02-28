@@ -20,6 +20,13 @@
   - Exercise / cancel / settle flows
   - Real-time option status display
 
+### CI/CD
+
+- [ ] **Create Cloudflare Pages project for frontend**
+  - Run `wrangler pages project create frogop-frontend` once from CLI
+  - Set environment variables in Pages dashboard: `VITE_OPNET_NETWORK`, `VITE_OPNET_RPC_URL`, `VITE_POOL_ADDRESS`, `VITE_FACTORY_ADDRESS`, `VITE_INDEXER_URL`
+  - `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` secrets already exist in GitHub (used by indexer)
+
 ## In Progress
 
 ## Done
@@ -29,3 +36,6 @@
 - [x] ~~Use WebSockets in integration tests~~ — Not needed; polling is fine for test scripts (block time is the bottleneck, not poll interval). WebSockets only beneficial in frontend.
 - [x] All integration tests passing on testnet (13/13 lifecycle, 42+ total)
 - [x] Testnet contracts deployed (tokens, factory, pool template, pool)
+- [x] ~~Frontend CI/CD~~ — `frontend.yml`: lint → typecheck → test → build on PR; deploy to Cloudflare Pages on push to master
+- [x] ~~Contracts CI~~ — `contracts.yml`: lint → typecheck → WASM build → unit tests on PR; upload WASM artifacts on push to master
+- [x] ~~Indexer tests in CI~~ — Uncommented `npm test` step in `indexer.yml` (poller + decoder + router tests)

@@ -47,6 +47,20 @@ export function blocksToTime(blocks: bigint): string {
   return `${Math.round(days / 30)} months`;
 }
 
+export function blocksToCountdown(blocksLeft: bigint): string {
+    if (blocksLeft <= 0n) return 'Expired';
+    const totalHours = Number(blocksLeft) * 10 / 60; // ~10 min per block
+    const days = Math.floor(totalHours / 24);
+    const hours = Math.round(totalHours % 24);
+    if (days > 0) return `~${days}d ${hours}h`;
+    if (hours > 0) return `~${hours}h`;
+    return '<1h';
+}
+
+export function bpsToPct(bps: bigint): string {
+    return `${Number(bps) / 100}%`;
+}
+
 export function formatAddress(address: string): string {
   if (!address) return '';
   if (address.length <= 16) return address;

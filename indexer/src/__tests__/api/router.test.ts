@@ -16,6 +16,9 @@ vi.mock('../../db/queries.js', () => ({
     getOptionsByBuyer:  vi.fn(),
     getOptionsByUser:   vi.fn(),
     getLastIndexedBlock: vi.fn(),
+    getCandles:         vi.fn(),
+    getLatestPrice:     vi.fn(),
+    getPriceHistory:    vi.fn(),
 }));
 
 import { handleFetch } from '../../api/router.js';
@@ -31,6 +34,9 @@ const mockGetOptionsByWriter  = vi.mocked(queries.getOptionsByWriter);
 const mockGetOptionsByBuyer   = vi.mocked(queries.getOptionsByBuyer);
 const mockGetOptionsByUser    = vi.mocked(queries.getOptionsByUser);
 const mockGetLastIndexedBlock = vi.mocked(queries.getLastIndexedBlock);
+const mockGetCandles          = vi.mocked(queries.getCandles);
+const mockGetLatestPrice      = vi.mocked(queries.getLatestPrice);
+const mockGetPriceHistory     = vi.mocked(queries.getPriceHistory);
 
 // ---- Test fixtures --------------------------------------------------------
 const mockDb  = {} as D1Database;
@@ -41,6 +47,8 @@ const mockEnv: Env = {
     POOL_ADDRESSES:   '',
     FACTORY_ADDRESS:  '',
     MAX_BLOCKS_PER_RUN: '50',
+    NATIVESWAP_ADDRESSES: '',
+    NATIVESWAP_LABELS:    'MOTO,PILL',
 };
 
 const POOL_ADDR = 'opt1pool000';
@@ -269,5 +277,93 @@ describe('CORS', () => {
         mockGetLastIndexedBlock.mockResolvedValue(0);
         const res = await handleFetch(req('/health'), mockEnv);
         expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('GET /prices/:token/candles', () => {
+    it('returns candles for valid token and interval', async () => {
+        mockGetCandles.mockResolvedValue([{
+            token: 'MOTO', interval: '1d', open_time: '2026-02-28T00:00:00Z',
+            open: '100', high: '110', low: '90', close: '105',
+            volume_sats: '500', volume_tokens: '75', trade_count: 3,
+        }]);
+        const res = await handleFetch(req('/prices/MOTO/candles?interval=1d'), mockEnv);
+        expect(res.status).toBe(200);
+        const body = await res.json() as unknown[];
+        expect(body).toHaveLength(1);
+    });
+
+    it('normalizes token to uppercase', async () => {
+        mockGetCandles.mockResolvedValue([]);
+        await handleFetch(req('/prices/moto/candles?interval=1h'), mockEnv);
+        expect(mockGetCandles).toHaveBeenCalledWith(mockDb, 'MOTO', '1h', expect.anything());
+    });
+
+    it('accepts MOTO_PILL and MOTO/PILL tokens', async () => {
+        mockGetCandles.mockResolvedValue([]);
+        await handleFetch(req('/prices/MOTO_PILL/candles?interval=1d'), mockEnv);
+        expect(mockGetCandles).toHaveBeenCalledWith(mockDb, 'MOTO_PILL', '1d', expect.anything());
+        vi.clearAllMocks();
+        mockGetCandles.mockResolvedValue([]);
+        await handleFetch(req('/prices/MOTO%2FPILL/candles?interval=1d'), mockEnv);
+        expect(mockGetCandles).toHaveBeenCalledWith(mockDb, 'MOTO_PILL', '1d', expect.anything());
+    });
+
+    it('returns 400 for invalid token', async () => {
+        const res = await handleFetch(req('/prices/INVALID/candles?interval=1d'), mockEnv);
+        expect(res.status).toBe(400);
+    });
+
+    it('returns 400 for invalid interval', async () => {
+        const res = await handleFetch(req('/prices/MOTO/candles?interval=5m'), mockEnv);
+        expect(res.status).toBe(400);
+    });
+
+    it('defaults to 1d interval when not specified', async () => {
+        mockGetCandles.mockResolvedValue([]);
+        await handleFetch(req('/prices/MOTO/candles'), mockEnv);
+        expect(mockGetCandles).toHaveBeenCalledWith(mockDb, 'MOTO', '1d', expect.anything());
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('GET /prices/:token/latest', () => {
+    it('returns latest price when found', async () => {
+        mockGetLatestPrice.mockResolvedValue({
+            token: 'MOTO', block_number: 1000,
+            timestamp: '2026-02-28T12:00:00Z', price: '150000',
+        });
+        const res = await handleFetch(req('/prices/MOTO/latest'), mockEnv);
+        expect(res.status).toBe(200);
+    });
+
+    it('returns 404 when no price data', async () => {
+        mockGetLatestPrice.mockResolvedValue(null);
+        const res = await handleFetch(req('/prices/PILL/latest'), mockEnv);
+        expect(res.status).toBe(404);
+    });
+
+    it('returns 400 for invalid token', async () => {
+        const res = await handleFetch(req('/prices/INVALID/latest'), mockEnv);
+        expect(res.status).toBe(400);
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('GET /prices/:token/history', () => {
+    it('returns price history', async () => {
+        mockGetPriceHistory.mockResolvedValue([
+            { token: 'PILL', block_number: 100, timestamp: '2026-02-28T10:00:00Z', price: '100' },
+        ]);
+        const res = await handleFetch(req('/prices/PILL/history'), mockEnv);
+        expect(res.status).toBe(200);
+        const body = await res.json() as unknown[];
+        expect(body).toHaveLength(1);
+    });
+
+    it('returns 400 for invalid token', async () => {
+        const res = await handleFetch(req('/prices/INVALID/history'), mockEnv);
+        expect(res.status).toBe(400);
     });
 });

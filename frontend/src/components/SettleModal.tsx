@@ -12,6 +12,7 @@ import type { OptionData } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount } from '../config/index.ts';
+import { useTransactionContext } from '../contexts/TransactionContext.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface SettleModalProps {
@@ -44,6 +45,7 @@ export function SettleModal({
     const [txStatus, setTxStatus] = useState<'idle' | 'settling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
+    const { addTransaction } = useTransactionContext();
 
     const isCall = option.optionType === OptionType.CALL;
     const collateral = isCall
@@ -75,6 +77,11 @@ export function SettleModal({
                 network,
             });
             setTxId(receipt.transactionId);
+            addTransaction({
+                txId: receipt.transactionId, type: 'settle', status: 'broadcast',
+                poolAddress, broadcastBlock: null,
+                label: `Settle Option #${option.id}`, flowId: null, flowStep: null, meta: {},
+            });
             setTxStatus('done');
         } catch (err) {
             setTxError(err instanceof Error ? err.message : 'Settle failed');

@@ -36,3 +36,7 @@ POOL_ADDRESSES   = "opt1sqzd8x7u53eyw4k8y9pnsaup4j0tntxt7pyncp3t9"
 FACTORY_ADDRESS  = "opt1sqz4wm6z6gy2rrfsqxf0tuh6tkyn32eerkg57nrka"
 # Max blocks to process per cron invocation (prevents CPU timeout on catch-up)
 MAX_BLOCKS_PER_RUN = "50"
+# NativeSwap tracking (space-separated bech32 addresses for MOTO and PILL pools)
+NATIVESWAP_ADDRESSES = ""
+# Token labels matching NATIVESWAP_ADDRESSES order (comma-separated)
+NATIVESWAP_LABELS = "MOTO,PILL"

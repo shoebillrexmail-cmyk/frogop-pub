@@ -7,6 +7,7 @@ import { formatAddress } from '../config/index.ts';
 interface PoolInfoCardProps {
     poolInfo: PoolInfo;
     poolAddress: string;
+    motoPillRatio?: number | null;
     onWriteOption: () => void;
 }
 
@@ -14,7 +15,7 @@ function bpsToPct(bps: bigint): string {
     return `${Number(bps) / 100}%`;
 }
 
-export function PoolInfoCard({ poolInfo, poolAddress, onWriteOption }: PoolInfoCardProps) {
+export function PoolInfoCard({ poolInfo, poolAddress, motoPillRatio, onWriteOption }: PoolInfoCardProps) {
     return (
         <div className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
@@ -58,6 +59,12 @@ export function PoolInfoCard({ poolInfo, poolAddress, onWriteOption }: PoolInfoC
                     Grace period:{' '}
                     <span className="text-terminal-text-primary">
                         {poolInfo.gracePeriodBlocks.toString()} blocks (~24h)
+                    </span>
+                </span>
+                <span className="text-terminal-text-muted">
+                    MOTO/PILL:{' '}
+                    <span className="text-terminal-text-primary">
+                        {motoPillRatio != null ? `~${motoPillRatio.toFixed(4)}` : 'N/A'}
                     </span>
                 </span>
             </div>
