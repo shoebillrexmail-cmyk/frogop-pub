@@ -267,15 +267,15 @@ export function AboutPage() {
             <ul className="space-y-2 text-sm text-terminal-text-secondary">
               <li className="flex items-start gap-2">
                 <span className="text-accent mt-0.5 font-mono">›</span>
-                <span><strong>Earn yield</strong> — Write covered calls on tokens you already hold and collect premiums</span>
+                <span><strong>Collect premiums</strong> — Lock tokens you hold, set a price. When someone buys your option, you receive the premium directly</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-accent mt-0.5 font-mono">›</span>
-                <span><strong>Buy at your price</strong> — Write puts at your target entry price and get paid while waiting</span>
+                <span><strong>Keep tokens + premium</strong> — If the option expires unexercised, you get your full collateral back and keep the premium earned</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-accent mt-0.5 font-mono">›</span>
-                <span><strong>Set your own terms</strong> — You choose the strike, expiry, and premium</span>
+                <span><strong>Buy at your price</strong> — Write puts at your target entry and collect premium while waiting. If exercised, you acquire the tokens at the strike you chose</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-accent mt-0.5 font-mono">›</span>

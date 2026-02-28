@@ -151,16 +151,17 @@ export function LandingPage() {
           <div className="grid md:grid-cols-2 gap-6">
             <div className="terminal-card rounded-xl p-6">
               <h3 className="text-lg font-semibold text-terminal-text-primary mb-4">
-                Writers earn yield
+                Writers collect premiums
               </h3>
               <p className="text-terminal-text-secondary text-sm leading-relaxed mb-4">
-                Hold tokens and earn premiums by writing covered calls. Or write puts to buy tokens at your
-                target price while getting paid to wait. You set the terms — strike, expiry, and premium.
+                Lock tokens you already hold and set a price for them. When someone buys your option,
+                you receive the premium directly — that&apos;s your income. If the option expires
+                unexercised, you keep both the premium and your tokens.
               </p>
               <ul className="space-y-1.5 text-terminal-text-muted text-xs font-mono">
-                <li>Cancel anytime — 1% fee before expiry, free after</li>
-                <li>Premium goes to you immediately on purchase</li>
-                <li>100% collateral returned if option expires unsold</li>
+                <li>Premium paid to you the moment someone buys</li>
+                <li>Full collateral back if unexercised or unsold</li>
+                <li>Cancel before expiry for a 1% fee, or free after</li>
               </ul>
             </div>
             <div className="terminal-card rounded-xl p-6">
