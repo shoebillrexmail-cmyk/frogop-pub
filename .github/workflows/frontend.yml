@@ -72,9 +72,8 @@ jobs:
         env:
           VITE_OPNET_NETWORK: testnet
           VITE_OPNET_RPC_URL: https://testnet.opnet.org
-          VITE_POOL_ADDRESS: ${{ vars.VITE_POOL_ADDRESS }}
-          VITE_FACTORY_ADDRESS: ${{ vars.VITE_FACTORY_ADDRESS }}
-          VITE_INDEXER_URL: ${{ vars.VITE_INDEXER_URL }}
+          VITE_POOL_ADDRESS: opt1sqzd8x7u53eyw4k8y9pnsaup4j0tntxt7pyncp3t9
+          VITE_INDEXER_URL: https://api.frogop.net
 
       - name: Ensure Cloudflare Pages project exists
         run: npx wrangler pages project create frogop-frontend --production-branch=master || true
