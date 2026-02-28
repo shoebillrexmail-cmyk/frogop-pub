@@ -1,0 +1,64 @@
+name: Contracts CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "src/contracts/**"
+      - "tests/**"
+      - "asconfig.json"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/contracts.yml"
+  pull_request:
+    paths:
+      - "src/contracts/**"
+      - "tests/**"
+      - "asconfig.json"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/contracts.yml"
+
+jobs:
+  ci:
+    name: Lint / Type-check / Build / Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check tests
+        run: npm run typecheck
+
+      - name: Build WASM (factory + pool)
+        run: npm run build
+
+      - name: Build test runner
+        run: npm run build:tests
+
+      - name: Unit tests — OptionsFactory
+        run: npm run test:factory
+
+      - name: Unit tests — OptionsPool
+        run: npm run test:pool
+
+      - name: Upload WASM artifacts
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-contracts
+          path: |
+            build/OptionsFactory.wasm
+            build/OptionsPool.wasm
+          retention-days: 30
