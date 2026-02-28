@@ -6,7 +6,16 @@
  * on tx.events[] — confirmed via live testnet RPC. No per-tx getTransactionReceipt.
  */
 import { JSONRpcProvider } from 'opnet';
+import { networks, type Network } from '@btc-vision/bitcoin';
 import type { Env, BlockTx, TxEvent, PriceCandleRow } from '../types/index.js';
+
+/** Resolve network string from env to actual network object */
+function resolveNetwork(name: string): Network {
+    switch (name) {
+        case 'opnetTestnet': return networks.opnetTestnet;
+        default: return networks.opnetTestnet;
+    }
+}
 import {
     getLastIndexedBlock,
     stmtSetLastIndexedBlock,
@@ -24,8 +33,8 @@ export async function pollNewBlocks(env: Env): Promise<void> {
     const poolHexSet      = await resolvePoolAddresses(env);
     const swapConfig      = resolveSwapConfig(env);
 
-    // JSONRpcProvider uses fetch() — browser polyfill active in Workers
-    const provider = new JSONRpcProvider({ url: env.OPNET_RPC_URL, network: env.OPNET_NETWORK as never });
+    const network = resolveNetwork(env.OPNET_NETWORK);
+    const provider = new JSONRpcProvider({ url: env.OPNET_RPC_URL, network });
 
     const lastIndexed = await getLastIndexedBlock(env.DB);
     const latestBlock = Number(await provider.getBlockNumber());
@@ -74,21 +83,39 @@ async function processBlock(
         return;
     }
 
-    // OPNet getBlock response: transactions array with embedded events
+    // OPNet getBlock response: transactions array with embedded events.
+    // tx.events can be either an array or an object keyed by contract address.
     const rawTxs = (block as unknown as { transactions?: unknown[] }).transactions ?? [];
     const txs: BlockTx[] = rawTxs.map((tx: unknown) => {
         const t = tx as Record<string, unknown>;
-        return {
-            id:     String(t['id'] ?? ''),
-            events: ((t['events'] as unknown[] | undefined) ?? []).map((ev: unknown) => {
+        const rawEvents = t['events'];
+        const eventList: TxEvent[] = [];
+
+        if (Array.isArray(rawEvents)) {
+            for (const ev of rawEvents) {
                 const e = ev as Record<string, string>;
-                return {
+                eventList.push({
                     contractAddress: e['contractAddress'] ?? '',
                     type:            e['type'] ?? '',
                     data:            e['data'] ?? '',
-                } satisfies TxEvent;
-            }),
-        } satisfies BlockTx;
+                });
+            }
+        } else if (rawEvents && typeof rawEvents === 'object') {
+            // Events keyed by contract address: { "opt1...": [...], ... }
+            for (const [contractAddr, events] of Object.entries(rawEvents)) {
+                if (!Array.isArray(events)) continue;
+                for (const ev of events) {
+                    const e = ev as Record<string, string>;
+                    eventList.push({
+                        contractAddress: e['contractAddress'] ?? contractAddr,
+                        type:            e['type'] ?? '',
+                        data:            e['data'] ?? '',
+                    });
+                }
+            }
+        }
+
+        return { id: String(t['id'] ?? ''), events: eventList } satisfies BlockTx;
     });
 
     // Decode events → D1 prepared statements
@@ -113,7 +140,8 @@ async function processBlock(
 // TODO: cache resolved hex in D1 `indexer_state` to avoid repeated RPC calls.
 async function resolvePoolAddresses(env: Env): Promise<Set<string>> {
     const bech32Addresses = env.POOL_ADDRESSES.split(' ').filter(Boolean);
-    const provider = new JSONRpcProvider({ url: env.OPNET_RPC_URL, network: env.OPNET_NETWORK as never });
+    const network = resolveNetwork(env.OPNET_NETWORK);
+    const provider = new JSONRpcProvider({ url: env.OPNET_RPC_URL, network });
     const hexSet   = new Set<string>();
 
     for (const addr of bech32Addresses) {
