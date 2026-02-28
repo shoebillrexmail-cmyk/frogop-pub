@@ -32,7 +32,7 @@ database_id = "2a80cb38-da06-438b-9224-3cc1c71c5f2b"
 OPNET_NETWORK    = "testnet"
 OPNET_RPC_URL    = "https://testnet.opnet.org"
 # Space-separated bech32 pool addresses to track
-POOL_ADDRESSES   = "opt1sqp30jy9pzty2ylt0t0f8a25u99eu09wyny3e4syd"
+POOL_ADDRESSES   = "opt1sqqled6uxmlx0zrlqnz6x2eq500vprj2ssuaefveq"
 FACTORY_ADDRESS  = "opt1sqz4wm6z6gy2rrfsqxf0tuh6tkyn32eerkg57nrka"
 # Max blocks to process per cron invocation (prevents CPU timeout on catch-up)
 MAX_BLOCKS_PER_RUN = "50"

@@ -30,9 +30,8 @@ jobs:
       - name: Type-check
         run: npm run type-check
 
-      # Uncomment when Story 7.9 (indexer unit tests) is implemented:
-      # - name: Run tests
-      #   run: npm test
+      - name: Run tests
+        run: npm test
 
   # ── Deploy: runs only on push to master ────────────────────────────────────
   deploy:
@@ -54,6 +53,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Migrate D1 schema
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: indexer
+          command: d1 execute frogop-indexer --file=./src/db/schema.sql
 
       - name: Deploy via Wrangler
         uses: cloudflare/wrangler-action@v3

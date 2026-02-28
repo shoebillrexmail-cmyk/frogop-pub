@@ -45,6 +45,9 @@ tests/integration/deployed-contracts.json
 # Windows artifacts
 nul
 
+# Wrangler local dev state
+.wrangler/
+
 # Claude Code internal state
 .claude/
 

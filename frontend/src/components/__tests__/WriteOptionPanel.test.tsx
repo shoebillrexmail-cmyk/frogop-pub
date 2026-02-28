@@ -192,6 +192,33 @@ describe('WriteOptionPanel', () => {
         expect(sendParams.mldsaSigner).toBeNull();
     });
 
+    it('passes writeOption arguments in correct order with correct values', async () => {
+        mockSendTransaction.mockResolvedValue({ transactionId: 'txabc123' });
+
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+
+        fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '1' } });
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
+        fireEvent.change(screen.getByTestId('input-expiry'), { target: { value: '144' } });
+        fireEvent.click(screen.getByTestId('btn-write'));
+
+        await waitFor(() => {
+            expect(mockContractMethod).toHaveBeenCalled();
+        });
+
+        // Contract reads: optionType(u8), strikePrice(u256), expiryBlock(u64), underlyingAmount(u256), premium(u256)
+        const args = mockContractMethod.mock.calls[0] as unknown[];
+        const [optionType, strike, expiry, amount, premium] = args;
+
+        expect(optionType).toBe(0); // CALL
+        expect(strike).toBe(50n * 10n ** 18n);
+        // Expiry must be absolute: mockBlockNumber(5000) + 144 = 5144
+        expect(expiry).toBe(5000n + 144n);
+        expect(amount).toBe(1n * 10n ** 18n);
+        expect(premium).toBe(5n * 10n ** 18n);
+    });
+
     it('shows success message after write', async () => {
         mockSendTransaction.mockResolvedValue({ transactionId: 'txabc123' });
 
