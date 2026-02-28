@@ -1,7 +1,7 @@
 {
     "functions": [
         {
-            "name": "getUnderlying",
+            "name": "underlying",
             "type": "View",
             "payable": false,
             "onlyOwner": false,
@@ -14,7 +14,7 @@
             ]
         },
         {
-            "name": "getPremiumToken",
+            "name": "premiumToken",
             "type": "View",
             "payable": false,
             "onlyOwner": false,
@@ -53,15 +53,58 @@
             ]
         },
         {
-            "name": "accumulatedFeesMethod",
+            "name": "getOptionsBatch",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "startId",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "count",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": []
+        },
+        {
+            "name": "feeRecipient",
             "type": "View",
             "payable": false,
             "onlyOwner": false,
             "inputs": [],
             "outputs": [
                 {
-                    "name": "fees",
-                    "type": "UINT256"
+                    "name": "recipient",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "buyFeeBps",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "bps",
+                    "type": "UINT64"
+                }
+            ]
+        },
+        {
+            "name": "exerciseFeeBps",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "bps",
+                    "type": "UINT64"
                 }
             ]
         },
@@ -131,28 +174,20 @@
             ]
         },
         {
-            "name": "getUnderlyingDecimals",
-            "type": "View",
+            "name": "updateFeeRecipient",
+            "type": "Function",
             "payable": false,
             "onlyOwner": false,
-            "inputs": [],
-            "outputs": [
+            "inputs": [
                 {
-                    "name": "decimals",
-                    "type": "UINT8"
+                    "name": "newRecipient",
+                    "type": "ADDRESS"
                 }
-            ]
-        },
-        {
-            "name": "getPremiumDecimals",
-            "type": "View",
-            "payable": false,
-            "onlyOwner": false,
-            "inputs": [],
+            ],
             "outputs": [
                 {
-                    "name": "decimals",
-                    "type": "UINT8"
+                    "name": "success",
+                    "type": "BOOL"
                 }
             ]
         },
@@ -264,6 +299,16 @@
         }
     ],
     "events": [
+        {
+            "name": "FeeRecipientUpdated",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
         {
             "name": "OptionWritten",
             "values": [

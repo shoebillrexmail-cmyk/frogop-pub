@@ -51,12 +51,11 @@ import {
     SafeMath,
     StoredAddress,
     StoredU256,
-    encodeSelector,
-    Selector,
     EMPTY_BUFFER,
     NetEvent,
     ReentrancyGuard,
     ReentrancyLevel,
+    encodeSelector,
 } from '@btc-vision/btc-runtime/runtime';
 import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
 // =============================================================================
@@ -363,7 +362,7 @@ export class OptionsPool extends ReentrancyGuard {
         this._nextId = new StoredU256(NEXT_ID_POINTER, EMPTY_BUFFER);
     }
 
-    private get feeRecipient(): StoredAddress {
+    private get feeRecipientStore(): StoredAddress {
         if (!this._feeRecipient) {
             this._feeRecipient = new StoredAddress(FEE_RECIPIENT_POINTER);
         }
@@ -390,72 +389,33 @@ export class OptionsPool extends ReentrancyGuard {
 
         this._underlying.value = underlying;
         this._premiumToken.value = premiumToken;
-        this.feeRecipient.value = feeRecipientAddr;
-    }
-    
-    // -------------------------------------------------------------------------
-    // METHOD ROUTING
-    // -------------------------------------------------------------------------
-    
-    public override execute(method: Selector, calldata: Calldata): BytesWriter {
-        switch (method) {
-            case encodeSelector('underlying()'):
-                return this.getUnderlying(calldata);
-            case encodeSelector('premiumToken()'):
-                return this.getPremiumToken(calldata);
-            case encodeSelector('writeOption(uint8,uint256,uint64,uint256,uint256)'):
-                return this.writeOption(calldata);
-            case encodeSelector('cancelOption(uint256)'):
-                return this.cancelOption(calldata);
-            case encodeSelector('buyOption(uint256)'):
-                return this.buyOption(calldata);
-            case encodeSelector('exercise(uint256)'):
-                return this.exercise(calldata);
-            case encodeSelector('settle(uint256)'):
-                return this.settle(calldata);
-            case encodeSelector('getOption(uint256)'):
-                return this.getOption(calldata);
-            case encodeSelector('getOptionsBatch(uint256,uint256)'):
-                return this.getOptionsBatch(calldata);
-            case encodeSelector('optionCount()'):
-                return this.optionCount(calldata);
-            case encodeSelector('feeRecipient()'):
-                return this.feeRecipientMethod(calldata);
-            case encodeSelector('buyFeeBps()'):
-                return this.buyFeeBpsMethod(calldata);
-            case encodeSelector('exerciseFeeBps()'):
-                return this.exerciseFeeBpsMethod(calldata);
-            case encodeSelector('updateFeeRecipient(address)'):
-                return this.updateFeeRecipientMethod(calldata);
-            case encodeSelector('gracePeriodBlocks()'):
-                return this.gracePeriodBlocks(calldata);
-            case encodeSelector('maxExpiryBlocks()'):
-                return this.maxExpiryBlocks(calldata);
-            case encodeSelector('cancelFeeBps()'):
-                return this.cancelFeeBps(calldata);
-            case encodeSelector('calculateCollateral(uint8,uint256,uint256)'):
-                return this.calculateCollateral(calldata);
-            default:
-                return super.execute(method, calldata);
-        }
+        this.feeRecipientStore.value = feeRecipientAddr;
     }
     
     // -------------------------------------------------------------------------
     // VIEW METHODS
     // -------------------------------------------------------------------------
     
+    @view
+    @method('underlying')
+    @returns({ name: 'underlying', type: ABIDataTypes.ADDRESS })
     public getUnderlying(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(32);
         writer.writeAddress(this._underlying.value);
         return writer;
     }
     
+    @view
+    @method('premiumToken')
+    @returns({ name: 'premiumToken', type: ABIDataTypes.ADDRESS })
     public getPremiumToken(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(32);
         writer.writeAddress(this._premiumToken.value);
         return writer;
     }
     
+    @view
+    @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     public getOption(calldata: Calldata): BytesWriter {
         const optionId = calldata.readU256();
         
@@ -479,6 +439,9 @@ export class OptionsPool extends ReentrancyGuard {
         return writer;
     }
     
+    @view
+    @method()
+    @returns({ name: 'count', type: ABIDataTypes.UINT256 })
     public optionCount(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(32);
         writer.writeU256(this._nextId.value);
@@ -492,6 +455,11 @@ export class OptionsPool extends ReentrancyGuard {
      *              underlyingAmount(32) premium(32) expiryBlock(8) status(1) = 202 bytes.
      * Capped at 50 options per call.
      */
+    @view
+    @method(
+        { name: 'startId', type: ABIDataTypes.UINT256 },
+        { name: 'count', type: ABIDataTypes.UINT256 },
+    )
     public getOptionsBatch(calldata: Calldata): BytesWriter {
         const startId = calldata.readU256();
         const requestedCount = calldata.readU256();
@@ -544,42 +512,67 @@ export class OptionsPool extends ReentrancyGuard {
         return writer;
     }
 
+    @view
+    @method('feeRecipient')
+    @returns({ name: 'recipient', type: ABIDataTypes.ADDRESS })
     public feeRecipientMethod(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(32);
-        writer.writeAddress(this.feeRecipient.value);
+        writer.writeAddress(this.feeRecipientStore.value);
         return writer;
     }
 
+    @view
+    @method('buyFeeBps')
+    @returns({ name: 'bps', type: ABIDataTypes.UINT64 })
     public buyFeeBpsMethod(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(8);
         writer.writeU64(BUY_FEE_BPS);
         return writer;
     }
 
+    @view
+    @method('exerciseFeeBps')
+    @returns({ name: 'bps', type: ABIDataTypes.UINT64 })
     public exerciseFeeBpsMethod(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(8);
         writer.writeU64(EXERCISE_FEE_BPS);
         return writer;
     }
     
+    @view
+    @method()
+    @returns({ name: 'blocks', type: ABIDataTypes.UINT64 })
     public gracePeriodBlocks(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(8);
         writer.writeU64(GRACE_PERIOD_BLOCKS);
         return writer;
     }
     
+    @view
+    @method()
+    @returns({ name: 'blocks', type: ABIDataTypes.UINT64 })
     public maxExpiryBlocks(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(8);
         writer.writeU64(MAX_EXPIRY_BLOCKS);
         return writer;
     }
     
+    @view
+    @method()
+    @returns({ name: 'bps', type: ABIDataTypes.UINT64 })
     public cancelFeeBps(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(8);
         writer.writeU64(CANCEL_FEE_BPS);
         return writer;
     }
     
+    @view
+    @method(
+        { name: 'optionType', type: ABIDataTypes.UINT8 },
+        { name: 'strikePrice', type: ABIDataTypes.UINT256 },
+        { name: 'underlyingAmount', type: ABIDataTypes.UINT256 },
+    )
+    @returns({ name: 'collateral', type: ABIDataTypes.UINT256 })
     public calculateCollateral(calldata: Calldata): BytesWriter {
         const optionType = calldata.readU8();
         const strikePrice = calldata.readU256();
@@ -597,9 +590,12 @@ export class OptionsPool extends ReentrancyGuard {
         return writer;
     }
     
+    @method('updateFeeRecipient', { name: 'newRecipient', type: ABIDataTypes.ADDRESS })
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    @emit('FeeRecipientUpdated')
     public updateFeeRecipientMethod(calldata: Calldata): BytesWriter {
         const caller = Blockchain.tx.sender;
-        if (!caller.equals(this.feeRecipient.value)) {
+        if (!caller.equals(this.feeRecipientStore.value)) {
             throw new Revert('Only fee recipient');
         }
 
@@ -608,7 +604,7 @@ export class OptionsPool extends ReentrancyGuard {
             throw new Revert('Zero address not allowed');
         }
 
-        this.feeRecipient.value = newAddr;
+        this.feeRecipientStore.value = newAddr;
 
         const event = new BytesWriter(64);
         event.writeAddress(caller);
@@ -624,6 +620,15 @@ export class OptionsPool extends ReentrancyGuard {
     // STATE-CHANGING METHODS
     // -------------------------------------------------------------------------
 
+    @method(
+        { name: 'optionType', type: ABIDataTypes.UINT8 },
+        { name: 'strikePrice', type: ABIDataTypes.UINT256 },
+        { name: 'expiryBlock', type: ABIDataTypes.UINT64 },
+        { name: 'underlyingAmount', type: ABIDataTypes.UINT256 },
+        { name: 'premium', type: ABIDataTypes.UINT256 },
+    )
+    @returns({ name: 'optionId', type: ABIDataTypes.UINT256 })
+    @emit('OptionWritten')
     public writeOption(calldata: Calldata): BytesWriter {
         const optionType = calldata.readU8();
         const strikePrice = calldata.readU256();
@@ -692,6 +697,9 @@ export class OptionsPool extends ReentrancyGuard {
         return result;
     }
 
+    @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    @emit('OptionCancelled')
     public cancelOption(calldata: Calldata): BytesWriter {
         const optionId = calldata.readU256();
 
@@ -742,7 +750,7 @@ export class OptionsPool extends ReentrancyGuard {
 
         this._transfer(collateralToken, option.writer, returnAmount);
         if (fee > u256.Zero) {
-            this._transfer(collateralToken, this.feeRecipient.value, fee);
+            this._transfer(collateralToken, this.feeRecipientStore.value, fee);
         }
 
         const event = new BytesWriter(128); // 32+32+32+32 = 128 bytes
@@ -757,6 +765,9 @@ export class OptionsPool extends ReentrancyGuard {
         return result;
     }
 
+    @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    @emit('OptionPurchased')
     public buyOption(calldata: Calldata): BytesWriter {
         const optionId = calldata.readU256();
 
@@ -794,7 +805,7 @@ export class OptionsPool extends ReentrancyGuard {
         this.options.setStatus(optionId, PURCHASED);
 
         this._transferFrom(this._premiumToken.value, buyer, option.writer, writerAmount);
-        this._transferFrom(this._premiumToken.value, buyer, this.feeRecipient.value, buyFee);
+        this._transferFrom(this._premiumToken.value, buyer, this.feeRecipientStore.value, buyFee);
 
         const event = new BytesWriter(168); // 32+32+32+32+32+8 = 168 bytes
         event.writeU256(optionId);
@@ -810,6 +821,9 @@ export class OptionsPool extends ReentrancyGuard {
         return result;
     }
 
+    @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    @emit('OptionExercised')
     public exercise(calldata: Calldata): BytesWriter {
         const optionId = calldata.readU256();
 
@@ -856,7 +870,7 @@ export class OptionsPool extends ReentrancyGuard {
             const buyerReceives = SafeMath.sub(option.underlyingAmount, exerciseFee);
             this._transferFrom(this._premiumToken.value, caller, option.writer, strikeValue);
             this._transfer(this._underlying.value, caller, buyerReceives);
-            this._transfer(this._underlying.value, this.feeRecipient.value, exerciseFee);
+            this._transfer(this._underlying.value, this.feeRecipientStore.value, exerciseFee);
         } else {
             // Story 8.4: ceiling division — protocol never under-collects on dust
             exerciseFee = SafeMath.div(
@@ -869,7 +883,7 @@ export class OptionsPool extends ReentrancyGuard {
             const buyerReceives = SafeMath.sub(strikeValue, exerciseFee);
             this._transferFrom(this._underlying.value, caller, option.writer, option.underlyingAmount);
             this._transfer(this._premiumToken.value, caller, buyerReceives);
-            this._transfer(this._premiumToken.value, this.feeRecipient.value, exerciseFee);
+            this._transfer(this._premiumToken.value, this.feeRecipientStore.value, exerciseFee);
         }
 
         const event = new BytesWriter(193); // 32+32+32+1+32+32+32 = 193 bytes
@@ -887,6 +901,9 @@ export class OptionsPool extends ReentrancyGuard {
         return result;
     }
 
+    @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    @emit('OptionExpired')
     public settle(calldata: Calldata): BytesWriter {
         const optionId = calldata.readU256();
 
