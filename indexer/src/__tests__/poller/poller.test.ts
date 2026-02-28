@@ -60,8 +60,9 @@ const mockEnv: Env = {
     POOL_ADDRESSES:   'opt1abc',
     FACTORY_ADDRESS:  '',
     MAX_BLOCKS_PER_RUN: '5',
-    NATIVESWAP_ADDRESSES: '',
-    NATIVESWAP_LABELS:    'MOTO,PILL',
+    NATIVESWAP_CONTRACT:       '',
+    NATIVESWAP_TOKEN_ADDRESSES: '',
+    NATIVESWAP_LABELS:         'MOTO,PILL',
 };
 
 /** Build a fake block with a transactions array */
@@ -211,8 +212,9 @@ describe('pollNewBlocks — passes swapLabelMap to decodeBlock', () => {
     it('passes swap label map as 5th argument to decodeBlock', async () => {
         const envWithSwap: Env = {
             ...mockEnv,
-            NATIVESWAP_ADDRESSES: 'opt1swap1',
-            NATIVESWAP_LABELS: 'MOTO',
+            NATIVESWAP_CONTRACT:       '0xrouter_hex',
+            NATIVESWAP_TOKEN_ADDRESSES: '0xmoto_hex',
+            NATIVESWAP_LABELS:         'MOTO',
         };
         mockGetLastIndexedBlock.mockResolvedValue(99);
         mockProvider.getBlockNumber.mockResolvedValue(100);
@@ -223,7 +225,8 @@ describe('pollNewBlocks — passes swapLabelMap to decodeBlock', () => {
         await pollNewBlocks(envWithSwap);
         expect(mockDecodeBlock).toHaveBeenCalledOnce();
         const args = mockDecodeBlock.mock.calls[0]!;
-        // 5th argument should be a Map (swapLabelMap)
+        // 5th argument should be a Map (swapLabelMap with router hex)
         expect(args[4]).toBeInstanceOf(Map);
+        expect((args[4] as Map<string, string>).has('0xrouter_hex')).toBe(true);
     });
 });
