@@ -144,11 +144,12 @@ async function route(
             return badRequest('Invalid interval. Use 1h, 4h, 1d, or 1w');
         }
         const limit = Math.min(1000, Math.max(1, parseInt(params.get('limit') ?? '500', 10)));
-        const candles = await getCandles(env.DB, token, interval, {
-            from: params.get('from') ?? undefined,
-            to:   params.get('to') ?? undefined,
-            limit,
-        });
+        const opts: { from?: string; to?: string; limit?: number } = { limit };
+        const fromParam = params.get('from');
+        const toParam = params.get('to');
+        if (fromParam) opts.from = fromParam;
+        if (toParam) opts.to = toParam;
+        const candles = await getCandles(env.DB, token, interval, opts);
         return json(candles);
     }
 
@@ -167,11 +168,12 @@ async function route(
         const token = normalizeToken(historyMatch[1] ?? '');
         if (!token) return badRequest('Invalid token. Use MOTO, PILL, or MOTO_PILL');
         const limit = Math.min(1000, Math.max(1, parseInt(params.get('limit') ?? '200', 10)));
-        const history = await getPriceHistory(env.DB, token, {
-            from: params.get('from') ?? undefined,
-            to:   params.get('to') ?? undefined,
-            limit,
-        });
+        const hOpts: { from?: string; to?: string; limit?: number } = { limit };
+        const hFrom = params.get('from');
+        const hTo = params.get('to');
+        if (hFrom) hOpts.from = hFrom;
+        if (hTo) hOpts.to = hTo;
+        const history = await getPriceHistory(env.DB, token, hOpts);
         return json(history);
     }
 
