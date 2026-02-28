@@ -57,6 +57,11 @@ export function PortfolioPage() {
         provider: provider ?? null,
     });
 
+    // Modal targets — must be declared before any early returns (Rules of Hooks)
+    const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
+    const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
+    const [settleTarget, setSettleTarget] = useState<OptionData | null>(null);
+
     // -------------------------------------------------------------------------
     // Connect gate
     // -------------------------------------------------------------------------
@@ -95,10 +100,6 @@ export function PortfolioPage() {
 
     // Grace period warning: any PURCHASED options owned by the buyer
     const activePurchased = purchasedOptions.filter((o) => o.status === OptionStatus.PURCHASED);
-
-    const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
-    const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
-    const [settleTarget, setSettleTarget] = useState<OptionData | null>(null);
 
     function handleCancel(option: OptionData) {
         if (provider) setCancelTarget(option);
