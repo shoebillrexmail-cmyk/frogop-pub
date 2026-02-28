@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { useWalletConnect } from '@btc-vision/walletconnect';
+import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
 import { usePool } from '../hooks/usePool.ts';
 import { useBlockTracker } from '../hooks/useBlockTracker.ts';
@@ -25,6 +26,7 @@ import type { OptionData } from '../services/types.ts';
 const NATIVESWAP_ADDRESS = import.meta.env.VITE_NATIVESWAP_ADDRESS || '';
 
 export function PoolsPage() {
+    const wsBlock = useWsBlock();
     const { walletAddress, address, provider, network } = useWalletConnect();
     const {
         pools,
@@ -50,7 +52,7 @@ export function PoolsPage() {
     const { poolInfo, options, loading: poolLoading, error: poolError, refetch: refetchPool } =
         usePool(selectedPoolAddr);
 
-    const { currentBlock } = useBlockTracker(provider ?? null);
+    const { currentBlock } = useBlockTracker(provider ?? null, wsBlock);
 
     const { motoPillRatio } = usePriceRatio(
         NATIVESWAP_ADDRESS || null,

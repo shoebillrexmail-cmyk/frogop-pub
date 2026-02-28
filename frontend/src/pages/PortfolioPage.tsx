@@ -10,6 +10,7 @@ import { usePool } from '../hooks/usePool.ts';
 import { useUserOptions } from '../hooks/useUserOptions.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { useBlockTracker } from '../hooks/useBlockTracker.ts';
+import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import { useTransactionContext } from '../contexts/TransactionContext.tsx';
 import { PortfolioSkeleton } from '../components/LoadingSkeletons.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
@@ -24,11 +25,12 @@ import type { OptionData } from '../services/types.ts';
 const POOL_ADDRESS = CONTRACT_ADDRESSES.pool;
 
 export function PortfolioPage() {
+    const wsBlock = useWsBlock();
     const { walletAddress, address, provider, network, openConnectModal } = useWalletConnect();
 
     const walletHex = address ? address.toString() : null;
 
-    const { currentBlock } = useBlockTracker(provider ?? null);
+    const { currentBlock } = useBlockTracker(provider ?? null, wsBlock);
 
     // Pool config only (fees, grace period, token addresses)
     const { poolInfo, loading: poolLoading, error: poolError, refetch: poolRefetch } = usePool(
