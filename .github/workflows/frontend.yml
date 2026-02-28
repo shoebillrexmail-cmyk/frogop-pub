@@ -76,11 +76,19 @@ jobs:
           # updated without changing this workflow.
           VITE_OPNET_NETWORK: testnet
 
+      - name: Ensure Cloudflare Pages project exists
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create frogop-frontend --production-branch=master
+          workingDirectory: frontend
+        continue-on-error: true # Already exists is fine
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # First run: create Pages project via `wrangler pages project create frogop-frontend`
-          command: pages deploy dist --project-name=frogop-frontend
+          command: pages deploy dist --project-name=frogop-frontend --commit-dirty=true
           workingDirectory: frontend
