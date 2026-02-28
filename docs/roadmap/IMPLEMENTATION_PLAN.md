@@ -53,9 +53,9 @@
 
 ### Story 1.2: OptionsFactory Contract
 
-**As a** user  
-**I want** to create option pools for any token pair  
-**So that** I can trade options on different markets
+**As an** admin
+**I want** to deploy and register option pools for token pairs
+**So that** users can trade options
 
 #### Tasks
 

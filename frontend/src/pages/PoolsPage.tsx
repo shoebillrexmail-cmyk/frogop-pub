@@ -1,32 +1,275 @@
+/**
+ * PoolsPage — on-chain pool view with factory discovery, options table,
+ * write panel, and action modals.
+ */
+import { useState, useEffect } from 'react';
+import { useWalletConnect } from '@btc-vision/walletconnect';
+import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
+import { usePool } from '../hooks/usePool.ts';
+import { PoolInfoCard } from '../components/PoolInfoCard.tsx';
+import { OptionsTable } from '../components/OptionsTable.tsx';
+import { WriteOptionPanel } from '../components/WriteOptionPanel.tsx';
+import { BuyOptionModal } from '../components/BuyOptionModal.tsx';
+import { CancelModal } from '../components/CancelModal.tsx';
+import { ExerciseModal } from '../components/ExerciseModal.tsx';
+import { SettleModal } from '../components/SettleModal.tsx';
+import { CONTRACT_ADDRESSES, currentNetwork, formatAddress } from '../config/index.ts';
+import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
+import type { OptionData } from '../services/types.ts';
+
 export function PoolsPage() {
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-16 text-center">
-      <h1 className="text-3xl font-bold text-terminal-text-primary font-mono mb-4">
-        Option Pools
-      </h1>
-      <p className="text-terminal-text-secondary mb-12 max-w-lg mx-auto">
-        Browse pools, write options, and trade — coming soon.
-      </p>
+    const { walletAddress, address, provider, network } = useWalletConnect();
+    const {
+        pools,
+        loading: discoveryLoading,
+        error: discoveryError,
+        source,
+        refetch: refetchPools,
+    } = useDiscoverPools();
 
-      <div className="max-w-2xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-6 mb-16">
-        <div className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-6">
-          <p className="text-2xl font-bold neon-orange font-mono mb-1">Write</p>
-          <p className="text-terminal-text-muted text-sm">Lock collateral and create a CALL or PUT option</p>
-        </div>
-        <div className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-6">
-          <p className="text-2xl font-bold neon-orange font-mono mb-1">Buy</p>
-          <p className="text-terminal-text-muted text-sm">Purchase open options and pay the premium</p>
-        </div>
-        <div className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-6">
-          <p className="text-2xl font-bold neon-orange font-mono mb-1">Exercise</p>
-          <p className="text-terminal-text-muted text-sm">Claim your payout within the grace period</p>
-        </div>
-      </div>
+    const [selectedPoolAddr, setSelectedPoolAddr] = useState<string | null>(null);
 
-      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-terminal-bg-elevated border border-terminal-border-subtle text-terminal-text-muted font-mono text-sm">
-        <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
-        Trading interface in development
-      </div>
-    </div>
-  );
+    // Auto-select first pool when pools change
+    useEffect(() => {
+        if (pools.length > 0 && !selectedPoolAddr) {
+            setSelectedPoolAddr(pools[0].address);
+        }
+        // If selected pool is no longer in the list, reset
+        if (selectedPoolAddr && pools.length > 0 && !pools.some((p) => p.address === selectedPoolAddr)) {
+            setSelectedPoolAddr(pools[0].address);
+        }
+    }, [pools, selectedPoolAddr]);
+
+    const { poolInfo, options, loading: poolLoading, error: poolError, refetch: refetchPool } =
+        usePool(selectedPoolAddr);
+
+    const [writeOpen, setWriteOpen] = useState(false);
+    const [buyTarget, setBuyTarget] = useState<OptionData | null>(null);
+    const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
+    const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
+    const [settleTarget, setSettleTarget] = useState<OptionData | null>(null);
+
+    // address.toString() = 0x-prefixed MLDSA hash; used for action visibility
+    const walletHex = address ? address.toString() : null;
+
+    const loading = discoveryLoading || poolLoading;
+    const error = discoveryError || poolError;
+
+    function handleRefetch() {
+        refetchPools();
+        refetchPool();
+    }
+
+    function handleBuy(option: OptionData) {
+        if (!provider) {
+            setBuyTarget(null);
+        } else {
+            setBuyTarget(option);
+        }
+    }
+
+    function handleCancel(option: OptionData) {
+        if (provider) setCancelTarget(option);
+    }
+
+    function handleExercise(option: OptionData) {
+        if (provider) setExerciseTarget(option);
+    }
+
+    function handleSettle(option: OptionData) {
+        if (provider) setSettleTarget(option);
+    }
+
+    // No pool source configured at all
+    if (!CONTRACT_ADDRESSES.factory && !CONTRACT_ADDRESSES.pool) {
+        return (
+            <div className="max-w-7xl mx-auto px-4 py-16 text-center">
+                <p className="text-terminal-text-muted font-mono text-sm">
+                    No pool source configured. Set{' '}
+                    <code className="neon-orange">VITE_FACTORY_ADDRESS</code> or{' '}
+                    <code className="neon-orange">VITE_POOL_ADDRESS</code> in your{' '}
+                    <code className="neon-orange">.env</code> file.
+                </p>
+            </div>
+        );
+    }
+
+    if (loading) return <PoolsSkeleton />;
+
+    return (
+        <div className="max-w-7xl mx-auto px-4 py-8">
+            {/* Error state */}
+            {error && (
+                <div className="bg-terminal-bg-elevated border border-rose-700 rounded-xl p-6 text-center">
+                    <p className="text-rose-400 font-mono text-sm mb-3">{error}</p>
+                    <button onClick={handleRefetch} className="btn-secondary px-4 py-2 text-sm rounded">
+                        Retry
+                    </button>
+                </div>
+            )}
+
+            {/* Pool selector when multiple pools */}
+            {!error && pools.length > 1 && (
+                <div className="mb-4 flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-terminal-text-muted font-mono">Pool:</span>
+                    {pools.map((p) => (
+                        <button
+                            key={p.address}
+                            data-testid={`pool-selector-${p.address}`}
+                            onClick={() => setSelectedPoolAddr(p.address)}
+                            className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
+                                selectedPoolAddr === p.address
+                                    ? 'bg-accent text-terminal-bg-primary'
+                                    : 'bg-terminal-bg-elevated text-terminal-text-secondary hover:bg-terminal-bg-secondary'
+                            }`}
+                        >
+                            {formatAddress(p.address)}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* Main content */}
+            {!error && poolInfo && selectedPoolAddr && (
+                <div className="space-y-4">
+                    <PoolInfoCard
+                        poolInfo={poolInfo}
+                        poolAddress={selectedPoolAddr}
+                        onWriteOption={() => setWriteOpen(true)}
+                    />
+                    <OptionsTable
+                        options={options}
+                        walletHex={walletHex}
+                        gracePeriodBlocks={poolInfo.gracePeriodBlocks}
+                        onBuy={handleBuy}
+                        onCancel={handleCancel}
+                        onExercise={handleExercise}
+                        onSettle={handleSettle}
+                    />
+                </div>
+            )}
+
+            {/* Network + source badge (hidden on mainnet) */}
+            {currentNetwork !== 'mainnet' && (
+                <div className="mt-6 flex items-center gap-2 text-xs text-terminal-text-muted font-mono">
+                    <span className="w-2 h-2 rounded-full bg-yellow-400" />
+                    Network: {currentNetwork.charAt(0).toUpperCase() + currentNetwork.slice(1)}
+                    {source && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded bg-terminal-bg-elevated text-terminal-text-muted">
+                            source: {source}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {/* Buy Option modal */}
+            {buyTarget && poolInfo && selectedPoolAddr && provider && network && (
+                <BuyOptionModal
+                    option={buyTarget}
+                    poolInfo={poolInfo}
+                    poolAddress={selectedPoolAddr}
+                    walletAddress={walletAddress}
+                    address={address}
+                    provider={provider}
+                    network={network}
+                    onClose={() => setBuyTarget(null)}
+                    onSuccess={() => {
+                        setBuyTarget(null);
+                        refetchPool();
+                    }}
+                />
+            )}
+
+            {/* Cancel Option modal */}
+            {cancelTarget && poolInfo && selectedPoolAddr && provider && network && (
+                <CancelModal
+                    option={cancelTarget}
+                    poolInfo={poolInfo}
+                    poolAddress={selectedPoolAddr}
+                    walletAddress={walletAddress}
+                    address={address}
+                    provider={provider}
+                    network={network}
+                    onClose={() => setCancelTarget(null)}
+                    onSuccess={() => {
+                        setCancelTarget(null);
+                        refetchPool();
+                    }}
+                />
+            )}
+
+            {/* Exercise Option modal */}
+            {exerciseTarget && poolInfo && selectedPoolAddr && provider && network && (
+                <ExerciseModal
+                    option={exerciseTarget}
+                    poolInfo={poolInfo}
+                    poolAddress={selectedPoolAddr}
+                    walletAddress={walletAddress}
+                    address={address}
+                    provider={provider}
+                    network={network}
+                    onClose={() => setExerciseTarget(null)}
+                    onSuccess={() => {
+                        setExerciseTarget(null);
+                        refetchPool();
+                    }}
+                />
+            )}
+
+            {/* Settle Option modal */}
+            {settleTarget && selectedPoolAddr && provider && network && (
+                <SettleModal
+                    option={settleTarget}
+                    poolAddress={selectedPoolAddr}
+                    walletAddress={walletAddress}
+                    address={address}
+                    provider={provider}
+                    network={network}
+                    onClose={() => setSettleTarget(null)}
+                    onSuccess={() => {
+                        setSettleTarget(null);
+                        refetchPool();
+                    }}
+                />
+            )}
+
+            {/* Write Option slide-in panel */}
+            {writeOpen && poolInfo && selectedPoolAddr && provider && network && (
+                <WriteOptionPanel
+                    poolAddress={selectedPoolAddr}
+                    poolInfo={poolInfo}
+                    walletAddress={walletAddress}
+                    walletHex={walletHex}
+                    address={address}
+                    provider={provider}
+                    network={network}
+                    onClose={() => setWriteOpen(false)}
+                    onSuccess={() => {
+                        setWriteOpen(false);
+                        refetchPool();
+                    }}
+                />
+            )}
+
+            {/* Connect prompt when write or buy needs wallet */}
+            {(writeOpen || buyTarget !== null) && !provider && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+                    <div className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-8 text-center max-w-sm">
+                        <p className="text-terminal-text-primary font-mono mb-4">
+                            Connect your wallet to continue.
+                        </p>
+                        <button
+                            onClick={() => {
+                                setWriteOpen(false);
+                                setBuyTarget(null);
+                            }}
+                            className="btn-secondary px-4 py-2 text-sm rounded"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }

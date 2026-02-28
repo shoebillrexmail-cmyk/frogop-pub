@@ -44,12 +44,22 @@ frogop/
 │   └── contracts/          # Smart contracts (AssemblyScript)
 │       ├── factory/        # OptionsFactory contract
 │       └── pool/           # OptionsPool contract
+├── frontend/               # React 19 + Vite + Tailwind SPA
+│   ├── src/
+│   │   ├── components/     # Layout, shared UI
+│   │   ├── pages/          # Landing, Pools, Portfolio, About
+│   │   ├── hooks/          # Contract interaction hooks
+│   │   ├── services/       # Contract service layer
+│   │   └── config/         # Network config, utilities
+│   └── package.json
 ├── tests/                  # Unit tests (TypeScript)
 │   ├── runtime/            # Test runtime helpers
+│   ├── integration/        # Testnet integration tests
 │   ├── OptionsFactory.test.ts
 │   └── OptionsPool.test.ts
 ├── docs/                   # Documentation
 │   ├── contracts/          # Contract specs & best practices
+│   ├── frontend/           # Frontend design — user flows, page layouts
 │   ├── roadmap/            # Planning & milestones
 │   ├── security/           # Security documentation
 │   └── tests/              # Test documentation
@@ -154,22 +164,20 @@ npm run test:pool
 
 ### Known Limitations ⚠️
 
-**Unit Test Gas Limit**: The OptionsPool contract (30KB WASM) exceeds the unit test framework's 500B gas limit during deployment. This is a test framework constraint - the contracts work correctly on mainnet (4.5T gas target).
+**Unit Test Gas Limit**: The OptionsPool contract (30KB WASM) exceeds the unit test framework's 500B gas limit during deployment. This is a test framework constraint - the contracts work correctly on testnet/mainnet (4.5T gas target).
 
-**Affected Tests**:
-- Pool creation via factory (3 tests)
-- OptionsPool direct deployment tests
-
-**Workaround**: Test on OPNet testnet or wait for unit test framework update.
+**Workaround**: Use integration tests on OPNet testnet (see `tests/integration/`).
 
 ### Test Coverage
 
 | Component | Tests | Status |
 |-----------|-------|--------|
 | OptionsFactory | 13 | 10 passing (77%) |
-| OptionsPool | 22 | Limited by gas |
+| OptionsPool | 22 | Limited by unit test gas |
+| Integration (testnet) | 42+ | All passing ✅ |
 
-See [docs/tests/UNIT_TESTS_STATUS.md](docs/tests/UNIT_TESTS_STATUS.md) for detailed test status.
+See [docs/tests/UNIT_TESTS_STATUS.md](docs/tests/UNIT_TESTS_STATUS.md) for unit test details.
+See [SPRINTBOARD.md](SPRINTBOARD.md) for current development status.
 
 ## Documentation
 
@@ -184,6 +192,13 @@ See [docs/tests/UNIT_TESTS_STATUS.md](docs/tests/UNIT_TESTS_STATUS.md) for detai
 
 - **[docs/contracts/OptionsFactory.md](docs/contracts/OptionsFactory.md)** - Factory contract design
 - **[docs/contracts/OptionsPool.md](docs/contracts/OptionsPool.md)** - Pool contract design
+
+### Frontend Design
+
+- **[docs/frontend/USER_FLOWS.md](docs/frontend/USER_FLOWS.md)** - Option lifecycle state machine + all user flows with ASCII sketches
+- **[docs/frontend/PAGE_DESIGNS.md](docs/frontend/PAGE_DESIGNS.md)** - Pools and Portfolio page layout references
+- **[docs/frontend/FRONTEND_IMPLEMENTATION_PLAN.md](docs/frontend/FRONTEND_IMPLEMENTATION_PLAN.md)** - Phase-by-phase implementation guide
+- **[docs/frontend-integration-plan.md](docs/frontend-integration-plan.md)** - Contract ↔ UI integration reference
 
 ### Development
 
@@ -224,11 +239,28 @@ See **[docs/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md](docs/contracts/OPNET
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Branch Strategy
+
+| Branch | Purpose | Deploys to |
+|--------|---------|------------|
+| `master` | Production — stable releases only | Cloudflare Pages (production) |
+| `develop` | Integration — daily work lands here | Cloudflare Pages (preview) |
+| `feat/*` / `fix/*` | Topic branches for individual work | Nothing (PR only) |
+
+**Never push directly to `master`.**
+
+```bash
+# Start new work from develop
+git checkout develop && git pull origin develop
+git checkout -b feat/my-feature
+
+# ... make changes, commit ...
+
+# Open PR: feat/my-feature → develop
+git push origin feat/my-feature
+
+# Releases: open PR develop → master
+```
 
 ## License
 

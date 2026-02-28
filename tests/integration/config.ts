@@ -154,6 +154,7 @@ export function computeSelectorU32(signature: string): number {
     return hash.readUInt32BE(0);
 }
 
+
 export function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -199,7 +200,10 @@ export const POOL_SELECTORS = {
     underlying: computeSelector('underlying()'),
     premiumToken: computeSelector('premiumToken()'),
     optionCount: computeSelector('optionCount()'),
-    accumulatedFees: computeSelector('accumulatedFees()'),
+    getOptionsBatch: computeSelector('getOptionsBatch(uint256,uint256)'),
+    feeRecipient: computeSelector('feeRecipient()'),
+    buyFeeBps: computeSelector('buyFeeBps()'),
+    exerciseFeeBps: computeSelector('exerciseFeeBps()'),
     gracePeriodBlocks: computeSelector('gracePeriodBlocks()'),
     maxExpiryBlocks: computeSelector('maxExpiryBlocks()'),
     cancelFeeBps: computeSelector('cancelFeeBps()'),
@@ -210,13 +214,18 @@ export const POOL_SELECTORS = {
     buyOption: computeSelectorU32('buyOption(uint256)'),
     exercise: computeSelectorU32('exercise(uint256)'),
     settle: computeSelectorU32('settle(uint256)'),
+    updateFeeRecipient: computeSelectorU32('updateFeeRecipient(address)'),
 };
 
 /** OptionsFactory method selectors */
 export const FACTORY_SELECTORS = {
+    getOwner: computeSelector('getOwner()'),
     getPoolTemplate: computeSelector('getPoolTemplate()'),
     getPoolCount: computeSelector('getPoolCount()'),
     getPool: computeSelector('getPool(address,address)'),
+    getPoolByIndex: computeSelector('getPoolByIndex(uint256)'),
+    getTreasury: computeSelector('getTreasury()'),
     setPoolTemplate: computeSelectorU32('setPoolTemplate(address)'),
     createPool: computeSelectorU32('createPool(address,address,uint8,uint8)'),
+    registerPool: computeSelectorU32('registerPool(address,address,address)'),
 };

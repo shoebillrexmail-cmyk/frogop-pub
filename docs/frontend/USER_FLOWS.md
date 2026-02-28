@@ -1,0 +1,401 @@
+# FroGop — Frontend User Flows
+
+> Design reference for the Pools and Portfolio pages.
+> All flows assume OPNet testnet. Block times ≈ 10 min (Signet).
+
+---
+
+## Option Lifecycle State Machine
+
+```
+                      ┌─────────┐
+                      │  OPEN   │  ← writeOption() called by writer
+                      └────┬────┘
+                    ┌──────┴──────┐
+                    ▼             ▼
+              ┌──────────┐  ┌───────────┐
+  buyOption() │PURCHASED │  │CANCELLED  │  ← cancelOption() by writer
+  by buyer →  └─────┬────┘  └───────────┘    (1% fee if before expiry,
+                    │                         0% fee if after expiry)
+          ┌─────────┴─────────┐
+          ▼                   ▼
+   within 144-block       grace period
+   grace period after       expired
+   expiry block
+          │                   │
+          ▼                   ▼
+    ┌──────────┐        ┌─────────┐
+    │EXERCISED │        │ EXPIRED │  ← settle() callable by anyone
+    └──────────┘        └─────────┘    (returns collateral to writer)
+```
+
+**Status codes** (on-chain): `OPEN=0  PURCHASED=1  EXERCISED=2  EXPIRED=3  CANCELLED=4`
+
+**Grace period**: 144 blocks ≈ 24 hours after `expiryBlock`
+
+---
+
+## Flow A — Connect Wallet
+
+**Trigger**: user clicks `[Connect]` in header (wallet not connected)
+
+```
+  [Header — disconnected state]
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ FROGOP                      Pools  Portfolio  About  [Connect ▶] │
+  └──────────────────────────────────────────────────────────────────┘
+                                                          │
+                                                 clicks [Connect ▶]
+                                                          │
+                                                          ▼
+                                     ┌────────────────────────────────┐
+                                     │  OPWallet browser extension    │
+                                     │  ─────────────────────────────  │
+                                     │  Connect to frogop.xyz?        │
+                                     │  opt1pfteyvlu...               │
+                                     │                                │
+                                     │  [Approve]        [Reject]     │
+                                     └────────────────────────────────┘
+                                                  │ approved
+                                                  ▼
+  [Header — connected state]
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ FROGOP                   Pools  Portfolio  About  [opt1pf…  ●]  │
+  └──────────────────────────────────────────────────────────────────┘
+
+  All write actions (Write Option, Buy, Exercise, Cancel) now unlocked.
+  Wallet disconnect available from address dropdown.
+```
+
+**Library**: `@btc-vision/walletconnect` — `openConnectModal()` / `useWalletConnect()`
+
+---
+
+## Flow B — Write an Option (Writer)
+
+**Preconditions**: wallet connected · MOTO balance ≥ underlyingAmount
+
+```
+  [Pools Page — options table visible]
+  ┌──────────────────────────────────────────────────────────────┐
+  │  MOTO / PILL                              [Write Option  +]  │
+  │  Options: 6 │ Buy: 1% │ Exercise: 0.1% │ Cancel: 1%         │
+  └──────────────────────────────────────────────────────────────┘
+
+  User clicks [Write Option +]
+  ────────────────────────────────────────────────────────────────
+  Right-side panel slides in:
+
+  ┌──────────────────────── WRITE OPTION ──────────────────────┐
+  │                                                  [✕ close]  │
+  │  Option Type    ○ CALL   ● PUT                              │
+  │                                                             │
+  │  Underlying Amount   [  1.0000  ]  MOTO                    │
+  │  Strike Price        [ 50.0000  ]  PILL per MOTO           │
+  │  Premium             [  5.0000  ]  PILL                    │
+  │  Expiry (blocks)     [   144    ]  from now (~24h)         │
+  │                                                             │
+  │  ┌─────────────────────────────────────────────────────┐   │
+  │  │ Collateral Required (CALL)                           │   │
+  │  │ You lock: 1.0 MOTO                                  │   │
+  │  │ Your MOTO balance: 1000.0 ✓                         │   │
+  │  │ Pool allowance:    0.0  ← approval needed           │   │
+  │  └─────────────────────────────────────────────────────┘   │
+  │                                                             │
+  │  [Approve MOTO  →]                                          │
+  └─────────────────────────────────────────────────────────────┘
+
+  Step 1 — Approve MOTO:
+  ┌────────────────────────────────┐
+  │  OPWallet — confirm tx         │
+  │  increaseAllowance(pool, 1 MOTO│
+  │  [Sign]          [Reject]      │
+  └────────────────────────────────┘
+        │ signed → tx broadcast
+        ▼ (poll allowance, update panel)
+
+  ┌──────────────────────── WRITE OPTION ──────────────────────┐
+  │  ...                                                        │
+  │  Pool allowance: 1.0 MOTO  ✓                               │
+  │                                                             │
+  │  [Write Option  →]                                          │
+  └─────────────────────────────────────────────────────────────┘
+
+  Step 2 — Submit:
+  ┌────────────────────────────────┐
+  │  OPWallet — confirm tx         │
+  │  writeOption CALL              │
+  │  1 MOTO @ 50 PILL, 5 premium   │
+  │  [Sign]          [Reject]      │
+  └────────────────────────────────┘
+        │ signed → tx broadcast
+        ▼
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  ⏳ Waiting for block confirmation... (~10 min on testnet)  │
+  │  Option will appear in the table once the block mines.      │
+  └─────────────────────────────────────────────────────────────┘
+
+  [After block mines — options table refreshes]
+  ┌────┬──────┬──────────┬────────────┬────────┬────────┬──────┐
+  │ #  │ Type │ Strike   │ Expiry     │ Amount │Premium │Status│
+  ├────┼──────┼──────────┼────────────┼────────┼────────┼──────┤
+  │ 6  │ CALL │ 50 PILL  │ blk 2484   │ 1 MOTO │ 5 PILL │ OPEN │  ← NEW
+  └────┴──────┴──────────┴────────────┴────────┴────────┴──────┘
+```
+
+**Contract call**: `writeOption(optionType, strikePrice, expiryBlock, underlyingAmount, premium)`
+
+---
+
+## Flow C — Buy an Option (Buyer)
+
+**Preconditions**: wallet connected · PILL balance ≥ premium · option status = OPEN · not writer
+
+```
+  [Pools Page — options table]
+  ┌────┬──────┬──────────┬────────────┬────────┬────────┬──────────────┐
+  │ #  │ Type │ Strike   │ Expiry     │ Amount │Premium │ Status       │
+  ├────┼──────┼──────────┼────────────┼────────┼────────┼──────────────┤
+  │ 6  │ CALL │ 50 PILL  │ blk 2484   │ 1 MOTO │ 5 PILL │ OPEN [Buy ▶] │
+  └────┴──────┴──────────┴────────────┴────────┴────────┴──────────────┘
+
+  User clicks [Buy ▶]
+  ────────────────────────────────────────────────────────────────────
+  Confirmation modal:
+
+  ┌───────────────── BUY OPTION #6 ─────────────────────────────┐
+  │                                                   [✕ close]  │
+  │  CALL option — 1 MOTO @ 50 PILL/MOTO                        │
+  │  Expires: block 2484  (~24h)                                 │
+  │  Grace to exercise: 144 blocks after expiry                  │
+  │                                                             │
+  │  Cost breakdown:                                            │
+  │    Premium:        5.00 PILL                                │
+  │    Buy fee (1%):   0.05 PILL  → protocol                   │
+  │    ─────────────────────────                                │
+  │    Total you pay:  5.05 PILL                                │
+  │                                                             │
+  │  Your PILL balance: 120.0  ✓                                │
+  │  Pool allowance:    0.0  ← needs approval                   │
+  │                                                             │
+  │  [Approve PILL  →]                                          │
+  └─────────────────────────────────────────────────────────────┘
+
+  Step 1 — Approve PILL (amount = premium + 1% fee):
+    OPWallet sign → broadcast → poll allowance
+
+  Panel updates:
+  │  Pool allowance: 5.05 PILL  ✓                               │
+  │  [Confirm Purchase  →]                                      │
+
+  Step 2 — Purchase:
+    OPWallet sign → broadcast
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  ⏳ Purchase pending block confirmation...                   │
+  └─────────────────────────────────────────────────────────────┘
+
+  [Table refreshes after block]
+  ┌────┬──────┬──────────┬────────────┬────────┬────────┬───────────────┐
+  │ 6  │ CALL │ 50 PILL  │ blk 2484   │ 1 MOTO │ 5 PILL │ PURCHASED     │
+  └────┴──────┴──────────┴────────────┴────────┴────────┴───────────────┘
+
+  [Exercise button appears in Portfolio > My Purchased Options]
+```
+
+**Contract call**: `buyOption(optionId)` — buyer must hold PILL allowance = premium + 1% fee
+
+---
+
+## Flow D — Exercise an Option (Buyer)
+
+**Preconditions**: wallet = buyer · status = PURCHASED · current block ≤ expiryBlock + 144
+
+```
+  [Portfolio Page — My Purchased Options]
+  ┌────┬──────┬──────────┬──────────────────────┬────────┬───────────┐
+  │ #  │ Type │ Strike   │ Grace ends            │ Status │ Action    │
+  ├────┼──────┼──────────┼──────────────────────┼────────┼───────────┤
+  │ 6  │ CALL │ 50 PILL  │ blk 2628  ⚡ ~2h left │ PURCH. │[Exercise] │
+  └────┴──────┴──────────┴──────────────────────┴────────┴───────────┘
+
+  ⚡ Warning banner: Grace period ends in ~2 hours — act before block 2628
+
+  User clicks [Exercise]
+  ────────────────────────────────────────────────────────────────────
+  Confirmation modal:
+
+  ┌───────────────── EXERCISE OPTION #6 ────────────────────────┐
+  │                                                   [✕ close]  │
+  │  CALL — buy 1 MOTO at strike price 50 PILL                  │
+  │                                                             │
+  │  You pay:                                                   │
+  │    Strike cost:       50.00 PILL  (50 × 1 MOTO)            │
+  │    Exercise fee (0.1%): 0.05 PILL                           │
+  │    ─────────────────────────────                            │
+  │    Total:             50.05 PILL                            │
+  │                                                             │
+  │  You receive:  1.0 MOTO                                     │
+  │                                                             │
+  │  Your PILL balance: 200.0  ✓                                │
+  │  Pool allowance:    0.0  ← needs approval                   │
+  │                                                             │
+  │  [Approve PILL  →]                                          │
+  └─────────────────────────────────────────────────────────────┘
+
+  Step 1 — Approve PILL (strike cost + 0.1% fee):
+    OPWallet sign → broadcast → poll
+
+  Step 2 — Exercise:
+    OPWallet sign → broadcast
+
+  [Portfolio refreshes]
+  ┌────┬──────┬──────────┬──────────────────────┬───────────┬────────────┐
+  │ 6  │ CALL │ 50 PILL  │ -                    │ EXERCISED │ ✓ +1 MOTO  │
+  └────┴──────┴──────────┴──────────────────────┴───────────┴────────────┘
+
+  Balance card updates: MOTO ↑1.0 · PILL ↓50.05
+```
+
+**PUT exercise**: buyer pays underlying (MOTO), receives strike value in PILL.
+
+---
+
+## Flow E — Cancel an Option (Writer)
+
+**Preconditions**: wallet = writer · status = OPEN
+
+```
+  [Portfolio Page — My Written Options]
+  ┌────┬──────┬──────────┬──────────────┬────────┬──────────┐
+  │ #  │ Type │ Strike   │ Expiry       │ Status │ Action   │
+  ├────┼──────┼──────────┼──────────────┼────────┼──────────┤
+  │ 6  │ CALL │ 50 PILL  │ blk 2484 24h │ OPEN   │ [Cancel] │
+  └────┴──────┴──────────┴──────────────┴────────┴──────────┘
+
+  User clicks [Cancel]
+  ────────────────────────────────────────────────────────────────────
+  Confirmation modal:
+
+  ┌───────────────── CANCEL OPTION #6 ──────────────────────────┐
+  │                                                   [✕ close]  │
+  │  CALL — 1 MOTO @ 50 PILL                                    │
+  │                                                             │
+  │  Collateral you locked:  1.0 MOTO                           │
+  │  Cancel fee (1%):        0.01 MOTO  → fee recipient         │
+  │  ─────────────────────────────────                          │
+  │  You get back:           0.99 MOTO                          │
+  │                                                             │
+  │  Note: If option has already expired, fee = 0% (full refund)│
+  │                                                             │
+  │  [Confirm Cancel]       [Keep open]                         │
+  └─────────────────────────────────────────────────────────────┘
+
+  User clicks [Confirm Cancel]
+    OPWallet sign → broadcast (no token approval needed)
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  ⏳ Cancel pending block confirmation...                     │
+  └─────────────────────────────────────────────────────────────┘
+
+  [Portfolio refreshes]
+  ┌────┬──────┬──────────┬──────────────┬───────────┬──────────────────┐
+  │ 6  │ CALL │ 50 PILL  │ blk 2484     │ CANCELLED │ ✓ +0.99 MOTO back│
+  └────┴──────┴──────────┴──────────────┴───────────┴──────────────────┘
+```
+
+**No approval needed** — cancel only returns existing collateral (no new token movement from buyer).
+
+---
+
+## Flow F — Settle an Expired Option (Anyone)
+
+**Preconditions**: status = PURCHASED · current block > expiryBlock + 144 (grace expired)
+
+```
+  [Pools Page — options table with expired option]
+  ┌────┬──────┬──────────┬─────────────────────┬────────┬───────────┐
+  │ #  │ Type │ Strike   │ Expiry              │ Status │ Action    │
+  ├────┼──────┼──────────┼─────────────────────┼────────┼───────────┤
+  │ 5  │ CALL │ 50 PILL  │ blk 2310 (expired)  │ PURCH. │ [Settle]  │
+  └────┴──────┴──────────┴─────────────────────┴────────┴───────────┘
+
+  User clicks [Settle]  (visible to anyone when grace period expired)
+  ────────────────────────────────────────────────────────────────────
+  Confirmation modal:
+
+  ┌───────────────── SETTLE OPTION #5 ──────────────────────────┐
+  │                                                   [✕ close]  │
+  │  CALL — 1 MOTO @ 50 PILL/MOTO                               │
+  │  Expired: block 2310  (grace ended at block 2454)           │
+  │                                                             │
+  │  Outcome: Option expired unexercised                        │
+  │  Writer gets back: 1.0 MOTO (full collateral)               │
+  │  Buyer receives:   nothing (option expired worthless)       │
+  │                                                             │
+  │  No approval needed. Anyone can trigger settlement.         │
+  │                                                             │
+  │  [Confirm Settle]                                           │
+  └─────────────────────────────────────────────────────────────┘
+
+  OPWallet sign → broadcast
+
+  [Table refreshes]
+  ┌────┬──────┬──────────┬──────────────────────┬─────────┬──────────┐
+  │ 5  │ CALL │ 50 PILL  │ blk 2310 (expired)   │ EXPIRED │ ✓ settled│
+  └────┴──────┴──────────┴──────────────────────┴─────────┴──────────┘
+```
+
+**No approval needed** — settle only moves existing collateral back to writer.
+
+---
+
+## Action Visibility Matrix
+
+| Action     | Who can see it          | When                                       |
+|------------|-------------------------|--------------------------------------------|
+| Write      | Any connected wallet    | Always (on Pools page)                     |
+| Buy        | Anyone except writer    | Option status = OPEN                       |
+| Cancel     | Writer only             | Option status = OPEN                       |
+| Exercise   | Buyer only              | Status = PURCHASED · within grace period   |
+| Settle     | Anyone                  | Status = PURCHASED · grace period expired  |
+
+**Wallet-disconnected users**: can see table but all action buttons show `[Connect to trade]` tooltip.
+
+---
+
+## Token Approval Two-Step Pattern
+
+Every flow that moves tokens requires an on-chain `increaseAllowance` call before the main action:
+
+```
+  [Panel/Modal loads]
+  → Query current allowance on-chain
+  → If allowance < required amount:
+       Show [Approve X] button
+     Else:
+       Show [Submit] button directly
+
+  [Approve step]
+  → Call increaseAllowance(pool, requiredAmount)
+  → OPWallet sign + broadcast
+  → Poll allowance until updated (~1 block)
+  → Enable [Submit] button
+
+  [Submit step]
+  → Call write/buy/exercise
+  → OPWallet sign + broadcast
+  → Show pending state
+  → Poll getOption(id) until status changes
+  → Refresh table / portfolio
+```
+
+**Required allowances**:
+| Action   | Token | Amount                              |
+|----------|-------|-------------------------------------|
+| Write    | MOTO  | underlyingAmount                    |
+| Buy      | PILL  | premium + 1% fee (ceiling)          |
+| Exercise | PILL  | strikePrice × underlyingAmount + 0.1% fee |
+| Cancel   | —     | no approval needed                  |
+| Settle   | —     | no approval needed                  |

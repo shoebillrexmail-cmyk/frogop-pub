@@ -61,7 +61,8 @@ async function main() {
         // Deploy Pool template with dummy addresses (will be overwritten when cloned by Factory)
         const dummyUnderlying = Address.fromString('0x0000000000000000000000000000000000000000000000000000000000000000');
         const dummyPremium = Address.fromString('0x0000000000000000000000000000000000000000000000000000000000000001');
-        const poolCalldata = createPoolCalldata(dummyUnderlying, dummyPremium);
+        const dummyFeeRecipient = Address.fromString('0x0000000000000000000000000000000000000000000000000000000000000002');
+        const poolCalldata = createPoolCalldata(dummyUnderlying, dummyPremium, dummyFeeRecipient);
         
         log.info('Deploying OptionsPool Template (with dummy calldata for template initialization)...');
         const poolResult = await deployer.deployContract(
@@ -100,7 +101,8 @@ async function main() {
         // Deploy Pool template with dummy addresses (will be overwritten when cloned by Factory)
         const dummyUnderlying = Address.fromString('0x0000000000000000000000000000000000000000000000000000000000000000');
         const dummyPremium = Address.fromString('0x0000000000000000000000000000000000000000000000000000000000000001');
-        const poolCalldata = createPoolCalldata(dummyUnderlying, dummyPremium);
+        const dummyFeeRecipient = Address.fromString('0x0000000000000000000000000000000000000000000000000000000000000002');
+        const poolCalldata = createPoolCalldata(dummyUnderlying, dummyPremium, dummyFeeRecipient);
         
         log.info('Deploying OptionsPool Template (with dummy calldata for template initialization)...');
         const poolResult = await deployer.deployContract(

@@ -156,7 +156,7 @@ When making changes to contracts or architecture, you MUST update the relevant d
 | New features | `docs/roadmap/IMPLEMENTATION_PLAN.md` |
 | Security changes | `docs/security/THREAT_MODEL.md` |
 | Test changes | `docs/tests/UNIT_TESTS_STATUS.md` |
-| Completing a story | `docs/roadmap/SPRINT_BOARD.md` |
+| Completing a story / new tasks | `SPRINTBOARD.md` (project root) |
 | Gas optimizations | `docs/roadmap/GAS_OPTIMIZATION_REFACTOR.md` |
 
 ### Documentation Checklist
@@ -251,30 +251,22 @@ After completing work:
 | Epic 1 | Smart Contracts | ✅ Done |
 | Epic 2 | Security | ✅ Done |
 | Epic 3 | Testing | 🔄 Partial |
-| **Epic 6** | **Gas Optimization** | **✅ Done** |
-| **Epic 5** | **Integration Testing** | **🔴 BLOCKING - MUST COMPLETE** |
-| Epic 4 | Frontend MVP | ⏸️ Blocked by Epic 5 |
+| Epic 6 | Gas Optimization | ✅ Done |
+| Epic 5 | Integration Testing | ✅ Done (testnet) |
+| Epic 4 | Frontend MVP | 🔄 In Progress |
 
-### CRITICAL: Epic 5 (Integration Testing)
+### Integration Tests (Epic 5 — Complete)
 
-**Current blocker**: Unit tests cannot test token transfers (Blockchain.call() limitation).
+All integration tests run against **OPNet testnet** (`https://testnet.opnet.org`). Regtest is no longer used.
 
-Before frontend work (Epic 4), complete Epic 5:
-1. **Story 5.1**: Regtest Setup - Wallet, mnemonic, .env, test BTC
-2. **Story 5.2**: Deploy Test OP20 Tokens - Custom tokens (FROG-U, FROG-P)
-3. **Story 5.3**: Deploy OptionsFactory - With template configuration
-4. **Story 5.4**: Deploy Pool Template - For pool creation
-5. **Story 5.5**: Create Integration Tests - Full option lifecycle on regtest
-6. **Story 5.6**: Test Token Transfers - writeOption, buyOption, exercise
-7. **Story 5.7**: Gas Validation - Verify gas usage on-chain
+Deployed testnet contracts (see `tests/integration/deployed-contracts.json`):
+- FROG-U, FROG-P tokens deployed and minted
+- OptionsFactory + pool template deployed
+- OptionsPool deployed directly (factory `createPool` is NOT supported by OPNet runtime)
 
-**Why before frontend?**
-- Unit tests cannot test actual token transfers
-- Frontend needs verified contract behavior
-- Must test full option lifecycle with real OP20 tokens
-- Regtest deployment required before frontend development
+Full lifecycle verified: writeOption → getOption → cancelOption (status=4, fees collected).
 
-**See**: `docs/tests/INTEGRATION_TEST_TECHNICAL.md` for technical details.
+**See**: `SPRINTBOARD.md` for current task backlog.
 
 ---
 
@@ -286,7 +278,7 @@ Before frontend work (Epic 4), complete Epic 5:
 2. **[docs/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md](docs/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md)** - OPNet complexity and gas optimization
 3. **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
 4. **[docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md)** - Security considerations
-5. **[docs/roadmap/SPRINT_BOARD.md](docs/roadmap/SPRINT_BOARD.md)** - Current sprint status
+5. **[SPRINTBOARD.md](SPRINTBOARD.md)** - Current task backlog and in-progress work
 
 ### Reference
 
@@ -309,12 +301,40 @@ The OptionsPool contract (~30KB WASM) exceeds the unit test framework's 500B gas
 
 ---
 
-## Commit Guidelines
+## Git Strategy
+
+### Branch Model
+
+| Branch | Purpose | Deploys to |
+|--------|---------|------------|
+| `master` | Production — stable releases only | Cloudflare Pages (production) |
+| `develop` | Integration — daily work lands here | Cloudflare Pages (preview) |
+| `feat/*` / `fix/*` | Topic branches for individual work | Nothing (PR only) |
+
+**NEVER push directly to `master`.** All changes go through `develop` first.
+
+### Workflow
+
+```bash
+# Always branch from develop
+git checkout develop && git pull origin develop
+git checkout -b feat/my-feature   # or fix/my-fix
+
+# ... implement, test, commit ...
+
+# Push topic branch and open PR → develop
+git push origin feat/my-feature
+
+# To release to production: open PR develop → master
+```
+
+### Commit Guidelines
 
 1. Run `npm run lint && npm run typecheck && npm run build` before committing
 2. Update relevant documentation
-3. Write descriptive commit messages
+3. Write descriptive commit messages using conventional format: `feat:`, `fix:`, `chore:`, `docs:`
 4. Reference issue numbers when applicable
+5. Add `Co-Authored-By:` line when using AI assistance
 
 ---
 
@@ -345,5 +365,5 @@ The OptionsPool contract (~30KB WASM) exceeds the unit test framework's 500B gas
 - Security: See `docs/security/THREAT_MODEL.md`
 - OPNet Patterns: See `docs/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md`
 - Planning: See `docs/roadmap/IMPLEMENTATION_PLAN.md`
-- Current Sprint: See `docs/roadmap/SPRINT_BOARD.md`
+- Current Sprint: See `SPRINTBOARD.md`
 - Gas Optimization: See `docs/roadmap/GAS_OPTIMIZATION_REFACTOR.md`

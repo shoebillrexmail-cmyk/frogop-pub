@@ -1,0 +1,244 @@
+/**
+ * WriteOptionPanel tests — validation, approval flow, submission.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import type { PoolInfo } from '../../services/types.ts';
+
+// ---------------------------------------------------------------------------
+// Module mocks
+// ---------------------------------------------------------------------------
+
+const mockUseTokenInfo = vi.fn();
+vi.mock('../../hooks/useTokenInfo.ts', () => ({
+    useTokenInfo: (...args: unknown[]) => mockUseTokenInfo(...args),
+}));
+
+// Mock getContract — returns a proxy that records calls
+const mockSendTransaction = vi.fn();
+const mockCallResult = { sendTransaction: mockSendTransaction };
+const mockContractMethod = vi.fn(() => Promise.resolve(mockCallResult));
+const mockGetContract = vi.fn(() =>
+    new Proxy({}, {
+        get: (_target, prop) => {
+            if (typeof prop === 'string') return mockContractMethod;
+            return undefined;
+        },
+    })
+);
+vi.mock('opnet', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('opnet')>();
+    return {
+        ...actual,
+        getContract: (...args: unknown[]) => mockGetContract(...args),
+    };
+});
+
+import { WriteOptionPanel } from '../WriteOptionPanel.tsx';
+
+// ---------------------------------------------------------------------------
+// Test data
+// ---------------------------------------------------------------------------
+
+const POOL_INFO: PoolInfo = {
+    underlying: '0xaaaa000000000000000000000000000000000000000000000000000000000001',
+    premiumToken: '0xbbbb000000000000000000000000000000000000000000000000000000000002',
+    optionCount: 0n,
+    cancelFeeBps: 100n,
+    buyFeeBps: 100n,
+    exerciseFeeBps: 10n,
+    gracePeriodBlocks: 144n,
+};
+
+const POOL_ADDRESS = '0xcccc000000000000000000000000000000000000000000000000000000000003';
+
+function makeAddress(hex: string) {
+    return { toString: () => hex };
+}
+
+const WALLET_HEX = '0xdead000000000000000000000000000000000000000000000000000000000001';
+
+const DEFAULT_PROPS = {
+    poolAddress: POOL_ADDRESS,
+    poolInfo: POOL_INFO,
+    walletAddress: 'opt1pftest',
+    walletHex: WALLET_HEX,
+    address: makeAddress(WALLET_HEX) as ReturnType<typeof import('@btc-vision/transaction').Address['fromString']>,
+    provider: {
+        getPublicKeyInfo: vi.fn().mockResolvedValue({ toString: () => POOL_ADDRESS }),
+        call: vi.fn(),
+    } as unknown as import('opnet').AbstractRpcProvider,
+    network: {} as import('@btc-vision/walletconnect').WalletConnectNetwork,
+    onClose: vi.fn(),
+    onSuccess: vi.fn(),
+};
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('WriteOptionPanel', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+
+        // Default token info: sufficient balance, sufficient allowance
+        mockUseTokenInfo.mockReturnValue({
+            info: {
+                balance: 100n * 10n ** 18n,
+                allowance: 100n * 10n ** 18n,
+            },
+            loading: false,
+            error: null,
+            refetch: vi.fn(),
+        });
+    });
+
+    it('renders the panel with form fields', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+        expect(screen.getByTestId('write-option-panel')).toBeInTheDocument();
+        expect(screen.getByTestId('input-amount')).toBeInTheDocument();
+        expect(screen.getByTestId('input-strike')).toBeInTheDocument();
+        expect(screen.getByTestId('input-premium')).toBeInTheDocument();
+        expect(screen.getByTestId('input-expiry')).toBeInTheDocument();
+    });
+
+    it('has CALL/PUT type toggle', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+        expect(screen.getByTestId('type-call')).toBeInTheDocument();
+        expect(screen.getByTestId('type-put')).toBeInTheDocument();
+    });
+
+    it('closes when backdrop is clicked', () => {
+        const onClose = vi.fn();
+        render(<WriteOptionPanel {...DEFAULT_PROPS} onClose={onClose} />);
+        fireEvent.click(screen.getByTestId('panel-backdrop'));
+        expect(onClose).toHaveBeenCalledOnce();
+    });
+
+    it('closes when ✕ button is clicked', () => {
+        const onClose = vi.fn();
+        render(<WriteOptionPanel {...DEFAULT_PROPS} onClose={onClose} />);
+        fireEvent.click(screen.getByLabelText('Close panel'));
+        expect(onClose).toHaveBeenCalledOnce();
+    });
+
+    it('shows Write Option button when allowance is sufficient', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+        expect(screen.getByTestId('btn-write')).toBeInTheDocument();
+        expect(screen.queryByTestId('btn-approve')).not.toBeInTheDocument();
+    });
+
+    it('shows Approve button when allowance is insufficient', () => {
+        mockUseTokenInfo.mockReturnValue({
+            info: {
+                balance: 100n * 10n ** 18n,
+                allowance: 0n, // no allowance
+            },
+            loading: false,
+            error: null,
+            refetch: vi.fn(),
+        });
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+        expect(screen.getByTestId('btn-approve')).toBeInTheDocument();
+        expect(screen.queryByTestId('btn-write')).not.toBeInTheDocument();
+    });
+
+    it('shows validation error when strike is empty and Write is clicked', async () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+
+        // Clear strike field
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '' } });
+        fireEvent.click(screen.getByTestId('btn-write'));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('validation-error')).toBeInTheDocument();
+        });
+        expect(screen.getByTestId('validation-error').textContent).toMatch(/strike/i);
+    });
+
+    it('shows validation error when expiry is out of range', async () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
+        fireEvent.change(screen.getByTestId('input-expiry'), { target: { value: '999999' } });
+        fireEvent.click(screen.getByTestId('btn-write'));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('validation-error')).toBeInTheDocument();
+        });
+        expect(screen.getByTestId('validation-error').textContent).toMatch(/expiry/i);
+    });
+
+    it('calls getContract and sendTransaction on Write submit', async () => {
+        mockSendTransaction.mockResolvedValue({ transactionId: 'txabc123' });
+
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
+
+        fireEvent.click(screen.getByTestId('btn-write'));
+
+        await waitFor(() => {
+            expect(mockGetContract).toHaveBeenCalled();
+            expect(mockSendTransaction).toHaveBeenCalled();
+        });
+
+        // Verify signer=null pattern (frontend wallet signs)
+        const [sendParams] = mockSendTransaction.mock.calls[0] as [Record<string, unknown>];
+        expect(sendParams.signer).toBeNull();
+        expect(sendParams.mldsaSigner).toBeNull();
+    });
+
+    it('shows success message after write', async () => {
+        mockSendTransaction.mockResolvedValue({ transactionId: 'txabc123' });
+
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
+        fireEvent.click(screen.getByTestId('btn-write'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Transaction broadcast/i)).toBeInTheDocument();
+        });
+    });
+
+    it('shows tx error on failure', async () => {
+        mockSendTransaction.mockRejectedValue(new Error('Insufficient UTXOs'));
+
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
+        fireEvent.click(screen.getByTestId('btn-write'));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('tx-error')).toBeInTheDocument();
+        });
+        expect(screen.getByTestId('tx-error').textContent).toMatch(/Insufficient UTXOs/i);
+    });
+
+    it('calls Approve flow and uses increaseAllowance contract method', async () => {
+        mockUseTokenInfo.mockReturnValue({
+            info: {
+                balance: 100n * 10n ** 18n,
+                allowance: 0n,
+            },
+            loading: false,
+            error: null,
+            refetch: vi.fn(),
+        });
+        mockSendTransaction.mockResolvedValue({ transactionId: 'approve-tx' });
+
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+        fireEvent.click(screen.getByTestId('btn-approve'));
+
+        await waitFor(() => {
+            expect(mockGetContract).toHaveBeenCalled();
+            expect(mockContractMethod).toHaveBeenCalled();
+            expect(mockSendTransaction).toHaveBeenCalled();
+        });
+    });
+});

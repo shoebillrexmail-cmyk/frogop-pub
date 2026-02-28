@@ -1,0 +1,38 @@
+name = "frogop-indexer"
+main = "src/worker.ts"
+compatibility_date = "2026-01-01"
+
+# nodejs_compat: polyfills Buffer, process, etc. required by opnet + @btc-vision packages
+compatibility_flags = ["nodejs_compat"]
+
+# Custom domain — Cloudflare handles DNS + SSL automatically.
+# No dashboard click needed after wrangler deploy.
+routes = [
+  { pattern = "api.frogop.net", custom_domain = true }
+]
+
+[triggers]
+# Testnet blocks ~10 min — poll every minute to stay fresh
+# Free plan minimum is */5; paid plan allows * * * * * (every minute)
+crons = ["* * * * *"]
+
+# ---------------------------------------------------------------------------
+# D1 — managed SQLite
+# Run `npm run db:create` once to provision, then fill in the database_id below
+# ---------------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "frogop-indexer"
+database_id = "REPLACE_AFTER_wrangler_d1_create"
+
+# ---------------------------------------------------------------------------
+# Non-secret config (committed). Secrets go via `wrangler secret put`.
+# ---------------------------------------------------------------------------
+[vars]
+OPNET_NETWORK    = "testnet"
+OPNET_RPC_URL    = "https://testnet.opnet.org"
+# Space-separated bech32 pool addresses to track
+POOL_ADDRESSES   = "opt1sqp30jy9pzty2ylt0t0f8a25u99eu09wyny3e4syd"
+FACTORY_ADDRESS  = "opt1sqz4wm6z6gy2rrfsqxf0tuh6tkyn32eerkg57nrka"
+# Max blocks to process per cron invocation (prevents CPU timeout on catch-up)
+MAX_BLOCKS_PER_RUN = "50"

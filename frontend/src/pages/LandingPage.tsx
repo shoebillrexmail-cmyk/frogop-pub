@@ -217,8 +217,8 @@ export function LandingPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-terminal-bg-primary rounded-lg p-3">
                       <p className="text-xs font-mono text-status-positive mb-1">MOTO = 70 PILL</p>
-                      <p className="text-xs">Bob exercises. Gets 100 MOTO for 5,000 PILL.</p>
-                      <p className="text-xs mt-1">Bob profit: <span className="font-mono text-status-positive">+1,495 PILL</span></p>
+                      <p className="text-xs">Bob exercises. Pays 5,000 PILL, gets 99.9 MOTO (0.1% exercise fee).</p>
+                      <p className="text-xs mt-1">Bob profit: <span className="font-mono text-status-positive">~+1,488 PILL</span></p>
                     </div>
                     <div className="bg-terminal-bg-primary rounded-lg p-3">
                       <p className="text-xs font-mono text-status-negative mb-1">MOTO = 40 PILL</p>
@@ -240,14 +240,14 @@ export function LandingPage() {
             Protocol Flow
           </h2>
           <p className="text-terminal-text-muted text-center mb-12 max-w-xl mx-auto text-sm font-mono">
-            Four steps from pool creation to settlement
+            Four steps from discovery to settlement
           </p>
           <div className="grid md:grid-cols-4 gap-4">
             <div className="terminal-card rounded-xl p-5 text-center">
               <div className="text-sm font-mono text-accent mb-2">01</div>
-              <h4 className="text-sm font-semibold text-terminal-text-primary mb-1">Create Pool</h4>
+              <h4 className="text-sm font-semibold text-terminal-text-primary mb-1">Browse Pools</h4>
               <p className="text-xs text-terminal-text-muted">
-                Deploy a pool for any OP20 token pair
+                Find a pool for your target token pair
               </p>
             </div>
             <div className="terminal-card rounded-xl p-5 text-center">
@@ -296,7 +296,8 @@ export function LandingPage() {
             </div>
             <div className="terminal-card rounded-xl p-4 text-center">
               <p className="text-xs text-terminal-text-muted mb-1 font-mono">Exercise</p>
-              <p className="text-lg font-bold text-status-positive">Free</p>
+              <p className="text-lg font-bold text-accent">0.1%</p>
+              <p className="text-[10px] text-terminal-text-muted mt-0.5">of payout</p>
             </div>
             <div className="terminal-card rounded-xl p-4 text-center">
               <p className="text-xs text-terminal-text-muted mb-1 font-mono">Cancel</p>

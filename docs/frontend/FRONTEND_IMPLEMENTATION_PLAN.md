@@ -78,15 +78,18 @@ Based on current smart contract capabilities:
 | Feature | Contract Method | Priority |
 |---------|-----------------|----------|
 | Connect Wallet | N/A (wallet connection) | P0 |
-| View Pools | `factory.getPool()` | P0 |
-| Create Pool | `factory.createPool()` | P1 |
-| View Options | `pool.getOption()`, `pool.getOptionsByWriter()` | P0 |
+| List All Pools | `factory.getPoolCount()` + `factory.getPoolByIndex(i)` | P0 |
+| Pool Discovery | `factory.getPoolCount()` + `getPoolByIndex()` | P0 |
+| View Options in Pool | `pool.getOptionsBatch(startId, count)` — client-side filter by status | P0 |
+| Single Option Detail | `pool.getOption(id)` | P0 |
 | Write Option | `pool.writeOption()` | P0 |
 | Buy Option | `pool.buyOption()` | P0 |
-| View Portfolio | `pool.getOptionsByWriter/Buyer()` | P0 |
+| View Portfolio | `pool.getOptionsBatch()` per pool — filter client-side by `writer/buyer == me` | P0 |
 | Cancel Option | `pool.cancelOption()` | P1 |
 | Exercise Option | `pool.exercise()` | P0 |
 | Settle Option | `pool.settle()` | P1 |
+
+> **Note:** `getOptionsByWriter()` and `getOptionsByBuyer()` do not exist on-chain. Phase 1 uses client-side filtering via `getOptionsBatch()`. Per-address on-chain indices are Phase 2.
 
 ### 3.2 User Flows
 
@@ -166,7 +169,7 @@ App
 │   │
 │   ├── PoolsPage
 │   │   ├── PoolList
-│   │   ├── CreatePoolModal
+│   │   ├── PoolSelector  (factory-driven pool discovery)
 │   │   └── PoolFilters
 │   │
 │   ├── PoolDetailPage
@@ -220,7 +223,7 @@ interface PoolState {
   selectedPool: Pool | null;
   loading: boolean;
   fetchPools: () => Promise<void>;
-  createPool: (tokenA: string, tokenB: string) => Promise<void>;
+  // Pool creation is admin-only — not exposed in frontend
 }
 
 // stores/optionStore.ts
@@ -260,7 +263,7 @@ Key Features:
 - No oracle dependency - strike prices are token pair ratios
 - Trustless settlement - automated via smart contracts
 - Bitcoin-native - works with OP20 tokens on Bitcoin
-- Permissionless - anyone can create pools and trade options
+- Permissionless trading - anyone can write, buy, and exercise options
 
 How it's different:
 - Not on Ethereum/L2 - built directly on Bitcoin
@@ -294,7 +297,7 @@ Phase 1: MVP - Core Options (Current)
 - Token-pair strikes (e.g., PILL per MOTO)
 - 100% collateralization
 - Block-height expiry
-- Permissionless pool creation
+- Admin pool deployment + factory registry
 - Full option lifecycle (write, buy, exercise, cancel, settle)
 
 Phase 2: NativeSwap Integration (Planned)
@@ -500,24 +503,35 @@ npm run build
 # Output: frontend/dist/
 ```
 
-### Deployment Options
+### Hosting: Cloudflare Workers (Static Assets)
 
-| Option | Cost | Complexity |
-|--------|------|------------|
-| IPFS | Free | Medium |
-| Vercel | Free | Low |
-| Netlify | Free | Low |
-| GitHub Pages | Free | Low |
+FroGop frontend is deployed via **Cloudflare Workers with static assets** — free tier, global CDN, auto-deploy on push to `master`.
 
-### Recommended: IPFS + ENS
+See [`docs/deployment/CLOUDFLARE_PAGES.md`](../deployment/CLOUDFLARE_PAGES.md) for the full setup guide.
+
+```
+Push to master
+  → Cloudflare builds: cd frontend && npm install --legacy-peer-deps && npm run build
+  → wrangler deploys frontend/dist/ → Cloudflare edge (global CDN)
+  → SPA routing via not_found_handling = "single-page-application" in wrangler.toml
+```
+
+**Environment variables** are set in the Cloudflare dashboard (Settings → Environment Variables) and baked into the JS bundle at build time:
+
+| Variable | Value |
+|---|---|
+| `VITE_OPNET_NETWORK` | `testnet` |
+| `VITE_OPNET_RPC_URL` | `https://testnet.opnet.org` |
+| `VITE_FACTORY_ADDRESS` | *(set after contract deployment)* |
+| `VITE_POOL_TEMPLATE_ADDRESS` | *(set after contract deployment)* |
+
+### Local Development
 
 ```bash
-# Build and upload to IPFS
-npm run build
-npx ipfs-deploy dist
-
-# Update ENS record
-# frogop.eth → ipfs://Qm...
+cd frontend
+npm install
+npm run dev
+# Available at http://localhost:5173
 ```
 
 ---
@@ -527,15 +541,15 @@ npx ipfs-deploy dist
 ### MVP Complete When:
 
 - [ ] Users can connect OPWallet
-- [ ] Users can view all pools
+- [ ] Users can view all pools (via getPoolCount + getPoolByIndex)
 - [ ] Users can create new pools
 - [ ] Users can write options
 - [ ] Users can buy options
-- [ ] Users can view their portfolio
+- [ ] Users can view their portfolio (via getOptionsBatch + client filter)
 - [ ] Users can exercise options
 - [ ] All transactions confirm successfully
 - [ ] Mobile responsive
-- [ ] Deployed to IPFS
+- [ ] Deployed to Cloudflare Workers on testnet
 
 ---
 
