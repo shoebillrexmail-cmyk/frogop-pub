@@ -1,8 +1,11 @@
 /**
- * usePriceRatio — derives MOTO/PILL cross-rate via NativeSwap tBTC intermediary.
+ * usePriceRatio — MOTO/PILL cross-rate.
  *
- * Strategy: getQuote(MOTO, 100k sats) and getQuote(PILL, 100k sats), then
- * motoPillRatio = pillTokensOut / motoTokensOut (how much PILL 1 MOTO is worth).
+ * Primary: fetches from the indexer (/prices/MOTO_PILL/latest) — works
+ * without wallet connection or NativeSwap address configuration.
+ *
+ * Fallback: calls NativeSwap getQuote() on-chain when the indexer is
+ * unavailable AND wallet + NativeSwap address are available.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { getContract } from 'opnet';
@@ -11,6 +14,7 @@ import { NativeSwapAbi } from 'opnet';
 import type { INativeSwapContract } from 'opnet';
 import { Address } from '@btc-vision/transaction';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
+import { getLatestPrice } from '../services/priceService.ts';
 
 export interface UsePriceRatioResult {
     motoPillRatio: number | null;
@@ -20,6 +24,16 @@ export interface UsePriceRatioResult {
 
 const QUOTE_SATS = 100_000n;
 const POLL_INTERVAL_MS = 60_000;
+
+/** Convert an 18-decimal BigInt string to a float. */
+function priceToFloat(s: string): number {
+    if (!s || s === '0') return 0;
+    const val = BigInt(s);
+    const divisor = 10n ** 18n;
+    const whole = val / divisor;
+    const frac = val % divisor;
+    return Number(whole) + Number(frac) / 1e18;
+}
 
 export function usePriceRatio(
     nativeSwapAddress: string | null,
@@ -36,26 +50,45 @@ export function usePriceRatio(
     const refresh = useCallback(() => setTick((t) => t + 1), []);
 
     useEffect(() => {
-        if (!nativeSwapAddress || !motoAddress || !pillAddress || !provider || !network) {
-            setMotoPillRatio(null);
-            setLoading(false);
-            return;
-        }
-
         let cancelled = false;
 
         async function fetchRatio() {
             setLoading(true);
+
+            // ---- Try indexer first (no wallet needed) ----
+            try {
+                const snapshot = await getLatestPrice('MOTO_PILL');
+                if (snapshot && !cancelled) {
+                    const ratio = priceToFloat(snapshot.price);
+                    if (ratio > 0) {
+                        setMotoPillRatio(ratio);
+                        setError(null);
+                        setLoading(false);
+                        return;
+                    }
+                }
+            } catch {
+                // Indexer unavailable — fall through to on-chain
+            }
+
+            // ---- Fallback: on-chain NativeSwap getQuote ----
+            if (!nativeSwapAddress || !motoAddress || !pillAddress || !provider || !network) {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+                return;
+            }
+
             try {
                 const contract = getContract<INativeSwapContract>(
-                    nativeSwapAddress!,
+                    nativeSwapAddress,
                     NativeSwapAbi,
-                    provider!,
-                    network!,
+                    provider,
+                    network,
                 );
 
-                const motoAddr = Address.fromString(motoAddress!);
-                const pillAddr = Address.fromString(pillAddress!);
+                const motoAddr = Address.fromString(motoAddress);
+                const pillAddr = Address.fromString(pillAddress);
 
                 const [motoQuote, pillQuote] = await Promise.all([
                     contract.getQuote(motoAddr, QUOTE_SATS),

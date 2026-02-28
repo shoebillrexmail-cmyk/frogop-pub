@@ -17,9 +17,11 @@ export interface Env {
     FACTORY_ADDRESS: string;
     /** Max blocks to process per cron invocation */
     MAX_BLOCKS_PER_RUN: string;
-    /** Space-separated bech32 NativeSwap contract addresses (one per token pool) */
-    NATIVESWAP_ADDRESSES: string;
-    /** Comma-separated token labels matching NATIVESWAP_ADDRESSES order, e.g. "MOTO,PILL" */
+    /** 0x-prefixed hex address of the NativeSwap router contract */
+    NATIVESWAP_CONTRACT: string;
+    /** Space-separated 0x-prefixed hex token addresses to poll prices for */
+    NATIVESWAP_TOKEN_ADDRESSES: string;
+    /** Comma-separated token labels matching NATIVESWAP_TOKEN_ADDRESSES order, e.g. "MOTO,PILL" */
     NATIVESWAP_LABELS: string;
 }
 

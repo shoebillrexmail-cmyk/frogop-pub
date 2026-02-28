@@ -4,12 +4,6 @@
 
 ### Frontend
 
-- [ ] **WebSocket real-time updates in frontend**
-  - Replace HTTP polling with `WebSocketRpcProvider` for block subscriptions
-  - Live block-height display via WS events
-  - TX confirmation detection via WS instead of polling `getTransactionReceipt`
-  - `WebSocketRpcProvider` from `opnet`, URL: `wss://testnet.opnet.org/ws`
-
 ### CI/CD
 
 - [ ] **Create Cloudflare Pages project for frontend**
@@ -19,7 +13,7 @@
 
 ## In Progress
 
-- [ ] **WebSocket real-time updates** — replacing HTTP polling with WS subscriptions
+(none)
 
 ## Done
 
@@ -33,4 +27,5 @@
 - [x] ~~Indexer tests in CI~~ — Uncommented `npm test` step in `indexer.yml` (poller + decoder + router tests)
 - [x] ~~Frontend ↔ Testnet contract integration~~ — Wallet connection (WalletConnect/OPWallet), pool discovery (factory + direct), options table with filtering, write/buy/exercise/cancel/settle modal flows with 2-step approval, portfolio page with written + purchased sections, balances card.
 - [x] ~~OHLCV Price Tracking~~ — Indexer extended with NativeSwap SwapExecuted decoder, spot price polling via getQuote, OHLCV candle rollup (1h/4h/1d/1w), MOTO/PILL cross-rate, /prices/:token/candles|latest|history API. Frontend PriceChart (TradingView lightweight-charts) on PoolsPage.
+- [x] ~~WebSocket real-time updates~~ — `WebSocketRpcProvider` in Layout, `WsBlockContext` for sharing block across app. `useBlockTracker` uses WS block with HTTP polling fallback. `useTransactionPoller` triggers on WS block events. Live block number + connection status in footer.
 - [x] ~~Transaction Progress Tracking~~ — TransactionContext with localStorage persistence (keyed by wallet), useTransactionFlow for multi-step approval resume, useTransactionPoller for receipt polling, TransactionToast global indicator. All 5 modals wired (Buy, Write, Exercise, Cancel, Settle). Auto-refetch on confirmed TX in PoolsPage + PortfolioPage.

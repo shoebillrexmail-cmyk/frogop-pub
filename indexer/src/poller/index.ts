@@ -22,7 +22,7 @@ import { decodeBlock } from '../decoder/index.js';
 export async function pollNewBlocks(env: Env): Promise<void> {
     const maxBlocksPerRun = parseInt(env.MAX_BLOCKS_PER_RUN, 10) || 50;
     const poolHexSet      = await resolvePoolAddresses(env);
-    const swapLabelMap    = await resolveSwapAddresses(env);
+    const swapConfig      = resolveSwapConfig(env);
 
     // JSONRpcProvider uses fetch() — browser polyfill active in Workers
     const provider = new JSONRpcProvider({ url: env.OPNET_RPC_URL, network: env.OPNET_NETWORK as never });
@@ -39,12 +39,24 @@ export async function pollNewBlocks(env: Env): Promise<void> {
     const to   = Math.min(latestBlock, lastIndexed + maxBlocksPerRun);
     console.log(`[poller] Syncing blocks ${from} → ${to} (latest=${latestBlock})`);
 
+    // Build swap label map for event decoding (routerHex → label per token)
+    // For SwapExecuted events, we track the router contract; labels are resolved
+    // from event data, but we still need to know which contracts to watch.
+    const swapLabelMap = new Map<string, string>();
+    if (swapConfig) {
+        // Map the router address so decodeBlock watches it for SwapExecuted events
+        // Use first label as default — SwapExecuted events include buyer/amounts but
+        // not which token was swapped, so event labeling is best-effort for now.
+        const firstLabel = swapConfig.tokenMap.values().next().value as string;
+        swapLabelMap.set(swapConfig.routerHex, firstLabel);
+    }
+
     for (let n = from; n <= to; n++) {
         await processBlock(env.DB, provider, n, poolHexSet, swapLabelMap);
     }
 
     // After block sync: poll spot prices + rollup candles + prune old data
-    await pollPrices(env, provider, swapLabelMap, latestBlock);
+    await pollPrices(env, provider, swapConfig, latestBlock);
     await rollUpAllCandles(env.DB);
     await pruneOldData(env.DB, latestBlock);
 }
@@ -121,27 +133,33 @@ async function resolvePoolAddresses(env: Env): Promise<Set<string>> {
 // NativeSwap address resolution
 // ---------------------------------------------------------------------------
 
-async function resolveSwapAddresses(env: Env): Promise<Map<string, string>> {
-    const addressList = (env.NATIVESWAP_ADDRESSES ?? '').split(' ').filter(Boolean);
-    const labelList   = (env.NATIVESWAP_LABELS ?? '').split(',').filter(Boolean);
-    if (addressList.length === 0 || labelList.length === 0) return new Map();
+/** Resolved NativeSwap config: one router contract + per-token addresses. */
+interface SwapConfig {
+    /** 0x-hex of the NativeSwap router contract (where we call getQuote) */
+    routerHex: string;
+    /** tokenHex → label (e.g. "0xfd44..." → "MOTO") */
+    tokenMap: Map<string, string>;
+}
 
-    const provider = new JSONRpcProvider({ url: env.OPNET_RPC_URL, network: env.OPNET_NETWORK as never });
-    const map = new Map<string, string>();
+function resolveSwapConfig(env: Env): SwapConfig | null {
+    const router = (env.NATIVESWAP_CONTRACT ?? '').trim();
+    if (!router) return null;
 
-    for (let i = 0; i < addressList.length; i++) {
-        const label = labelList[i];
+    const tokenAddrs = (env.NATIVESWAP_TOKEN_ADDRESSES ?? '').split(' ').filter(Boolean);
+    const labels     = (env.NATIVESWAP_LABELS ?? '').split(',').filter(Boolean);
+    if (tokenAddrs.length === 0 || labels.length === 0) return null;
+
+    const tokenMap = new Map<string, string>();
+    for (let i = 0; i < tokenAddrs.length; i++) {
+        const label = labels[i];
         if (!label) continue;
-        try {
-            const info = await provider.getPublicKeyInfo(addressList[i]!, true);
-            if (info) map.set(info.toString(), label);
-        } catch (err) {
-            console.error(`[poller] Failed to resolve NativeSwap address ${addressList[i]}:`, err);
-        }
+        tokenMap.set(tokenAddrs[i]!, label);
     }
 
-    if (map.size > 0) console.log(`[poller] Tracking ${map.size} NativeSwap contract(s)`);
-    return map;
+    if (tokenMap.size > 0) {
+        console.log(`[poller] NativeSwap router: ${router}, tracking ${tokenMap.size} token(s)`);
+    }
+    return { routerHex: router, tokenMap };
 }
 
 // ---------------------------------------------------------------------------
@@ -168,38 +186,21 @@ function decodeU256FromHex(hex: string): bigint {
 async function pollPrices(
     env: Env,
     provider: JSONRpcProvider,
-    swapLabelMap: Map<string, string>,
+    swapConfig: SwapConfig | null,
     currentBlock: number,
 ): Promise<void> {
-    if (swapLabelMap.size === 0) return;
+    if (!swapConfig) return;
 
     const timestamp = new Date().toISOString();
     const stmts: D1PreparedStatement[] = [];
     const prices: Record<string, string> = {};
 
-    // For each NativeSwap pool, get the spot price (tokens per 100k sats)
-    // We need the NativeSwap contract hex → look it up from the map entries
-    // But we also need each token's contract address to pass to getQuote
-    // Since NativeSwap pools are token-specific, the token address IS the pool's paired token
-    // For simplicity: poll the NativeSwap contract itself — getQuote takes (tokenAddress, sats)
-    // The NativeSwap pool has a paired token; getQuote(pairedToken, sats) → how many tokens for N sats
-    // But we'd need the token address. The swapLabelMap only has hex→label.
-    // We store the raw response as the snapshot price.
-
-    // Approach: use provider.call(nativeSwapHex, getQuoteCalldata)
-    // For each entry in swapLabelMap: the key is the NativeSwap hex, value is the label
-    // getQuote on NativeSwap needs the token address to query. Since each NativeSwap pool
-    // IS the liquidity pool for that token, calling getQuote(anyTokenAddr, sats) should work.
-    // Actually — NativeSwap getQuote(tokenAddress, satoshis) returns tokens out for sats in.
-    // For a pool-specific NativeSwap, there's typically one token pair.
-    // Let's just call the contract with a standard getQuote and parse the response.
-
-    for (const [swapHex, label] of swapLabelMap) {
+    // Call getQuote(tokenAddress, 100k sats) on the single NativeSwap router
+    // for each tracked token. Returns how many tokens you get for 100k sats.
+    for (const [tokenHex, label] of swapConfig.tokenMap) {
         try {
-            // NativeSwap.getQuote(tokenAddress, satoshis) → returns tokensOut
-            // Since each NativeSwap pool is specific to a token, call with its own address
-            const calldata = encodeGetQuoteCalldata(swapHex, 100_000n);
-            const result = await provider.call(swapHex, calldata);
+            const calldata = encodeGetQuoteCalldata(tokenHex, 100_000n);
+            const result = await provider.call(swapConfig.routerHex, calldata);
             if (result) {
                 const price = decodeU256FromHex(String(result)).toString();
                 prices[label] = price;
