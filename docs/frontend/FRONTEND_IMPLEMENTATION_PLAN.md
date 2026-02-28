@@ -79,7 +79,7 @@ Based on current smart contract capabilities:
 |---------|-----------------|----------|
 | Connect Wallet | N/A (wallet connection) | P0 |
 | List All Pools | `factory.getPoolCount()` + `factory.getPoolByIndex(i)` | P0 |
-| Create Pool | `factory.createPool()` | P1 |
+| Pool Discovery | `factory.getPoolCount()` + `getPoolByIndex()` | P0 |
 | View Options in Pool | `pool.getOptionsBatch(startId, count)` — client-side filter by status | P0 |
 | Single Option Detail | `pool.getOption(id)` | P0 |
 | Write Option | `pool.writeOption()` | P0 |
@@ -169,7 +169,7 @@ App
 │   │
 │   ├── PoolsPage
 │   │   ├── PoolList
-│   │   ├── CreatePoolModal
+│   │   ├── PoolSelector  (factory-driven pool discovery)
 │   │   └── PoolFilters
 │   │
 │   ├── PoolDetailPage
@@ -223,7 +223,7 @@ interface PoolState {
   selectedPool: Pool | null;
   loading: boolean;
   fetchPools: () => Promise<void>;
-  createPool: (tokenA: string, tokenB: string) => Promise<void>;
+  // Pool creation is admin-only — not exposed in frontend
 }
 
 // stores/optionStore.ts
@@ -263,7 +263,7 @@ Key Features:
 - No oracle dependency - strike prices are token pair ratios
 - Trustless settlement - automated via smart contracts
 - Bitcoin-native - works with OP20 tokens on Bitcoin
-- Permissionless - anyone can create pools and trade options
+- Permissionless trading - anyone can write, buy, and exercise options
 
 How it's different:
 - Not on Ethereum/L2 - built directly on Bitcoin
@@ -297,7 +297,7 @@ Phase 1: MVP - Core Options (Current)
 - Token-pair strikes (e.g., PILL per MOTO)
 - 100% collateralization
 - Block-height expiry
-- Permissionless pool creation
+- Admin pool deployment + factory registry
 - Full option lifecycle (write, buy, exercise, cancel, settle)
 
 Phase 2: NativeSwap Integration (Planned)

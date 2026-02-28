@@ -19,7 +19,7 @@ Phase 1 delivers the minimum viable product: peer-to-peer options trading with O
 - ✅ Token-pair strikes (PILL per MOTO)
 - ✅ 100% collateralization
 - ✅ Block-height expiry
-- ✅ Permissionless pool creation
+- ✅ Admin pool deployment + factory registry
 - ✅ Option lifecycle management (write, buy, exercise, cancel, settle)
 - ✅ All integration tests passing on testnet (13/13)
 - 🔲 Protocol fee model (buy fee 1%, exercise fee 0.1%, cancel fee 1%) — sprint backlog
@@ -77,10 +77,10 @@ Phase 1 delivers the minimum viable product: peer-to-peer options trading with O
 
 ### 1. OptionsFactory
 
-Permissionless pool creation.
+Pool registry. Pools deployed by admin, registered via registerPool().
 
 **Key Methods**:
-- `createPool(underlying, premiumToken)` → poolAddress
+- `createPool(underlying, premiumToken)` → poolAddress *(not supported by OPNet runtime — use `registerPool` instead)*
 - `getPool(underlying, premiumToken)` → poolAddress
 - `getPoolByIndex(index)` → poolAddress *(pending — sprint backlog)*
 - `getPoolCount()` → count *(currently returns 0 — fix pending)*
@@ -357,7 +357,7 @@ Full lifecycle tests:
 
 Phase 1 is complete when:
 
-1. ✅ Users can create option pools (permissionless)
+1. ✅ Pools deployed by admin and registered in factory
 2. ✅ Writers can write calls and puts
 3. ✅ Buyers can purchase options
 4. ✅ Options can be exercised (ITM) or expire (OTM)

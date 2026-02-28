@@ -240,14 +240,14 @@ export function LandingPage() {
             Protocol Flow
           </h2>
           <p className="text-terminal-text-muted text-center mb-12 max-w-xl mx-auto text-sm font-mono">
-            Four steps from pool creation to settlement
+            Four steps from discovery to settlement
           </p>
           <div className="grid md:grid-cols-4 gap-4">
             <div className="terminal-card rounded-xl p-5 text-center">
               <div className="text-sm font-mono text-accent mb-2">01</div>
-              <h4 className="text-sm font-semibold text-terminal-text-primary mb-1">Create Pool</h4>
+              <h4 className="text-sm font-semibold text-terminal-text-primary mb-1">Browse Pools</h4>
               <p className="text-xs text-terminal-text-muted">
-                Deploy a pool for any OP20 token pair
+                Find a pool for your target token pair
               </p>
             </div>
             <div className="terminal-card rounded-xl p-5 text-center">

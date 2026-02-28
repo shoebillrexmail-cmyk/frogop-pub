@@ -32,6 +32,16 @@ export interface OptionData {
     status: number;
 }
 
+/** Minimal pool entry from the factory registry */
+export interface PoolEntry {
+    /** bech32 or hex pool contract address */
+    address: string;
+    /** Hex address of the underlying token */
+    underlying: string;
+    /** Hex address of the premium token */
+    premiumToken: string;
+}
+
 /** Pool-level configuration read from on-chain view methods */
 export interface PoolInfo {
     /** Hex address of the underlying token (MOTO) */

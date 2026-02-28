@@ -1,8 +1,10 @@
 /**
- * PoolsPage — real on-chain pool view with options table, write panel, and buy modal.
+ * PoolsPage — on-chain pool view with factory discovery, options table,
+ * write panel, and action modals.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWalletConnect } from '@btc-vision/walletconnect';
+import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
 import { usePool } from '../hooks/usePool.ts';
 import { PoolInfoCard } from '../components/PoolInfoCard.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
@@ -11,15 +13,36 @@ import { BuyOptionModal } from '../components/BuyOptionModal.tsx';
 import { CancelModal } from '../components/CancelModal.tsx';
 import { ExerciseModal } from '../components/ExerciseModal.tsx';
 import { SettleModal } from '../components/SettleModal.tsx';
-import { CONTRACT_ADDRESSES, currentNetwork } from '../config/index.ts';
+import { CONTRACT_ADDRESSES, currentNetwork, formatAddress } from '../config/index.ts';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
 import type { OptionData } from '../services/types.ts';
 
-const POOL_ADDRESS = CONTRACT_ADDRESSES.pool;
-
 export function PoolsPage() {
     const { walletAddress, address, provider, network } = useWalletConnect();
-    const { poolInfo, options, loading, error, refetch } = usePool(POOL_ADDRESS || null);
+    const {
+        pools,
+        loading: discoveryLoading,
+        error: discoveryError,
+        source,
+        refetch: refetchPools,
+    } = useDiscoverPools();
+
+    const [selectedPoolAddr, setSelectedPoolAddr] = useState<string | null>(null);
+
+    // Auto-select first pool when pools change
+    useEffect(() => {
+        if (pools.length > 0 && !selectedPoolAddr) {
+            setSelectedPoolAddr(pools[0].address);
+        }
+        // If selected pool is no longer in the list, reset
+        if (selectedPoolAddr && pools.length > 0 && !pools.some((p) => p.address === selectedPoolAddr)) {
+            setSelectedPoolAddr(pools[0].address);
+        }
+    }, [pools, selectedPoolAddr]);
+
+    const { poolInfo, options, loading: poolLoading, error: poolError, refetch: refetchPool } =
+        usePool(selectedPoolAddr);
+
     const [writeOpen, setWriteOpen] = useState(false);
     const [buyTarget, setBuyTarget] = useState<OptionData | null>(null);
     const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
@@ -29,9 +52,16 @@ export function PoolsPage() {
     // address.toString() = 0x-prefixed MLDSA hash; used for action visibility
     const walletHex = address ? address.toString() : null;
 
+    const loading = discoveryLoading || poolLoading;
+    const error = discoveryError || poolError;
+
+    function handleRefetch() {
+        refetchPools();
+        refetchPool();
+    }
+
     function handleBuy(option: OptionData) {
         if (!provider) {
-            // Prompt to connect — show a lightweight gate
             setBuyTarget(null);
         } else {
             setBuyTarget(option);
@@ -50,11 +80,13 @@ export function PoolsPage() {
         if (provider) setSettleTarget(option);
     }
 
-    if (!POOL_ADDRESS) {
+    // No pool source configured at all
+    if (!CONTRACT_ADDRESSES.factory && !CONTRACT_ADDRESSES.pool) {
         return (
             <div className="max-w-7xl mx-auto px-4 py-16 text-center">
                 <p className="text-terminal-text-muted font-mono text-sm">
-                    No pool address configured. Set{' '}
+                    No pool source configured. Set{' '}
+                    <code className="neon-orange">VITE_FACTORY_ADDRESS</code> or{' '}
                     <code className="neon-orange">VITE_POOL_ADDRESS</code> in your{' '}
                     <code className="neon-orange">.env</code> file.
                 </p>
@@ -70,18 +102,39 @@ export function PoolsPage() {
             {error && (
                 <div className="bg-terminal-bg-elevated border border-rose-700 rounded-xl p-6 text-center">
                     <p className="text-rose-400 font-mono text-sm mb-3">{error}</p>
-                    <button onClick={refetch} className="btn-secondary px-4 py-2 text-sm rounded">
+                    <button onClick={handleRefetch} className="btn-secondary px-4 py-2 text-sm rounded">
                         Retry
                     </button>
                 </div>
             )}
 
+            {/* Pool selector when multiple pools */}
+            {!error && pools.length > 1 && (
+                <div className="mb-4 flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-terminal-text-muted font-mono">Pool:</span>
+                    {pools.map((p) => (
+                        <button
+                            key={p.address}
+                            data-testid={`pool-selector-${p.address}`}
+                            onClick={() => setSelectedPoolAddr(p.address)}
+                            className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
+                                selectedPoolAddr === p.address
+                                    ? 'bg-accent text-terminal-bg-primary'
+                                    : 'bg-terminal-bg-elevated text-terminal-text-secondary hover:bg-terminal-bg-secondary'
+                            }`}
+                        >
+                            {formatAddress(p.address)}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {/* Main content */}
-            {!error && poolInfo && (
+            {!error && poolInfo && selectedPoolAddr && (
                 <div className="space-y-4">
                     <PoolInfoCard
                         poolInfo={poolInfo}
-                        poolAddress={POOL_ADDRESS}
+                        poolAddress={selectedPoolAddr}
                         onWriteOption={() => setWriteOpen(true)}
                     />
                     <OptionsTable
@@ -96,20 +149,25 @@ export function PoolsPage() {
                 </div>
             )}
 
-            {/* Network badge (hidden on mainnet) */}
+            {/* Network + source badge (hidden on mainnet) */}
             {currentNetwork !== 'mainnet' && (
                 <div className="mt-6 flex items-center gap-2 text-xs text-terminal-text-muted font-mono">
                     <span className="w-2 h-2 rounded-full bg-yellow-400" />
                     Network: {currentNetwork.charAt(0).toUpperCase() + currentNetwork.slice(1)}
+                    {source && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded bg-terminal-bg-elevated text-terminal-text-muted">
+                            source: {source}
+                        </span>
+                    )}
                 </div>
             )}
 
             {/* Buy Option modal */}
-            {buyTarget && poolInfo && provider && network && (
+            {buyTarget && poolInfo && selectedPoolAddr && provider && network && (
                 <BuyOptionModal
                     option={buyTarget}
                     poolInfo={poolInfo}
-                    poolAddress={POOL_ADDRESS}
+                    poolAddress={selectedPoolAddr}
                     walletAddress={walletAddress}
                     address={address}
                     provider={provider}
@@ -117,17 +175,17 @@ export function PoolsPage() {
                     onClose={() => setBuyTarget(null)}
                     onSuccess={() => {
                         setBuyTarget(null);
-                        refetch();
+                        refetchPool();
                     }}
                 />
             )}
 
             {/* Cancel Option modal */}
-            {cancelTarget && poolInfo && provider && network && (
+            {cancelTarget && poolInfo && selectedPoolAddr && provider && network && (
                 <CancelModal
                     option={cancelTarget}
                     poolInfo={poolInfo}
-                    poolAddress={POOL_ADDRESS}
+                    poolAddress={selectedPoolAddr}
                     walletAddress={walletAddress}
                     address={address}
                     provider={provider}
@@ -135,17 +193,17 @@ export function PoolsPage() {
                     onClose={() => setCancelTarget(null)}
                     onSuccess={() => {
                         setCancelTarget(null);
-                        refetch();
+                        refetchPool();
                     }}
                 />
             )}
 
             {/* Exercise Option modal */}
-            {exerciseTarget && poolInfo && provider && network && (
+            {exerciseTarget && poolInfo && selectedPoolAddr && provider && network && (
                 <ExerciseModal
                     option={exerciseTarget}
                     poolInfo={poolInfo}
-                    poolAddress={POOL_ADDRESS}
+                    poolAddress={selectedPoolAddr}
                     walletAddress={walletAddress}
                     address={address}
                     provider={provider}
@@ -153,16 +211,16 @@ export function PoolsPage() {
                     onClose={() => setExerciseTarget(null)}
                     onSuccess={() => {
                         setExerciseTarget(null);
-                        refetch();
+                        refetchPool();
                     }}
                 />
             )}
 
             {/* Settle Option modal */}
-            {settleTarget && provider && network && (
+            {settleTarget && selectedPoolAddr && provider && network && (
                 <SettleModal
                     option={settleTarget}
-                    poolAddress={POOL_ADDRESS}
+                    poolAddress={selectedPoolAddr}
                     walletAddress={walletAddress}
                     address={address}
                     provider={provider}
@@ -170,15 +228,15 @@ export function PoolsPage() {
                     onClose={() => setSettleTarget(null)}
                     onSuccess={() => {
                         setSettleTarget(null);
-                        refetch();
+                        refetchPool();
                     }}
                 />
             )}
 
             {/* Write Option slide-in panel */}
-            {writeOpen && poolInfo && provider && network && (
+            {writeOpen && poolInfo && selectedPoolAddr && provider && network && (
                 <WriteOptionPanel
-                    poolAddress={POOL_ADDRESS}
+                    poolAddress={selectedPoolAddr}
                     poolInfo={poolInfo}
                     walletAddress={walletAddress}
                     walletHex={walletHex}
@@ -188,7 +246,7 @@ export function PoolsPage() {
                     onClose={() => setWriteOpen(false)}
                     onSuccess={() => {
                         setWriteOpen(false);
-                        refetch();
+                        refetchPool();
                     }}
                 />
             )}

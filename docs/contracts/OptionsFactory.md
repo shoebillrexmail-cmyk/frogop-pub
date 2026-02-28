@@ -2,7 +2,7 @@
 
 ## Overview
 
-OptionsFactory is the permissionless factory contract for creating new option pools. Anyone can deploy a new option market for any OP20 token pair.
+OptionsFactory is the pool registry contract. Pools are deployed by the protocol admin and registered via `registerPool()`. The factory provides pool discovery methods (`getPoolCount`, `getPoolByIndex`, `getPool`).
 
 ## Contract Address
 
@@ -112,6 +112,8 @@ const receipt = await simulation.sendTransaction({
 
 console.log('Pool created:', simulation.properties.pool.toHex());
 ```
+
+> **Runtime Limitation:** `createPool()` relies on `Blockchain.deployContractFromExisting()` which is **not supported** by the OPNet runtime. Calling `createPool()` will revert on-chain. Instead, deploy pools via CLI/script and register them with `registerPool()`.
 
 ### getPool
 
@@ -271,7 +273,8 @@ interface PoolCreatedEvent {
 
 ### Access Control
 
-- **createPool**: Anyone (permissionless)
+- **createPool**: Not supported by OPNet runtime (use `registerPool` instead)
+- **registerPool**: Owner only
 - **setTemplate**: Owner only
 
 ### Validation

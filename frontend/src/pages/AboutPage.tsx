@@ -125,11 +125,11 @@ export function AboutPage() {
           <div className="terminal-card rounded-xl p-5 flex items-start gap-4">
             <span className="text-lg font-mono text-accent font-bold shrink-0">01</span>
             <div>
-              <h4 className="text-terminal-text-primary font-medium mb-1">Create a Pool</h4>
+              <h4 className="text-terminal-text-primary font-medium mb-1">Browse Pools</h4>
               <p className="text-sm text-terminal-text-muted">
-                Anyone can deploy an options pool for any OP20 token pair via the OptionsFactory.
-                Each pool defines an underlying token (e.g., MOTO) and a premium token (e.g., PILL).
-                Pool creation is permissionless — no approval needed.
+                Pools are deployed by the protocol admin for OP20 token pairs. Each pool defines
+                an underlying token (e.g., MOTO) and a premium token (e.g., PILL). All trading
+                within pools is fully permissionless.
               </p>
             </div>
           </div>
@@ -560,7 +560,7 @@ export function AboutPage() {
           />
           <FaqItem
             question="What tokens can I use?"
-            answer="Any OP20 token on OPNet. You can create an options pool for any token pair — for example, MOTO/PILL, ODYS/MOTO, or any other combination. Pool creation is permissionless."
+            answer="Any OP20 token on OPNet. New pools are deployed by the protocol admin. All trading is permissionless — for example, you can write, buy, and exercise options on MOTO/PILL, ODYS/MOTO, or any other deployed pool."
           />
           <FaqItem
             question="Do I need a price oracle?"

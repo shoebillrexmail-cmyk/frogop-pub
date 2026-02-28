@@ -28,7 +28,7 @@ Build an options protocol on OPNet (Bitcoin Layer 1 smart contracts).
 | Phase 2 Priority | NativeSwap (BTC) | Wider market appeal, native BTC support |
 | AMM Pool Type | Covered Call + Cash-Secured Put | Conservative, capital efficient |
 | Strike Denomination | Token pair (no oracle) | Simpler, no external dependency |
-| Pool Creation | Permissionless factory | Like MotoSwap, composable |
+| Pool Creation | Admin deployment + factory registry | OPNet runtime lacks deployContractFromExisting |
 | MVP Option Types | Calls + Puts | Complete option coverage |
 | Doc Location | `docs/` folder | Clean structure |
 
@@ -70,8 +70,8 @@ From OPNet documentation:
 ### Contract Structure
 
 ```
-OptionsFactory (permissionless pool creation)
-    └── deploys
+OptionsFactory (pool registry + discovery)
+    └── registers
         OptionsPool (core option market)
             └── Phase 2 extends
                 NativeSwapBridge (BTC support)

@@ -1,5 +1,6 @@
 /**
- * PoolsPage tests — real data rendering, filter controls, row action visibility.
+ * PoolsPage tests — real data rendering, filter controls, row action visibility,
+ * and factory-driven pool discovery.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -27,6 +28,11 @@ vi.mock('@btc-vision/walletconnect', () => ({
 const mockUsePool = vi.fn();
 vi.mock('../../hooks/usePool.ts', () => ({
     usePool: (...args: unknown[]) => mockUsePool(...args),
+}));
+
+const mockUseDiscoverPools = vi.fn();
+vi.mock('../../hooks/useDiscoverPools.ts', () => ({
+    useDiscoverPools: () => mockUseDiscoverPools(),
 }));
 
 // Pool address config — provide a non-empty pool address so the page renders data
@@ -106,7 +112,14 @@ function renderPage() {
 describe('PoolsPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        // Default: loaded successfully
+        // Default: single pool from env, loaded successfully
+        mockUseDiscoverPools.mockReturnValue({
+            pools: [{ address: 'opt1pftest000', underlying: '', premiumToken: '' }],
+            loading: false,
+            error: null,
+            source: 'env',
+            refetch: EMPTY_REFETCH,
+        });
         mockUsePool.mockReturnValue({
             poolInfo: mockPoolInfo,
             options: mockOptions,
@@ -142,7 +155,6 @@ describe('PoolsPage', () => {
 
     it('displays CALL and PUT type labels', () => {
         renderPage();
-        // Multiple CALL rows may exist; just verify at least one of each is rendered
         expect(screen.getAllByText('CALL').length).toBeGreaterThan(0);
         expect(screen.getAllByText('PUT').length).toBeGreaterThan(0);
     });
@@ -166,10 +178,17 @@ describe('PoolsPage', () => {
     });
 
     it('shows loading skeleton while fetching', () => {
+        mockUseDiscoverPools.mockReturnValue({
+            pools: [],
+            loading: true,
+            error: null,
+            source: null,
+            refetch: EMPTY_REFETCH,
+        });
         mockUsePool.mockReturnValue({
             poolInfo: null,
             options: [],
-            loading: true,
+            loading: false,
             error: null,
             refetch: EMPTY_REFETCH,
         });
@@ -179,6 +198,13 @@ describe('PoolsPage', () => {
     });
 
     it('shows error state with retry button', () => {
+        mockUseDiscoverPools.mockReturnValue({
+            pools: [],
+            loading: false,
+            error: null,
+            source: null,
+            refetch: EMPTY_REFETCH,
+        });
         mockUsePool.mockReturnValue({
             poolInfo: null,
             options: [],
@@ -192,17 +218,26 @@ describe('PoolsPage', () => {
     });
 
     it('retry button calls refetch', () => {
-        const refetch = vi.fn();
+        const poolRefetch = vi.fn();
+        const discoveryRefetch = vi.fn();
+        mockUseDiscoverPools.mockReturnValue({
+            pools: [],
+            loading: false,
+            error: null,
+            source: null,
+            refetch: discoveryRefetch,
+        });
         mockUsePool.mockReturnValue({
             poolInfo: null,
             options: [],
             loading: false,
             error: 'RPC timeout',
-            refetch,
+            refetch: poolRefetch,
         });
         renderPage();
         fireEvent.click(screen.getByText(/Retry/i));
-        expect(refetch).toHaveBeenCalledOnce();
+        expect(poolRefetch).toHaveBeenCalledOnce();
+        expect(discoveryRefetch).toHaveBeenCalledOnce();
     });
 
     describe('row actions — disconnected wallet', () => {
@@ -250,5 +285,51 @@ describe('PoolsPage', () => {
     it('shows network badge for non-mainnet', () => {
         renderPage();
         expect(screen.getByText(/Testnet/i)).toBeInTheDocument();
+    });
+
+    // ---------------------------------------------------------------------------
+    // Multi-pool discovery tests
+    // ---------------------------------------------------------------------------
+
+    describe('multi-pool discovery', () => {
+        const POOL_A = 'opt1poolAAAA';
+        const POOL_B = 'opt1poolBBBB';
+
+        beforeEach(() => {
+            mockUseDiscoverPools.mockReturnValue({
+                pools: [
+                    { address: POOL_A, underlying: '0xaa', premiumToken: '0xbb' },
+                    { address: POOL_B, underlying: '0xcc', premiumToken: '0xdd' },
+                ],
+                loading: false,
+                error: null,
+                source: 'factory',
+                refetch: EMPTY_REFETCH,
+            });
+        });
+
+        it('renders pool selector buttons when multiple pools exist', () => {
+            renderPage();
+            expect(screen.getByTestId(`pool-selector-${POOL_A}`)).toBeInTheDocument();
+            expect(screen.getByTestId(`pool-selector-${POOL_B}`)).toBeInTheDocument();
+        });
+
+        it('auto-selects the first pool', () => {
+            renderPage();
+            // usePool should have been called with the first pool address
+            expect(mockUsePool).toHaveBeenCalledWith(POOL_A);
+        });
+
+        it('switching pool updates usePool call', () => {
+            renderPage();
+            fireEvent.click(screen.getByTestId(`pool-selector-${POOL_B}`));
+            // After click, the next render should call usePool with POOL_B
+            expect(mockUsePool).toHaveBeenCalledWith(POOL_B);
+        });
+
+        it('shows source badge for factory', () => {
+            renderPage();
+            expect(screen.getByText(/source: factory/)).toBeInTheDocument();
+        });
     });
 });
