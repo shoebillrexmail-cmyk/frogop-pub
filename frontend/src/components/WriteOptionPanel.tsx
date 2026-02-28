@@ -125,7 +125,7 @@ export function WriteOptionPanel({
                 provider,
                 network,
                 address,
-            ) as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+            ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
             const callResult = await tokenContract['increaseAllowance'](poolHex, collateral);
             const receipt = await callResult.sendTransaction({
@@ -168,7 +168,7 @@ export function WriteOptionPanel({
                 provider,
                 network,
                 address,
-            ) as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+            ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
             const callResult = await poolContract['writeOption'](
                 optionType,

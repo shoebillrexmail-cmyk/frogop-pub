@@ -95,7 +95,7 @@ export function BuyOptionModal({
                 provider,
                 network,
                 address,
-            ) as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+            ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
             const call = await tokenContract['increaseAllowance'](poolHex, totalCost);
             const receipt = await call.sendTransaction({
@@ -125,7 +125,7 @@ export function BuyOptionModal({
                 provider,
                 network,
                 address,
-            ) as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+            ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
             const call = await poolContract['buyOption'](option.id);
             const receipt = await call.sendTransaction({
