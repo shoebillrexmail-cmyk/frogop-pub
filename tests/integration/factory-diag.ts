@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { JSONRpcProvider } from 'opnet';
-import { BinaryWriter } from '@btc-vision/transaction';
+import { Address, BinaryWriter } from '@btc-vision/transaction';
 import { getConfig, loadDeployedContracts, computeSelector, computeSelectorU32, FACTORY_SELECTORS } from './config.js';
 
 async function main() {
@@ -49,7 +49,7 @@ async function main() {
     const cd = Buffer.from(bw.getBuffer()).toString('hex');
     console.log('Simulating setPoolTemplate...');
     const walletHex = (await provider.getPublicKeyInfo(config.wallet.p2tr, true)).toString();
-    const simResult = await provider.call(deployed.factory, cd, walletHex);
+    const simResult = await provider.call(deployed.factory, cd, Address.fromString(walletHex));
     if ('error' in simResult) {
         console.log('setPoolTemplate simulation Error:', simResult.error);
     } else if (simResult.revert) {

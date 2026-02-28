@@ -6,7 +6,7 @@ import {
     saveDeployedContracts,
     loadDeployedContracts,
     getLogger,
-    formatAddress,
+    // formatAddress,
     sleep,
     waitForBlock,
     computeSelectorU32,

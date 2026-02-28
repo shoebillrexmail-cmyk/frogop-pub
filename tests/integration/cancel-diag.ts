@@ -11,6 +11,7 @@ import {
 async function main() {
     const config = getConfig();
     const deployed = loadDeployedContracts();
+    if (!deployed) { console.error('No deployed contracts found'); process.exit(1); }
     const provider = new JSONRpcProvider({ url: config.rpcUrl, network: config.network });
     const poolPk = await provider.getPublicKeyInfo(deployed.pool!, true);
     const poolHex = poolPk.toString();

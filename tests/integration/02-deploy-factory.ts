@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { JSONRpcProvider } from 'opnet';
-import { Address, BinaryWriter, TransactionFactory } from '@btc-vision/transaction';
+import { Address } from '@btc-vision/transaction';
 import { getConfig, saveDeployedContracts, loadDeployedContracts, getLogger, formatAddress, sleep, waitForBlock } from './config.js';
 import { DeploymentHelper, getWasmPath, createPoolCalldata, createSetPoolTemplateCalldata } from './deployment.js';
 import { FACTORY_SELECTORS } from './config.js';
