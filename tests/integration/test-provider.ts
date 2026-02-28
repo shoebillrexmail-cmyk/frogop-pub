@@ -16,17 +16,17 @@ async function main() {
     try {
         const receipt = await provider.getTransactionReceipt(txId);
         console.log('Receipt:', receipt);
-    } catch (e) {
-        console.log('Error getting receipt:', e.message);
+    } catch (e: unknown) {
+        console.log('Error getting receipt:', e instanceof Error ? e.message : e);
     }
-    
+
     // Check the transaction
     console.log('3. Getting transaction...');
     try {
         const tx = await provider.getTransaction(txId);
-        console.log('Transaction type:', tx?.transactionType);
-    } catch (e) {
-        console.log('Error getting transaction:', e.message);
+        console.log('Transaction type:', (tx as unknown as Record<string, unknown>)?.transactionType);
+    } catch (e: unknown) {
+        console.log('Error getting transaction:', e instanceof Error ? e.message : e);
     }
     
     // Check factory state

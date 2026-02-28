@@ -17,7 +17,7 @@ import {
     getConfig,
     loadDeployedContracts,
     getLogger,
-    formatAddress,
+    // formatAddress,
     formatBigInt,
     waitForBlock,
     sleep,
@@ -401,8 +401,8 @@ async function main() {
 
     let allSuccess = true;
 
-    for (let i = 0; i < tokens.length; i++) {
-        const { name, address } = tokens[i];
+    for (const token of tokens) {
+        const { name, address } = token;
         try {
             const result = await acquireToken(
                 name,
@@ -425,7 +425,7 @@ async function main() {
         }
 
         // Wait between tokens for UTXO refresh
-        if (i < tokens.length - 1) {
+        if (token !== tokens[tokens.length - 1]) {
             log.info('\nWaiting 30s for UTXO refresh...');
             await sleep(30_000);
         }

@@ -17,7 +17,7 @@ async function main() {
     const balance = await provider.getBalance(config.wallet.p2tr);
     console.log('Wallet BTC balance (sats):', balance.toString());
 
-    const utxos = await provider.getUTXOs(config.wallet.p2tr);
+    const utxos = await provider.utxoManager.getUTXOs({ address: config.wallet.p2tr });
     console.log('UTXO count:', Array.isArray(utxos) ? utxos.length : 'error');
     if (Array.isArray(utxos) && utxos.length > 0) {
         let total = 0n;
