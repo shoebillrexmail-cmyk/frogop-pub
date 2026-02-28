@@ -25,7 +25,10 @@
     "test:integration:query": "npx tsx tests/integration/07-query-methods.ts",
     "lint": "eslint src/**/*.ts tests/**/*.ts",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf build tests/dist"
+    "clean": "rimraf build tests/dist",
+    "dev": "concurrently -k -n indexer,frontend -c blue,green \"npm run dev:indexer\" \"npm run dev:frontend\"",
+    "dev:frontend": "cross-env VITE_INDEXER_URL=http://localhost:8787 npm --prefix frontend run dev",
+    "dev:indexer": "npm --prefix indexer run dev"
   },
   "keywords": [
     "opnet",
@@ -43,8 +46,8 @@
   "devDependencies": {
     "@assemblyscript/loader": "latest",
     "@btc-vision/assemblyscript": "latest",
-    "@btc-vision/bitcoin": "rc",
     "@btc-vision/bip32": "latest",
+    "@btc-vision/bitcoin": "rc",
     "@btc-vision/ecpair": "latest",
     "@btc-vision/op-vm": "rc",
     "@btc-vision/opnet-transform": "latest",
@@ -52,6 +55,8 @@
     "@btc-vision/unit-test-framework": "beta",
     "@eslint/js": "9.39.2",
     "@types/node": "22.7.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "dotenv": "^16.4.5",
     "eslint": "9.39.2",
     "opnet": "rc",

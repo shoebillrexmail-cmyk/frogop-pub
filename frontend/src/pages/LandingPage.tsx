@@ -217,8 +217,8 @@ export function LandingPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-terminal-bg-primary rounded-lg p-3">
                       <p className="text-xs font-mono text-status-positive mb-1">MOTO = 70 PILL</p>
-                      <p className="text-xs">Bob exercises. Gets 100 MOTO for 5,000 PILL.</p>
-                      <p className="text-xs mt-1">Bob profit: <span className="font-mono text-status-positive">+1,495 PILL</span></p>
+                      <p className="text-xs">Bob exercises. Pays 5,000 PILL, gets 99.9 MOTO (0.1% exercise fee).</p>
+                      <p className="text-xs mt-1">Bob profit: <span className="font-mono text-status-positive">~+1,488 PILL</span></p>
                     </div>
                     <div className="bg-terminal-bg-primary rounded-lg p-3">
                       <p className="text-xs font-mono text-status-negative mb-1">MOTO = 40 PILL</p>
@@ -296,7 +296,8 @@ export function LandingPage() {
             </div>
             <div className="terminal-card rounded-xl p-4 text-center">
               <p className="text-xs text-terminal-text-muted mb-1 font-mono">Exercise</p>
-              <p className="text-lg font-bold text-status-positive">Free</p>
+              <p className="text-lg font-bold text-accent">0.1%</p>
+              <p className="text-[10px] text-terminal-text-muted mt-0.5">of payout</p>
             </div>
             <div className="terminal-card rounded-xl p-4 text-center">
               <p className="text-xs text-terminal-text-muted mb-1 font-mono">Cancel</p>

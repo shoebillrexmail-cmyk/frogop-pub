@@ -720,17 +720,30 @@ export class OptionsPool extends ReentrancyGuard {
             collateralAmount = SafeMath.mul(option.strikePrice, option.underlyingAmount);
         }
 
-        const fee = SafeMath.div(
-            SafeMath.mul(collateralAmount, u256.fromU64(CANCEL_FEE_BPS)),
-            u256.fromU64(10000)
-        );
+        // Story 8.3: expired unsold options get full collateral back (no penalty)
+        // Story 8.4: ceiling division so protocol never under-collects on dust
+        const currentBlock = Blockchain.block.number;
+        let fee: u256;
+        if (currentBlock >= option.expiryBlock) {
+            fee = u256.Zero;
+        } else {
+            fee = SafeMath.div(
+                SafeMath.add(
+                    SafeMath.mul(collateralAmount, u256.fromU64(CANCEL_FEE_BPS)),
+                    u256.fromU64(9999)
+                ),
+                u256.fromU64(10000)
+            );
+        }
         const returnAmount = SafeMath.sub(collateralAmount, fee);
 
         option.status = CANCELLED;
         this.options.setStatus(optionId, CANCELLED);
 
         this._transfer(collateralToken, option.writer, returnAmount);
-        this._transfer(collateralToken, this.feeRecipient.value, fee);
+        if (fee > u256.Zero) {
+            this._transfer(collateralToken, this.feeRecipient.value, fee);
+        }
 
         const event = new BytesWriter(128); // 32+32+32+32 = 128 bytes
         event.writeU256(optionId);
@@ -767,8 +780,12 @@ export class OptionsPool extends ReentrancyGuard {
             throw new Revert('Writer cannot buy own option');
         }
 
+        // Story 8.4: ceiling division — protocol never under-collects on dust
         const buyFee = SafeMath.div(
-            SafeMath.mul(option.premium, u256.fromU64(BUY_FEE_BPS)),
+            SafeMath.add(
+                SafeMath.mul(option.premium, u256.fromU64(BUY_FEE_BPS)),
+                u256.fromU64(9999)
+            ),
             u256.fromU64(10000)
         );
         const writerAmount = SafeMath.sub(option.premium, buyFee);
@@ -828,8 +845,12 @@ export class OptionsPool extends ReentrancyGuard {
         let exerciseFee: u256 = u256.Zero;
 
         if (option.optionType == CALL) {
+            // Story 8.4: ceiling division — protocol never under-collects on dust
             exerciseFee = SafeMath.div(
-                SafeMath.mul(option.underlyingAmount, u256.fromU64(EXERCISE_FEE_BPS)),
+                SafeMath.add(
+                    SafeMath.mul(option.underlyingAmount, u256.fromU64(EXERCISE_FEE_BPS)),
+                    u256.fromU64(9999)
+                ),
                 u256.fromU64(10000)
             );
             const buyerReceives = SafeMath.sub(option.underlyingAmount, exerciseFee);
@@ -837,8 +858,12 @@ export class OptionsPool extends ReentrancyGuard {
             this._transfer(this._underlying.value, caller, buyerReceives);
             this._transfer(this._underlying.value, this.feeRecipient.value, exerciseFee);
         } else {
+            // Story 8.4: ceiling division — protocol never under-collects on dust
             exerciseFee = SafeMath.div(
-                SafeMath.mul(strikeValue, u256.fromU64(EXERCISE_FEE_BPS)),
+                SafeMath.add(
+                    SafeMath.mul(strikeValue, u256.fromU64(EXERCISE_FEE_BPS)),
+                    u256.fromU64(9999)
+                ),
                 u256.fromU64(10000)
             );
             const buyerReceives = SafeMath.sub(strikeValue, exerciseFee);

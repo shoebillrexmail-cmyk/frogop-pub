@@ -190,10 +190,10 @@ export function AboutPage() {
               <p className="text-xs font-mono text-status-positive mb-2">IF MOTO RISES TO 70 PILL (ITM)</p>
               <p className="text-sm text-terminal-text-secondary">
                 Bob exercises: pays <span className="font-mono">5,000 PILL</span> (strike) and
-                receives <span className="font-mono">100 MOTO</span> (worth 7,000 PILL).
+                receives <span className="font-mono">99.9 MOTO</span> (0.1% exercise fee deducted, worth ~6,993 PILL).
               </p>
               <p className="text-sm text-terminal-text-secondary mt-1">
-                Bob&apos;s profit: <span className="font-mono text-status-positive">1,495 PILL</span> (7,000 - 5,000 - 505 total cost)
+                Bob&apos;s profit: <span className="font-mono text-status-positive">~1,488 PILL</span> (6,993 - 5,000 - 505 total cost)
               </p>
               <p className="text-sm text-terminal-text-secondary mt-1">
                 Alice&apos;s outcome: <span className="font-mono">5,500 PILL</span> (5,000 strike + 500 premium)
@@ -344,9 +344,9 @@ export function AboutPage() {
                   <td className="py-2">1% of the premium, charged to the buyer on top of the premium. The writer receives their full premium — no reduction</td>
                 </tr>
                 <tr>
-                  <td className="py-2 pr-4 font-medium text-terminal-text-primary">Exercising</td>
-                  <td className="py-2 pr-4 font-mono text-status-positive">Free</td>
-                  <td className="py-2">No fee to exercise your option at expiry</td>
+                  <td className="py-2 pr-4 font-medium text-terminal-text-primary">Exercise fee</td>
+                  <td className="py-2 pr-4 font-mono text-accent">0.1%</td>
+                  <td className="py-2">0.1% of the underlying payout, deducted from what the buyer receives. Goes to the protocol fee recipient</td>
                 </tr>
               </tbody>
             </table>
@@ -381,7 +381,7 @@ export function AboutPage() {
                 <tr>
                   <td className="py-2 pr-4">Exercise fee</td>
                   <td className="py-2 pr-4 font-mono">0.1%</td>
-                  <td className="py-2">Liquidity providers</td>
+                  <td className="py-2">Redirected from protocol fee recipient to liquidity providers</td>
                 </tr>
               </tbody>
             </table>
@@ -576,7 +576,7 @@ export function AboutPage() {
           />
           <FaqItem
             question="What are the fees?"
-            answer={<>There are two protocol fees: a <span className="font-mono text-accent">1% buy fee</span> on the premium (charged to the buyer on top of the premium — the writer gets their full amount), and a <span className="font-mono text-accent">1% cancellation fee</span> on collateral when a writer cancels an unpurchased option before expiry. Writing and exercising are free. Expired unsold options can be reclaimed at no cost. Standard Bitcoin network fees (gas) apply to all transactions.</>}
+            answer={<>There are three protocol fees: a <span className="font-mono text-accent">1% buy fee</span> on the premium (charged to the buyer on top of the premium — the writer gets their full amount); a <span className="font-mono text-accent">1% cancellation fee</span> on collateral when a writer cancels an unpurchased option before expiry; and a <span className="font-mono text-accent">0.1% exercise fee</span> deducted from the underlying payout when a buyer exercises. Writing is free. Expired unsold options can be reclaimed at no cost. Standard Bitcoin network fees (gas) apply to all transactions.</>}
           />
           <FaqItem
             question="What network is FroGop on?"

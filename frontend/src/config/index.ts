@@ -25,6 +25,7 @@ export const getNetworkConfig = () => NETWORKS[currentNetwork];
 export const CONTRACT_ADDRESSES = {
   factory: import.meta.env.VITE_FACTORY_ADDRESS || '',
   poolTemplate: import.meta.env.VITE_POOL_TEMPLATE_ADDRESS || '',
+  pool: import.meta.env.VITE_POOL_ADDRESS || '',
 };
 
 export const BLOCK_CONSTANTS = {

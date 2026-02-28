@@ -20,6 +20,33 @@ services:
       timeout: 5s
       retries: 3
 
+  indexer:
+    image: ghcr.io/frogop/frogop-indexer:latest
+    container_name: indexer
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - OPNET_NETWORK=testnet
+      - OPNET_RPC_URL=https://testnet.opnet.org
+      # Space-separated list of pool bech32 addresses to track
+      - POOL_ADDRESSES=opt1sqp30jy9pzty2ylt0t0f8a25u99eu09wyny3e4syd
+      - FACTORY_ADDRESS=opt1sqz4wm6z6gy2rrfsqxf0tuh6tkyn32eerkg57nrka
+      - DB_PATH=/data/indexer.db
+      - PORT=3001
+      - POLL_INTERVAL_MS=60000
+    volumes:
+      - indexer-data:/data
+    networks:
+      - proxy-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 networks:
   proxy-net:
     external: true
+
+volumes:
+  indexer-data:
