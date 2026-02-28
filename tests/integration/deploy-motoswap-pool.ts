@@ -32,14 +32,14 @@ import * as path from 'path';
 const log = getLogger('deploy-motoswap-pool');
 
 // ---------------------------------------------------------------------------
-// Real MotoSwap testnet token addresses
+// Real MotoSwap testnet token addresses (from OPNet testnet announcement)
 // ---------------------------------------------------------------------------
 
-// MOTO — the underlying token (MotoSwap's native token on testnet)
-const MOTO_BECH32 = 'tb1pgnfydzn2hzs7avsq7pts2fhkejsvat6z6mxjskwh4rvlku26tcxqme4rv9';
+// MOTO (Motoswap) — underlying token, 18 decimals
+const MOTO_HEX = '0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd';
 
-// PILL — the premium token
-const PILL_HEX = '0x50b262ff2c03cfb5a1345dc9d461015b105ebe338df1e24596507917cc84df32';
+// PILL (Orange Pill) — premium token, 18 decimals
+const PILL_HEX = '0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb';
 
 // ---------------------------------------------------------------------------
 // Main
@@ -75,16 +75,13 @@ async function main() {
     }
 
     // -------------------------------------------------------------------------
-    // Resolve token addresses to hex
+    // Token addresses (already in hex — verified on-chain)
     // -------------------------------------------------------------------------
 
-    log.info('Resolving MOTO address...');
-    const motoHex = (await provider.getPublicKeyInfo(MOTO_BECH32, true)).toString();
-    log.info(`  MOTO hex: ${formatAddress(motoHex)}`);
-
+    log.info(`  MOTO hex: ${formatAddress(MOTO_HEX)}`);
     log.info(`  PILL hex: ${formatAddress(PILL_HEX)}`);
 
-    const motoAddress = Address.fromString(motoHex);
+    const motoAddress = Address.fromString(MOTO_HEX);
     const pillAddress = Address.fromString(PILL_HEX);
 
     // -------------------------------------------------------------------------
@@ -136,7 +133,7 @@ async function main() {
     };
 
     // Update with MotoSwap addresses
-    deployed.tokens.frogU = MOTO_BECH32;
+    deployed.tokens.frogU = MOTO_HEX;
     deployed.tokens.frogP = PILL_HEX;
     deployed.pool = poolAddress;
     deployed.deployedAt = new Date().toISOString();
