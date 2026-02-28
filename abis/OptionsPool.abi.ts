@@ -2,6 +2,11 @@ import { ABIDataTypes, BitcoinAbiTypes, OP_NET_ABI } from 'opnet';
 
 export const OptionsPoolEvents = [
     {
+        name: 'FeeRecipientUpdated',
+        values: [{ name: 'data', type: ABIDataTypes.STRING }],
+        type: BitcoinAbiTypes.Event,
+    },
+    {
         name: 'OptionWritten',
         values: [{ name: 'data', type: ABIDataTypes.STRING }],
         type: BitcoinAbiTypes.Event,
@@ -30,14 +35,14 @@ export const OptionsPoolEvents = [
 
 export const OptionsPoolAbi = [
     {
-        name: 'getUnderlying',
+        name: 'underlying',
         constant: true,
         inputs: [],
         outputs: [{ name: 'underlying', type: ABIDataTypes.ADDRESS }],
         type: BitcoinAbiTypes.Function,
     },
     {
-        name: 'getPremiumToken',
+        name: 'premiumToken',
         constant: true,
         inputs: [],
         outputs: [{ name: 'premiumToken', type: ABIDataTypes.ADDRESS }],
@@ -58,10 +63,34 @@ export const OptionsPoolAbi = [
         type: BitcoinAbiTypes.Function,
     },
     {
-        name: 'accumulatedFeesMethod',
+        name: 'getOptionsBatch',
+        constant: true,
+        inputs: [
+            { name: 'startId', type: ABIDataTypes.UINT256 },
+            { name: 'count', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'feeRecipient',
         constant: true,
         inputs: [],
-        outputs: [{ name: 'fees', type: ABIDataTypes.UINT256 }],
+        outputs: [{ name: 'recipient', type: ABIDataTypes.ADDRESS }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'buyFeeBps',
+        constant: true,
+        inputs: [],
+        outputs: [{ name: 'bps', type: ABIDataTypes.UINT64 }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'exerciseFeeBps',
+        constant: true,
+        inputs: [],
+        outputs: [{ name: 'bps', type: ABIDataTypes.UINT64 }],
         type: BitcoinAbiTypes.Function,
     },
     {
@@ -97,17 +126,9 @@ export const OptionsPoolAbi = [
         type: BitcoinAbiTypes.Function,
     },
     {
-        name: 'getUnderlyingDecimals',
-        constant: true,
-        inputs: [],
-        outputs: [{ name: 'decimals', type: ABIDataTypes.UINT8 }],
-        type: BitcoinAbiTypes.Function,
-    },
-    {
-        name: 'getPremiumDecimals',
-        constant: true,
-        inputs: [],
-        outputs: [{ name: 'decimals', type: ABIDataTypes.UINT8 }],
+        name: 'updateFeeRecipient',
+        inputs: [{ name: 'newRecipient', type: ABIDataTypes.ADDRESS }],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
         type: BitcoinAbiTypes.Function,
     },
     {

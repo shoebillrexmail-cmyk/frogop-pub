@@ -4,6 +4,9 @@ import { CallResult, OPNetEvent, IOP_NETContract } from 'opnet';
 // ------------------------------------------------------------------
 // Event Definitions
 // ------------------------------------------------------------------
+export type FeeRecipientUpdatedEvent = {
+    readonly data: string;
+};
 export type OptionWrittenEvent = {
     readonly data: string;
 };
@@ -25,9 +28,9 @@ export type OptionExpiredEvent = {
 // ------------------------------------------------------------------
 
 /**
- * @description Represents the result of the getUnderlying function call.
+ * @description Represents the result of the underlying function call.
  */
-export type GetUnderlying = CallResult<
+export type Underlying = CallResult<
     {
         underlying: Address;
     },
@@ -35,9 +38,9 @@ export type GetUnderlying = CallResult<
 >;
 
 /**
- * @description Represents the result of the getPremiumToken function call.
+ * @description Represents the result of the premiumToken function call.
  */
-export type GetPremiumToken = CallResult<
+export type PremiumToken = CallResult<
     {
         premiumToken: Address;
     },
@@ -60,11 +63,36 @@ export type OptionCount = CallResult<
 >;
 
 /**
- * @description Represents the result of the accumulatedFeesMethod function call.
+ * @description Represents the result of the getOptionsBatch function call.
  */
-export type AccumulatedFeesMethod = CallResult<
+export type GetOptionsBatch = CallResult<{}, OPNetEvent<never>[]>;
+
+/**
+ * @description Represents the result of the feeRecipient function call.
+ */
+export type FeeRecipient = CallResult<
     {
-        fees: bigint;
+        recipient: Address;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
+ * @description Represents the result of the buyFeeBps function call.
+ */
+export type BuyFeeBps = CallResult<
+    {
+        bps: bigint;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
+ * @description Represents the result of the exerciseFeeBps function call.
+ */
+export type ExerciseFeeBps = CallResult<
+    {
+        bps: bigint;
     },
     OPNetEvent<never>[]
 >;
@@ -110,23 +138,13 @@ export type CalculateCollateral = CallResult<
 >;
 
 /**
- * @description Represents the result of the getUnderlyingDecimals function call.
+ * @description Represents the result of the updateFeeRecipient function call.
  */
-export type GetUnderlyingDecimals = CallResult<
+export type UpdateFeeRecipient = CallResult<
     {
-        decimals: number;
+        success: boolean;
     },
-    OPNetEvent<never>[]
->;
-
-/**
- * @description Represents the result of the getPremiumDecimals function call.
- */
-export type GetPremiumDecimals = CallResult<
-    {
-        decimals: number;
-    },
-    OPNetEvent<never>[]
+    OPNetEvent<FeeRecipientUpdatedEvent>[]
 >;
 
 /**
@@ -183,11 +201,14 @@ export type Settle = CallResult<
 // IOptionsPool
 // ------------------------------------------------------------------
 export interface IOptionsPool extends IOP_NETContract {
-    getUnderlying(): Promise<GetUnderlying>;
-    getPremiumToken(): Promise<GetPremiumToken>;
+    underlying(): Promise<Underlying>;
+    premiumToken(): Promise<PremiumToken>;
     getOption(optionId: bigint): Promise<GetOption>;
     optionCount(): Promise<OptionCount>;
-    accumulatedFeesMethod(): Promise<AccumulatedFeesMethod>;
+    getOptionsBatch(startId: bigint, count: bigint): Promise<GetOptionsBatch>;
+    feeRecipient(): Promise<FeeRecipient>;
+    buyFeeBps(): Promise<BuyFeeBps>;
+    exerciseFeeBps(): Promise<ExerciseFeeBps>;
     gracePeriodBlocks(): Promise<GracePeriodBlocks>;
     maxExpiryBlocks(): Promise<MaxExpiryBlocks>;
     cancelFeeBps(): Promise<CancelFeeBps>;
@@ -196,8 +217,7 @@ export interface IOptionsPool extends IOP_NETContract {
         strikePrice: bigint,
         underlyingAmount: bigint,
     ): Promise<CalculateCollateral>;
-    getUnderlyingDecimals(): Promise<GetUnderlyingDecimals>;
-    getPremiumDecimals(): Promise<GetPremiumDecimals>;
+    updateFeeRecipient(newRecipient: Address): Promise<UpdateFeeRecipient>;
     writeOption(
         optionType: number,
         strikePrice: bigint,
