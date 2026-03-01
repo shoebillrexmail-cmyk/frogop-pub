@@ -4,17 +4,20 @@
  * Provides: transactions list, pendingCount, add/update/find helpers.
  * Trims to 20 entries; warns on beforeunload when TXs pending.
  *
- * Also manages the Active Flow lock — at most one two-step (approve → action)
- * flow per wallet. Flow state is persisted in a separate localStorage key,
- * synced across tabs, and auto-advanced when tracked TXs change status.
+ * Also manages Active Flows — up to MAX_PARALLEL_FLOWS concurrent two-step
+ * (approve → action) flows per wallet. Each flow is keyed by identity
+ * (actionType + poolAddress + optionId). Flow state is persisted in a
+ * separate localStorage key, synced across tabs, and auto-advanced when
+ * tracked TXs change status.
  *
  * Types + context value live in transactionDefs.ts so this file only
  * exports the TransactionProvider component (React Fast Refresh).
  */
-import { useReducer, useEffect, useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useReducer, useEffect, useCallback, useMemo, useState, useRef, type ReactNode } from 'react';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { TransactionContext } from './transactionDefs.ts';
 import type { TrackedTransaction, TransactionContextValue } from './transactionDefs.ts';
+import { flowIdentityKey, MAX_PARALLEL_FLOWS } from './flowDefs.ts';
 import type { ActiveFlow, FlowActionType, ResumeRequest } from './flowDefs.ts';
 
 // ---------------------------------------------------------------------------
@@ -61,32 +64,34 @@ function reducer(state: TransactionState, action: TransactionAction): Transactio
 // Flow helpers
 // ---------------------------------------------------------------------------
 
-const FLOW_STORAGE_PREFIX = 'frogop_active_flow_';
+const FLOWS_STORAGE_PREFIX = 'frogop_active_flows_';
 const STALE_FLOW_MS = 4 * 60 * 60 * 1000; // 4 hours
 
-function loadFlow(key: string): ActiveFlow | null {
+function loadFlows(key: string): ActiveFlow[] {
     try {
         const raw = localStorage.getItem(key);
-        if (!raw) return null;
-        const flow = JSON.parse(raw) as ActiveFlow;
-        // Auto-fail stale approval_pending flows
-        if (
-            flow.status === 'approval_pending' &&
-            Date.now() - new Date(flow.claimedAt).getTime() > STALE_FLOW_MS
-        ) {
-            localStorage.removeItem(key);
-            return null;
-        }
-        return flow;
+        if (!raw) return [];
+        const flows = JSON.parse(raw) as ActiveFlow[];
+        if (!Array.isArray(flows)) return [];
+        // Filter out stale approval_pending flows
+        return flows.filter((flow) => {
+            if (
+                flow.status === 'approval_pending' &&
+                Date.now() - new Date(flow.claimedAt).getTime() > STALE_FLOW_MS
+            ) {
+                return false;
+            }
+            return true;
+        });
     } catch {
-        return null;
+        return [];
     }
 }
 
-function saveFlow(key: string, flow: ActiveFlow | null) {
+function saveFlows(key: string, flows: ActiveFlow[]) {
     try {
-        if (flow) {
-            localStorage.setItem(key, JSON.stringify(flow));
+        if (flows.length > 0) {
+            localStorage.setItem(key, JSON.stringify(flows));
         } else {
             localStorage.removeItem(key);
         }
@@ -106,65 +111,72 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     const [state, dispatch] = useReducer(reducer, { transactions: [] });
 
     const storageKey = walletAddress ? `${STORAGE_PREFIX}${walletAddress}` : null;
-    const flowKey = walletAddress ? `${FLOW_STORAGE_PREFIX}${walletAddress}` : null;
+    const flowKey = walletAddress ? `${FLOWS_STORAGE_PREFIX}${walletAddress}` : null;
 
-    // --- Active Flow state ---
-    const [activeFlow, setActiveFlow] = useState<ActiveFlow | null>(null);
+    // --- Active Flows state ---
+    const [activeFlows, setActiveFlows] = useState<ActiveFlow[]>([]);
     const [resumeRequest, setResumeRequest] = useState<ResumeRequest | null>(null);
+
+    // Track scheduled auto-removals so we don't set duplicate timers
+    const scheduledRemovalsRef = useRef(new Set<string>());
 
     // Adjust flow state when wallet (flowKey) changes — React-recommended pattern.
     // See: https://react.dev/reference/react/useState#storing-information-from-previous-renders
     const [prevFlowKey, setPrevFlowKey] = useState(flowKey);
     if (flowKey !== prevFlowKey) {
         setPrevFlowKey(flowKey);
-        setActiveFlow(flowKey ? loadFlow(flowKey) : null);
+        setActiveFlows(flowKey ? loadFlows(flowKey) : []);
     }
 
-    // Persist flow to localStorage on every change
+    // Persist flows to localStorage on every change
     useEffect(() => {
         if (!flowKey) return;
-        saveFlow(flowKey, activeFlow);
-    }, [activeFlow, flowKey]);
+        saveFlows(flowKey, activeFlows);
+    }, [activeFlows, flowKey]);
 
     // Multi-tab sync via storage event
     useEffect(() => {
         if (!flowKey) return;
         const handler = (e: StorageEvent) => {
             if (e.key === flowKey) {
-                setActiveFlow(e.newValue ? loadFlow(flowKey) : null);
+                setActiveFlows(e.newValue ? loadFlows(flowKey) : []);
             }
         };
         window.addEventListener('storage', handler);
         return () => window.removeEventListener('storage', handler);
     }, [flowKey]);
 
-    // Auto-sync flow status when tracked TXs change.
-    // Uses function-updater form inside useCallback to avoid direct setState in the effect.
+    // Auto-sync flow statuses when tracked TXs change.
     const syncFlowStatus = useCallback(() => {
-        setActiveFlow((current) => {
-            if (!current) return current;
-
-            if (current.status === 'approval_pending' && current.approvalTxId) {
-                const approvalTx = state.transactions.find((tx) => tx.txId === current.approvalTxId);
-                if (approvalTx?.status === 'confirmed') {
-                    return { ...current, status: 'approval_confirmed' as const };
+        setActiveFlows((current) => {
+            if (current.length === 0) return current;
+            let changed = false;
+            const updated = current.map((flow) => {
+                if (flow.status === 'approval_pending' && flow.approvalTxId) {
+                    const approvalTx = state.transactions.find((tx) => tx.txId === flow.approvalTxId);
+                    if (approvalTx?.status === 'confirmed') {
+                        changed = true;
+                        return { ...flow, status: 'approval_confirmed' as const };
+                    }
+                    if (approvalTx?.status === 'failed') {
+                        changed = true;
+                        return { ...flow, status: 'approval_failed' as const };
+                    }
                 }
-                if (approvalTx?.status === 'failed') {
-                    return { ...current, status: 'approval_failed' as const };
+                if (flow.status === 'action_pending' && flow.actionTxId) {
+                    const actionTx = state.transactions.find((tx) => tx.txId === flow.actionTxId);
+                    if (actionTx?.status === 'confirmed') {
+                        changed = true;
+                        return { ...flow, status: 'action_confirmed' as const };
+                    }
+                    if (actionTx?.status === 'failed') {
+                        changed = true;
+                        return { ...flow, status: 'action_failed' as const };
+                    }
                 }
-            }
-
-            if (current.status === 'action_pending' && current.actionTxId) {
-                const actionTx = state.transactions.find((tx) => tx.txId === current.actionTxId);
-                if (actionTx?.status === 'confirmed') {
-                    return { ...current, status: 'action_confirmed' as const };
-                }
-                if (actionTx?.status === 'failed') {
-                    return { ...current, status: 'action_failed' as const };
-                }
-            }
-
-            return current;
+                return flow;
+            });
+            return changed ? updated : current;
         });
     }, [state.transactions]);
 
@@ -173,12 +185,19 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         syncFlowStatus();
     }, [syncFlowStatus]);
 
-    // Auto-release flow 3s after action_confirmed
+    // Auto-release flows 3s after action_confirmed
     useEffect(() => {
-        if (activeFlow?.status !== 'action_confirmed') return;
-        const timer = setTimeout(() => setActiveFlow(null), 3000);
-        return () => clearTimeout(timer);
-    }, [activeFlow?.status]);
+        const confirmedFlows = activeFlows.filter(
+            (f) => f.status === 'action_confirmed' && !scheduledRemovalsRef.current.has(f.flowId),
+        );
+        for (const flow of confirmedFlows) {
+            scheduledRemovalsRef.current.add(flow.flowId);
+            setTimeout(() => {
+                scheduledRemovalsRef.current.delete(flow.flowId);
+                setActiveFlows((prev) => prev.filter((f) => f.flowId !== flow.flowId));
+            }, 3000);
+        }
+    }, [activeFlows]);
 
     // --- Flow callbacks ---
 
@@ -190,13 +209,16 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             label: string;
             formState?: Record<string, string>;
         }): ActiveFlow | null => {
-            // Allow if no flow active, or if same identity flow is being re-claimed
-            if (activeFlow !== null) {
-                const sameIdentity =
-                    activeFlow.actionType === params.actionType &&
-                    activeFlow.poolAddress === params.poolAddress &&
-                    activeFlow.optionId === (params.optionId ?? null);
-                if (!sameIdentity) return null; // blocked
+            const key = flowIdentityKey(params.actionType, params.poolAddress, params.optionId);
+
+            // Check if same identity flow already exists
+            const existingIdx = activeFlows.findIndex(
+                (f) => flowIdentityKey(f.actionType, f.poolAddress, f.optionId) === key,
+            );
+
+            // At limit and no existing flow to replace → blocked
+            if (existingIdx === -1 && activeFlows.length >= MAX_PARALLEL_FLOWS) {
+                return null;
             }
 
             const flow: ActiveFlow = {
@@ -211,33 +233,46 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
                 label: params.label,
                 formState: params.formState ?? null,
             };
-            setActiveFlow(flow);
+
+            if (existingIdx !== -1) {
+                // Replace existing flow with same identity (retry scenario)
+                setActiveFlows((prev) => prev.map((f, i) => (i === existingIdx ? flow : f)));
+            } else {
+                setActiveFlows((prev) => [...prev, flow]);
+            }
             return flow;
         },
-        [activeFlow],
+        [activeFlows],
     );
 
     const updateFlowFn = useCallback(
-        (updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => {
-            setActiveFlow((prev) => (prev ? { ...prev, ...updates } : null));
+        (flowId: string, updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => {
+            setActiveFlows((prev) =>
+                prev.map((f) => (f.flowId === flowId ? { ...f, ...updates } : f)),
+            );
         },
         [],
     );
 
-    const abandonFlow = useCallback(() => {
-        setActiveFlow(null);
-        setResumeRequest(null);
+    const abandonFlowFn = useCallback((flowId: string) => {
+        setActiveFlows((prev) => prev.filter((f) => f.flowId !== flowId));
+        setResumeRequest((prev) => (prev?.flowId === flowId ? null : prev));
     }, []);
 
-    const requestResume = useCallback(() => {
-        if (!activeFlow) return;
-        setResumeRequest({
-            actionType: activeFlow.actionType,
-            poolAddress: activeFlow.poolAddress,
-            optionId: activeFlow.optionId,
-            formState: activeFlow.formState,
-        });
-    }, [activeFlow]);
+    const requestResumeFn = useCallback(
+        (flowId: string) => {
+            const flow = activeFlows.find((f) => f.flowId === flowId);
+            if (!flow) return;
+            setResumeRequest({
+                flowId: flow.flowId,
+                actionType: flow.actionType,
+                poolAddress: flow.poolAddress,
+                optionId: flow.optionId,
+                formState: flow.formState,
+            });
+        },
+        [activeFlows],
+    );
 
     const clearResumeRequest = useCallback(() => {
         setResumeRequest(null);
@@ -348,19 +383,19 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             getFlowTransaction,
             findResumableApproval,
             clearOld,
-            activeFlow,
+            activeFlows,
             claimFlow,
             updateFlow: updateFlowFn,
-            abandonFlow,
+            abandonFlow: abandonFlowFn,
             resumeRequest,
-            requestResume,
+            requestResume: requestResumeFn,
             clearResumeRequest,
         }),
         [
             state.transactions, pendingCount, recentTransactions,
             addTransaction, updateTransaction, getFlowTransaction, findResumableApproval, clearOld,
-            activeFlow, claimFlow, updateFlowFn, abandonFlow,
-            resumeRequest, requestResume, clearResumeRequest,
+            activeFlows, claimFlow, updateFlowFn, abandonFlowFn,
+            resumeRequest, requestResumeFn, clearResumeRequest,
         ],
     );
 

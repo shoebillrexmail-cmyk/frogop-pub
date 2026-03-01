@@ -2,6 +2,7 @@
  * TransactionToast — fixed-position floating pill showing pending TX count.
  *
  * Click expands a dropdown with each pending TX: label, elapsed time, status icon.
+ * Shows one FlowResumeCard per active two-step flow (parallel flows supported).
  * Auto-dismisses confirmed notifications after 10s.
  */
 import { useState, useEffect, useCallback } from 'react';
@@ -43,24 +44,24 @@ function elapsed(createdAt: string): string {
 }
 
 export function TransactionToast() {
-    const { recentTransactions, pendingCount, activeFlow, requestResume, abandonFlow } = useTransactionContext();
+    const { recentTransactions, pendingCount, activeFlows, requestResume, abandonFlow } = useTransactionContext();
     const [expanded, setExpanded] = useState(false);
     const [, setTick] = useState(0);
 
     // Update elapsed times every 15s
     useEffect(() => {
-        if (recentTransactions.length === 0) return;
+        if (recentTransactions.length === 0 && activeFlows.length === 0) return;
         const timer = setInterval(() => setTick((n) => n + 1), 15_000);
         return () => clearInterval(timer);
-    }, [recentTransactions.length]);
+    }, [recentTransactions.length, activeFlows.length]);
 
     // Auto-collapse when no more pending
     useEffect(() => {
-        if (pendingCount === 0 && expanded) {
+        if (pendingCount === 0 && activeFlows.length === 0 && expanded) {
             const timer = setTimeout(() => setExpanded(false), 10_000);
             return () => clearTimeout(timer);
         }
-    }, [pendingCount, expanded]);
+    }, [pendingCount, activeFlows.length, expanded]);
 
     const toggle = useCallback(() => setExpanded((v) => !v), []);
 
@@ -69,24 +70,30 @@ export function TransactionToast() {
         (tx) => tx.status !== 'failed',
     ).slice(0, 8);
 
-    const hasFlow = activeFlow !== null;
-    if (visible.length === 0 && pendingCount === 0 && !hasFlow) return null;
+    const hasFlows = activeFlows.length > 0;
+    if (visible.length === 0 && pendingCount === 0 && !hasFlows) return null;
 
     return (
         <div className="fixed bottom-4 right-4 z-50 font-mono">
             {/* Expanded dropdown */}
-            {expanded && (visible.length > 0 || hasFlow) && (
+            {expanded && (visible.length > 0 || hasFlows) && (
                 <div className="mb-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl shadow-lg overflow-hidden max-w-xs w-72">
                     <div className="px-3 py-2 border-b border-terminal-border-subtle text-xs text-terminal-text-muted">
                         Transactions
+                        {activeFlows.length > 0 && (
+                            <span className="ml-1 text-orange-400">
+                                ({activeFlows.length} flow{activeFlows.length > 1 ? 's' : ''})
+                            </span>
+                        )}
                     </div>
-                    {hasFlow && (
+                    {activeFlows.map((flow) => (
                         <FlowResumeCard
-                            flow={activeFlow}
-                            onResume={requestResume}
-                            onAbandon={abandonFlow}
+                            key={flow.flowId}
+                            flow={flow}
+                            onResume={() => requestResume(flow.flowId)}
+                            onAbandon={() => abandonFlow(flow.flowId)}
                         />
-                    )}
+                    ))}
                     <div className="max-h-64 overflow-y-auto">
                         {visible.map((tx: TrackedTransaction) => (
                             <div
@@ -112,7 +119,7 @@ export function TransactionToast() {
             )}
 
             {/* Floating pill */}
-            {(pendingCount > 0 || visible.length > 0 || hasFlow) && (
+            {(pendingCount > 0 || visible.length > 0 || hasFlows) && (
                 <button
                     onClick={toggle}
                     className="flex items-center gap-2 px-4 py-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-full shadow-lg hover:border-accent transition-colors"

@@ -1,12 +1,16 @@
 /**
  * useActiveFlow — convenience hook for two-step modal components.
  *
- * Wraps the TransactionContext's active flow APIs into a modal-friendly
+ * Wraps the TransactionContext's active flows APIs into a modal-friendly
  * interface with identity matching, canStartFlow gating, and form state
  * restoration for resumed flows.
+ *
+ * Supports parallel flows: each modal looks up its own flow by identity
+ * (actionType + poolAddress + optionId) from the flows array.
  */
 import { useMemo, useCallback } from 'react';
 import { useTransactionContext } from './useTransactionContext.ts';
+import { flowIdentityKey, MAX_PARALLEL_FLOWS } from '../contexts/flowDefs.ts';
 import type { FlowActionType, ActiveFlow } from '../contexts/flowDefs.ts';
 
 interface UseActiveFlowParams {
@@ -17,21 +21,21 @@ interface UseActiveFlowParams {
 }
 
 export interface UseActiveFlowResult {
-    /** True when no flow is active or this modal's flow is active */
+    /** True when this modal can start a new flow (under limit or own flow exists) */
     canStartFlow: boolean;
-    /** True when the currently active flow matches this modal's identity */
+    /** True when an active flow matches this modal's identity */
     isMyFlow: boolean;
     /** True when my flow's approval has been confirmed — ready for step 2 */
     approvalReady: boolean;
-    /** The active flow object (null if none) */
-    activeFlow: ActiveFlow | null;
+    /** The matching active flow object (null if no matching flow) */
+    myFlow: ActiveFlow | null;
     /** Restored form state from a matching resumed flow */
     resumedFormState: Record<string, string> | null;
-    /** Claim the flow lock. Returns the flow on success, null if blocked. */
+    /** Claim a flow slot. Returns the flow on success, null if at limit. */
     claimFlow: (formState?: Record<string, string>) => ActiveFlow | null;
     /** Update the active flow status/txIds */
     updateFlow: (updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => void;
-    /** Release the flow lock */
+    /** Remove this flow from the active flows */
     abandonFlow: () => void;
 }
 
@@ -42,25 +46,31 @@ export function useActiveFlow({
     label,
 }: UseActiveFlowParams): UseActiveFlowResult {
     const ctx = useTransactionContext();
-    const flow = ctx.activeFlow;
+    const { activeFlows } = ctx;
 
-    const isMyFlow = useMemo(() => {
-        if (!flow) return false;
-        return (
-            flow.actionType === actionType &&
-            flow.poolAddress === poolAddress &&
-            flow.optionId === (optionId ?? null)
-        );
-    }, [flow, actionType, poolAddress, optionId]);
+    const identityKey = useMemo(
+        () => flowIdentityKey(actionType, poolAddress, optionId),
+        [actionType, poolAddress, optionId],
+    );
 
-    const canStartFlow = flow === null || isMyFlow;
+    const myFlow = useMemo(
+        () =>
+            activeFlows.find(
+                (f) => flowIdentityKey(f.actionType, f.poolAddress, f.optionId) === identityKey,
+            ) ?? null,
+        [activeFlows, identityKey],
+    );
 
-    const approvalReady = isMyFlow && flow?.status === 'approval_confirmed';
+    const isMyFlow = myFlow !== null;
+
+    const canStartFlow = isMyFlow || activeFlows.length < MAX_PARALLEL_FLOWS;
+
+    const approvalReady = isMyFlow && myFlow?.status === 'approval_confirmed';
 
     const resumedFormState = useMemo(() => {
-        if (!isMyFlow || !flow) return null;
-        return flow.formState;
-    }, [isMyFlow, flow]);
+        if (!myFlow) return null;
+        return myFlow.formState;
+    }, [myFlow]);
 
     const claimFlow = useCallback(
         (formState?: Record<string, string>) => {
@@ -75,14 +85,27 @@ export function useActiveFlow({
         [ctx, actionType, poolAddress, optionId, label],
     );
 
+    const updateFlow = useCallback(
+        (updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => {
+            if (!myFlow) return;
+            ctx.updateFlow(myFlow.flowId, updates);
+        },
+        [ctx, myFlow],
+    );
+
+    const abandonFlow = useCallback(() => {
+        if (!myFlow) return;
+        ctx.abandonFlow(myFlow.flowId);
+    }, [ctx, myFlow]);
+
     return {
         canStartFlow,
         isMyFlow,
         approvalReady,
-        activeFlow: flow,
+        myFlow,
         resumedFormState,
         claimFlow,
-        updateFlow: ctx.updateFlow,
-        abandonFlow: ctx.abandonFlow,
+        updateFlow,
+        abandonFlow,
     };
 }

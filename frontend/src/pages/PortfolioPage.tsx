@@ -52,7 +52,7 @@ export function PortfolioPage() {
     const refetch = useCallback(() => { poolRefetch(); optRefetch(); }, [poolRefetch, optRefetch]);
 
     // Resume flow and auto-refetch
-    const { transactions, resumeRequest, clearResumeRequest, abandonFlow } = useTransactionContext();
+    const { transactions, resumeRequest, clearResumeRequest, abandonFlow: abandonFlowById } = useTransactionContext();
     const confirmedCountRef = useRef(0);
     useEffect(() => {
         if (!POOL_ADDRESS) return;
@@ -100,11 +100,11 @@ export function PortfolioPage() {
             if (opt) {
                 setExerciseTarget(opt);
             } else {
-                abandonFlow();
+                abandonFlowById(req.flowId);
                 alert('Option no longer available. Flow abandoned.');
             }
         }
-    }, [purchasedOptions, abandonFlow]);
+    }, [purchasedOptions, abandonFlowById]);
 
     // Handle exercise resume from flow card
     useEffect(() => {

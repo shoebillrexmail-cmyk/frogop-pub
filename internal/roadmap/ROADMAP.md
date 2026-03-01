@@ -266,8 +266,10 @@ Sprint 6 (UX Polish + E2E)  ◄──── All sprints
 | 6.3 | **Option detail page** (`/pools/:addr/options/:id`) | Full option data, P&L chart, Greeks, transfer history, context-aware action buttons, share link | 3d |
 | 6.4 | **Interactive onboarding** walkthrough | Step tooltips (Connect → Browse → Trade), first-visit trigger, skip/restart options | 2d |
 | 6.5 | **E2E tests** for complete user journeys | Mock wallet → template → write → buy → exercise → transfer → verify portfolio | 2d |
+| 6.6 | **Transaction flow UX overhaul** — remove global lock, parallel flows, persistent status | See [USER_FLOWS.md](./USER_FLOWS.md) for full design. Replace global singleton flow lock with per-option soft lock. Allow parallel two-step flows (e.g., approve for Buy #5 while Buy #7 approval is pending). Show "View" button on pill/toast from broadcast (not just after confirmation). Modal reopens with active flow state visible (spinner + tx link), not a fresh form. | 5d |
+| 6.7 | **User flow documentation & diagrams** ✅ | Document all user action flows (write, buy, exercise, cancel, settle, transfer, roll, batch, collar). ASCII/Mermaid diagrams for each. Edge cases documented. Design reference for future development. See [USER_FLOWS.md](./USER_FLOWS.md). | 2d |
 
-**Exit criteria**: No missed exercise windows. Human-readable time everywhere. Onboarding for new users. E2E coverage.
+**Exit criteria**: No missed exercise windows. Human-readable time everywhere. Onboarding for new users. E2E coverage. Users never blocked from starting new operations. All flows documented with diagrams.
 
 ---
 
@@ -280,8 +282,8 @@ Sprint 6 (UX Polish + E2E)  ◄──── All sprints
 | 3 — Option Transfer | 2 weeks | 9d | Contract + FE + Indexer | Moderate — contract upgrade required |
 | 4 — Batch Operations | 2 weeks | 10d | Contract + FE | Low — gas profiling needed |
 | 5 — Rolling | 2 weeks | 8d | Contract + FE | Moderate — complex collateral logic |
-| 6 — UX Polish | 2 weeks | 10d | Frontend | None — no contract changes |
-| **Total** | **~12 weeks** | **~55d** | | |
+| 6 — UX Polish | 3 weeks | 17d | Frontend | None — no contract changes |
+| **Total** | **~13 weeks** | **~62d** | | |
 
 **Contract upgrade strategy**: Sprints 3-5 contract changes can be batched into a single WASM upgrade via OPNet's built-in `Upgradeable` base class (timelock: 144 blocks). Deploy new WASM as source → `submitUpgrade` → wait → `applyUpgrade`. Existing options remain readable.
 
@@ -528,6 +530,7 @@ Total estimated: Phase 1.5 + 2 + 3 ≈ 32 weeks (~8 months, solo)
 | [PHASE_1_MVP.md](./PHASE_1_MVP.md) | Phase 1 detailed spec (complete) |
 | [PHASE_2_NATIVE.md](./PHASE_2_NATIVE.md) | NativeSwap BTC integration spec |
 | [PHASE_3_AMM.md](./PHASE_3_AMM.md) | AMM pool + LP spec |
+| [USER_FLOWS.md](./USER_FLOWS.md) | Transaction flow UX design + user flow diagrams |
 | [CANDIDATE_ROADMAP_V2.md](./CANDIDATE_ROADMAP_V2.md) | Research analysis + full sprint story detail |
 | [ECONOMIC_MODEL.md](./ECONOMIC_MODEL.md) | Participant incentives + pricing |
 | [PRICING_CALCULATIONS.md](./PRICING_CALCULATIONS.md) | Collateral + fee math |

@@ -2,17 +2,17 @@ export const NETWORKS = {
   regtest: {
     name: 'Regtest',
     rpc: 'https://regtest.opnet.org',
-    explorer: 'https://mempool.opnet.org',
+    explorerTx: 'https://regtest.opnet.org/tx/',
   },
   testnet: {
     name: 'Testnet',
     rpc: 'https://testnet.opnet.org',
-    explorer: 'https://mempool.opnet.org',
+    explorerTx: 'https://testnet.opnet.org/tx/',
   },
   mainnet: {
     name: 'Mainnet',
     rpc: 'https://mainnet.opnet.org',
-    explorer: 'https://mempool.opnet.org',
+    explorerTx: 'https://mainnet.opnet.org/tx/',
   },
 } as const;
 
@@ -27,6 +27,8 @@ export const CONTRACT_ADDRESSES = {
   poolTemplate: import.meta.env.VITE_POOL_TEMPLATE_ADDRESS || '',
   pool: import.meta.env.VITE_POOL_ADDRESS || '',
 };
+
+export const EXPLORER_TX_URL = NETWORKS[currentNetwork].explorerTx;
 
 export const BLOCK_CONSTANTS = {
   BLOCKS_PER_DAY: 144,

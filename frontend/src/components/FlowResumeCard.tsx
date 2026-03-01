@@ -1,11 +1,12 @@
 /**
  * FlowResumeCard — inline card shown in the TransactionToast dropdown
- * when an active two-step flow exists.
+ * for each active two-step flow.
  *
- * Displays the flow label, current status, elapsed time, and
- * Resume / Abandon buttons.
+ * Displays the flow label, current status, elapsed time, View TX link,
+ * and Resume / Abandon buttons.
  */
 import type { ActiveFlow, FlowStatus } from '../contexts/flowDefs.ts';
+import { EXPLORER_TX_URL } from '../config/index.ts';
 
 interface FlowResumeCardProps {
     flow: ActiveFlow;
@@ -16,17 +17,17 @@ interface FlowResumeCardProps {
 function statusLabel(status: FlowStatus): string {
     switch (status) {
         case 'approval_pending':
-            return 'Approval pending';
+            return 'Step 1: Approval pending...';
         case 'approval_confirmed':
-            return 'Approved — ready for step 2';
+            return 'Step 1: Approved \u2713 — ready for step 2';
         case 'action_pending':
-            return 'Action pending';
+            return 'Step 2: Confirming...';
         case 'action_confirmed':
-            return 'Confirmed';
+            return 'Confirmed \u2713';
         case 'approval_failed':
-            return 'Approval failed';
+            return 'Step 1: Approval failed';
         case 'action_failed':
-            return 'Action failed';
+            return 'Step 2: Action failed';
     }
 }
 
@@ -60,8 +61,14 @@ const RESUMABLE: ReadonlySet<FlowStatus> = new Set([
     'action_failed',
 ]);
 
+/** Returns the most recent txId available (action > approval). */
+function getViewTxId(flow: ActiveFlow): string | null {
+    return flow.actionTxId ?? flow.approvalTxId;
+}
+
 export function FlowResumeCard({ flow, onResume, onAbandon }: FlowResumeCardProps) {
     const canResume = RESUMABLE.has(flow.status);
+    const viewTxId = getViewTxId(flow);
 
     return (
         <div
@@ -80,6 +87,17 @@ export function FlowResumeCard({ flow, onResume, onAbandon }: FlowResumeCardProp
                 {statusLabel(flow.status)}
             </div>
             <div className="flex gap-2">
+                {viewTxId && (
+                    <a
+                        href={`${EXPLORER_TX_URL}${viewTxId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 text-center text-[10px] font-mono py-1 rounded bg-terminal-bg-elevated border border-terminal-border-subtle text-accent hover:text-accent/80 transition-colors"
+                        data-testid="flow-view-tx"
+                    >
+                        View TX
+                    </a>
+                )}
                 {canResume && (
                     <button
                         onClick={onResume}
@@ -89,13 +107,15 @@ export function FlowResumeCard({ flow, onResume, onAbandon }: FlowResumeCardProp
                         Resume
                     </button>
                 )}
-                <button
-                    onClick={onAbandon}
-                    className="flex-1 text-[10px] font-mono py-1 rounded bg-terminal-bg-elevated border border-terminal-border-subtle text-terminal-text-muted hover:text-terminal-text-primary transition-colors"
-                    data-testid="flow-abandon-btn"
-                >
-                    Abandon
-                </button>
+                {flow.status !== 'action_confirmed' && (
+                    <button
+                        onClick={onAbandon}
+                        className="flex-1 text-[10px] font-mono py-1 rounded bg-terminal-bg-elevated border border-terminal-border-subtle text-terminal-text-muted hover:text-terminal-text-primary transition-colors"
+                        data-testid="flow-abandon-btn"
+                    >
+                        Abandon
+                    </button>
+                )}
             </div>
         </div>
     );

@@ -73,7 +73,7 @@ export function PoolsPage() {
     const { candles } = usePriceCandles(chartToken, chartInterval);
 
     // Resume flow routing
-    const { transactions, resumeRequest, clearResumeRequest, abandonFlow } = useTransactionContext();
+    const { transactions, resumeRequest, clearResumeRequest, abandonFlow: abandonFlowById } = useTransactionContext();
     const confirmedCountRef = useRef(0);
     useEffect(() => {
         if (!selectedPoolAddr) return;
@@ -117,7 +117,7 @@ export function PoolsPage() {
             if (opt) {
                 setBuyTarget(opt);
             } else {
-                abandonFlow();
+                abandonFlowById(req.flowId);
                 alert('Option no longer available. Flow abandoned.');
             }
             return;
@@ -128,11 +128,11 @@ export function PoolsPage() {
             if (opt) {
                 setExerciseTarget(opt);
             } else {
-                abandonFlow();
+                abandonFlowById(req.flowId);
                 alert('Option no longer available. Flow abandoned.');
             }
         }
-    }, [options, abandonFlow]);
+    }, [options, abandonFlowById]);
 
     // Handle resume requests from the flow card
     useEffect(() => {

@@ -39,8 +39,8 @@ export interface TransactionContextValue {
     findResumableApproval: (poolAddress: string, optionId?: string) => TrackedTransaction | undefined;
     clearOld: () => void;
 
-    // Active Flow lock
-    activeFlow: ActiveFlow | null;
+    // Active Flows (parallel, per-identity)
+    activeFlows: ActiveFlow[];
     claimFlow: (params: {
         actionType: FlowActionType;
         poolAddress: string;
@@ -48,12 +48,12 @@ export interface TransactionContextValue {
         label: string;
         formState?: Record<string, string>;
     }) => ActiveFlow | null;
-    updateFlow: (updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => void;
-    abandonFlow: () => void;
+    updateFlow: (flowId: string, updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => void;
+    abandonFlow: (flowId: string) => void;
 
     // Resume
     resumeRequest: ResumeRequest | null;
-    requestResume: () => void;
+    requestResume: (flowId: string) => void;
     clearResumeRequest: () => void;
 }
 

@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import type { ActiveFlow } from '../../contexts/flowDefs.ts';
+import { MAX_PARALLEL_FLOWS } from '../../contexts/flowDefs.ts';
 
 // Use the real useActiveFlow (setup.ts mocks it, so we override)
 vi.mock('../useActiveFlow.ts', async (importOriginal) => {
@@ -31,7 +32,7 @@ const mockContext = (overrides: Record<string, unknown> = {}) => {
         getFlowTransaction: vi.fn(),
         findResumableApproval: vi.fn(() => null),
         clearOld: vi.fn(),
-        activeFlow: null,
+        activeFlows: [],
         claimFlow: vi.fn(() => ({
             flowId: 'new-flow',
             actionType: 'writeOption',
@@ -71,7 +72,7 @@ describe('useActiveFlow', () => {
         expect(result.current.resumedFormState).toBeNull();
     });
 
-    it('returns canStartFlow=false when different flow is active', () => {
+    it('returns canStartFlow=true when fewer than MAX_PARALLEL_FLOWS active', () => {
         const otherFlow: ActiveFlow = {
             flowId: 'other',
             actionType: 'buyOption',
@@ -84,7 +85,29 @@ describe('useActiveFlow', () => {
             label: 'Buy #42',
             formState: null,
         };
-        mockContext({ activeFlow: otherFlow });
+        mockContext({ activeFlows: [otherFlow] });
+
+        const { result } = renderHook(() =>
+            useActiveFlow({ actionType: 'writeOption', poolAddress: 'pool-1', label: 'Write' }),
+        );
+        expect(result.current.canStartFlow).toBe(true);
+        expect(result.current.isMyFlow).toBe(false);
+    });
+
+    it('returns canStartFlow=false when MAX_PARALLEL_FLOWS reached', () => {
+        const flows: ActiveFlow[] = Array.from({ length: MAX_PARALLEL_FLOWS }, (_, i) => ({
+            flowId: `flow-${i}`,
+            actionType: 'buyOption' as const,
+            poolAddress: 'pool-1',
+            optionId: String(i),
+            status: 'approval_pending' as const,
+            approvalTxId: null,
+            actionTxId: null,
+            claimedAt: new Date().toISOString(),
+            label: `Buy #${i}`,
+            formState: null,
+        }));
+        mockContext({ activeFlows: flows });
 
         const { result } = renderHook(() =>
             useActiveFlow({ actionType: 'writeOption', poolAddress: 'pool-1', label: 'Write' }),
@@ -106,7 +129,7 @@ describe('useActiveFlow', () => {
             label: 'Buy #7',
             formState: null,
         };
-        mockContext({ activeFlow: myFlow });
+        mockContext({ activeFlows: [myFlow] });
 
         const { result } = renderHook(() =>
             useActiveFlow({
@@ -134,7 +157,7 @@ describe('useActiveFlow', () => {
             label: 'Write Option',
             formState: { strike: '50', amount: '1', premium: '5', days: '7', optionType: '0' },
         };
-        mockContext({ activeFlow: myFlow });
+        mockContext({ activeFlows: [myFlow] });
 
         const { result } = renderHook(() =>
             useActiveFlow({ actionType: 'writeOption', poolAddress: 'pool-1', label: 'Write' }),
@@ -178,7 +201,7 @@ describe('useActiveFlow', () => {
             label: 'Write',
             formState: null,
         };
-        mockContext({ activeFlow: flow });
+        mockContext({ activeFlows: [flow] });
 
         const { result } = renderHook(() =>
             useActiveFlow({ actionType: 'writeOption', poolAddress: 'pool-1', label: 'Write' }),
@@ -199,7 +222,7 @@ describe('useActiveFlow', () => {
             label: 'Buy #5',
             formState: null,
         };
-        mockContext({ activeFlow: flow });
+        mockContext({ activeFlows: [flow] });
 
         const { result } = renderHook(() =>
             useActiveFlow({
@@ -210,6 +233,7 @@ describe('useActiveFlow', () => {
             }),
         );
         expect(result.current.isMyFlow).toBe(false);
-        expect(result.current.canStartFlow).toBe(false);
+        // With parallel flows, a single different flow doesn't block — canStartFlow is still true
+        expect(result.current.canStartFlow).toBe(true);
     });
 });

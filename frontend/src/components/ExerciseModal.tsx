@@ -147,7 +147,8 @@ export function ExerciseModal({
             setTxStatus('idle');
         } catch (err) {
             if (!mounted.current) return;
-            setTxError(err instanceof Error ? err.message : 'Approval failed');
+            const msg = err instanceof Error ? err.message : 'Approval failed';
+            setTxError(msg.includes('mempool-chain') ? 'Too many pending transactions. Wait for a confirmation before starting another.' : msg);
             updateFlow({ status: 'approval_failed' });
             setTxStatus('error');
         } finally {
@@ -185,7 +186,8 @@ export function ExerciseModal({
             setTxStatus('done');
         } catch (err) {
             if (!mounted.current) return;
-            setTxError(err instanceof Error ? err.message : 'Exercise failed');
+            const msg = err instanceof Error ? err.message : 'Exercise failed';
+            setTxError(msg.includes('mempool-chain') ? 'Too many pending transactions. Wait for a confirmation before starting another.' : msg);
             if (isMyFlow) updateFlow({ status: 'action_failed' });
             setTxStatus('error');
         } finally {
@@ -309,10 +311,10 @@ export function ExerciseModal({
                         })()}
                     </div>
 
-                    {/* Flow blocked warning */}
+                    {/* Flow limit warning */}
                     {!canStartFlow && (
                         <p className="text-yellow-400 text-xs font-mono" data-testid="flow-blocked">
-                            Another transaction flow is active. Complete or abandon it first.
+                            Too many pending transaction flows. Complete or abandon one first.
                         </p>
                     )}
 
