@@ -37,8 +37,8 @@ export enum OptionStatus {
     OPEN      = 0,
     PURCHASED = 1,
     EXERCISED = 2,
-    CANCELLED = 3,
-    SETTLED   = 4,
+    EXPIRED   = 3,
+    CANCELLED = 4,
 }
 
 export enum FeeEventType {

@@ -5,6 +5,7 @@
  * Reports how many were actually settled on success (non-atomic: skips unsettleable).
  */
 import { useState } from 'react';
+import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import type { Address } from '@btc-vision/transaction';
@@ -52,6 +53,7 @@ export function BatchSettleModal({
     onClose,
     onSuccess,
 }: BatchSettleModalProps) {
+    const mounted = useMountedRef();
     const [txStatus, setTxStatus] = useState<'idle' | 'settling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
@@ -90,6 +92,7 @@ export function BatchSettleModal({
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
             });
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
             addTransaction({
                 txId: receipt.transactionId,
@@ -104,6 +107,7 @@ export function BatchSettleModal({
             });
             setTxStatus('done');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Batch settle failed');
             setTxStatus('error');
         }
@@ -184,6 +188,9 @@ export function BatchSettleModal({
                         <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono">
                             <p className="text-green-300 mb-1">Batch settlement broadcast!</p>
                             <p className="text-terminal-text-muted break-all">{txId}</p>
+                            <p className="text-terminal-text-muted mt-1.5">
+                                Confirms in next block (~10 min). You can close this — check the transaction pill for updates.
+                            </p>
                             <button className="mt-2 btn-primary px-3 py-1 text-xs rounded" onClick={onSuccess}>
                                 Done
                             </button>

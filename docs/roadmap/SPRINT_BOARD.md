@@ -1929,7 +1929,7 @@ Tests run in the `node` pool — no D1 needed; D1 calls are intercepted via a mo
 | **handleCancelled** | | |
 | 7.9.2.13 | `fee > 0` → 2 statements (status update + fee event) | 0.2h |
 | 7.9.2.14 | `fee == 0` → 1 statement (status update only, no fee event) | 0.15h |
-| 7.9.2.15 | Status set to `OptionStatus.CANCELLED` (3) | 0.1h |
+| 7.9.2.15 | Status set to `OptionStatus.CANCELLED` (4) | 0.1h |
 | **handlePurchased** | | |
 | 7.9.2.16 | `fee = premium - writerAmount` computed correctly | 0.2h |
 | 7.9.2.17 | `premium < writerAmount` (impossible but defensive) → fee clamps to `'0'` | 0.15h |
@@ -1941,7 +1941,7 @@ Tests run in the `node` pool — no D1 needed; D1 calls are intercepted via a mo
 | 7.9.2.22 | Status set to `OptionStatus.EXERCISED` (2) | 0.1h |
 | **handleSettled** | | |
 | 7.9.2.23 | OptionExpired event (not 'OptionSettled') → 1 update statement | 0.15h |
-| 7.9.2.24 | Status set to `OptionStatus.SETTLED` (4) | 0.1h |
+| 7.9.2.24 | Status set to `OptionStatus.EXPIRED` (3) | 0.1h |
 | **decodeBlock** | | |
 | 7.9.2.25 | Events from non-tracked pool address are skipped | 0.15h |
 | 7.9.2.26 | Events from tracked pool are decoded and returned | 0.15h |

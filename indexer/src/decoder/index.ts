@@ -48,11 +48,14 @@ export function decodeBlock(
 
     for (const tx of txs) {
         for (const event of tx.events) {
+            // Normalize contract address to lowercase for consistent DB storage
+            const normalizedEvent = { ...event, contractAddress: event.contractAddress.toLowerCase() };
+
             // Check NativeSwap contracts (SwapExecuted events)
-            const tokenLabel = swapLabelMap.get(event.contractAddress);
-            if (tokenLabel && event.type === EV_SWAP_EXECUTED) {
+            const tokenLabel = swapLabelMap.get(normalizedEvent.contractAddress);
+            if (tokenLabel && normalizedEvent.type === EV_SWAP_EXECUTED) {
                 try {
-                    const s = handleSwapExecuted(db, event, blockNumber, tx.id, tokenLabel);
+                    const s = handleSwapExecuted(db, normalizedEvent, blockNumber, tx.id, tokenLabel);
                     if (s) stmts.push(s);
                 } catch (err) {
                     console.warn(
@@ -63,13 +66,13 @@ export function decodeBlock(
                 continue;
             }
 
-            if (!trackedPools.has(event.contractAddress)) continue;
+            if (!trackedPools.has(normalizedEvent.contractAddress)) continue;
             try {
-                const s = decodeEvent(db, event, blockNumber, tx.id);
+                const s = decodeEvent(db, normalizedEvent, blockNumber, tx.id);
                 if (s) stmts.push(...s);
             } catch (err) {
                 console.warn(
-                    `[decoder] Skipping malformed event type=${event.type} block=${blockNumber} tx=${tx.id}:`,
+                    `[decoder] Skipping malformed event type=${normalizedEvent.type} block=${blockNumber} tx=${tx.id}:`,
                     err,
                 );
             }
@@ -251,7 +254,7 @@ function handleSettled(
         { name: 'collateralAmount', type: 'u256'   },
     ]);
     if (!f) return [];
-    return [stmtUpdateOptionStatus(db, event.contractAddress, Number(f['optionId']), OptionStatus.SETTLED, null, blockNumber, txId)];
+    return [stmtUpdateOptionStatus(db, event.contractAddress, Number(f['optionId']), OptionStatus.EXPIRED, null, blockNumber, txId)];
 }
 
 function handleTransferred(

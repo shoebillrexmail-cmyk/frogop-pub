@@ -10,6 +10,7 @@
  * collateral and may require a top-up or produce a surplus.
  */
 import { useState, useEffect, useMemo } from 'react';
+import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import type { Address } from '@btc-vision/transaction';
@@ -49,6 +50,7 @@ export function RollModal({
     onClose,
     onSuccess,
 }: RollModalProps) {
+    const mounted = useMountedRef();
     const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'rolling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
@@ -60,14 +62,12 @@ export function RollModal({
     const [newExpiry, setNewExpiry] = useState('');
 
     useEffect(() => {
-        let mounted = true;
         provider.getBlockNumber().then((b) => {
-            if (!mounted) return;
+            if (!mounted.current) return;
             setCurrentBlock(b);
             setNewExpiry((prev) => prev || (b + 500n).toString());
-        }).catch(() => { if (mounted) setCurrentBlock(null); });
-        return () => { mounted = false; };
-    }, [provider]);
+        }).catch(() => { if (mounted.current) setCurrentBlock(null); });
+    }, [provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const isCall = option.optionType === OptionType.CALL;
     const collateralToken = isCall ? 'MOTO' : 'PILL';
@@ -134,6 +134,7 @@ export function RollModal({
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
             });
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
             addTransaction({
                 txId: receipt.transactionId,
@@ -148,6 +149,7 @@ export function RollModal({
             });
             setTxStatus('done');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Roll failed');
             setTxStatus('error');
         }
@@ -291,6 +293,9 @@ export function RollModal({
                         <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono">
                             <p className="text-green-300 mb-1">Roll broadcast!</p>
                             <p className="text-terminal-text-muted break-all">{txId}</p>
+                            <p className="text-terminal-text-muted mt-1.5">
+                                Confirms in next block (~10 min). You can close this — check the transaction pill for updates.
+                            </p>
                             <button className="mt-2 btn-primary px-3 py-1 text-xs rounded" onClick={onSuccess}>
                                 Done
                             </button>

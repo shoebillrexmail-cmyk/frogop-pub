@@ -14,6 +14,7 @@ export interface UseTransactionFlowResult {
     trackAction: (txId: string, type: TxType, label: string, meta?: Record<string, string>) => void;
     approvalConfirmed: boolean;
     resumableFlowId: string | null;
+    resumableMeta: Record<string, string> | null;
 }
 
 export function useTransactionFlow(
@@ -72,5 +73,6 @@ export function useTransactionFlow(
         trackAction,
         approvalConfirmed,
         resumableFlowId: resumable?.flowId ?? null,
+        resumableMeta: resumable?.meta ?? null,
     };
 }

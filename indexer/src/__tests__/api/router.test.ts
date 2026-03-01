@@ -247,6 +247,10 @@ describe('CORS', () => {
         'https://frogop.net',
         'https://app.pages.dev',
         'https://feature-branch.pages.dev',
+        'https://frogop-indexer.workers.dev',
+        'http://localhost',
+        'http://localhost:5173',
+        'http://localhost:8787',
     ];
 
     for (const origin of ALLOWED_ORIGINS) {
@@ -281,6 +285,30 @@ describe('CORS', () => {
     it('GET with no Origin → no CORS header', async () => {
         mockGetLastIndexedBlock.mockResolvedValue(0);
         const res = await handleFetch(req('/health'), mockEnv);
+        expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    });
+
+    it('rejects workers.dev with extra dots (subdomain attack)', async () => {
+        mockGetLastIndexedBlock.mockResolvedValue(0);
+        const res = await handleFetch(
+            req('/health', { origin: 'https://evil.sub.workers.dev' }), mockEnv,
+        );
+        expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    });
+
+    it('rejects https://localhost (only http allowed)', async () => {
+        mockGetLastIndexedBlock.mockResolvedValue(0);
+        const res = await handleFetch(
+            req('/health', { origin: 'https://localhost:5173' }), mockEnv,
+        );
+        expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    });
+
+    it('rejects pages.dev with extra dots', async () => {
+        mockGetLastIndexedBlock.mockResolvedValue(0);
+        const res = await handleFetch(
+            req('/health', { origin: 'https://evil.sub.pages.dev' }), mockEnv,
+        );
         expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
     });
 });

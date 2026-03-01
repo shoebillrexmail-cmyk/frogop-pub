@@ -6,6 +6,7 @@
  * Resolves bech32 to hex via provider.getPublicKeyInfo().
  */
 import { useState } from 'react';
+import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import { Address } from '@btc-vision/transaction';
@@ -37,6 +38,7 @@ export function TransferModal({
     onClose,
     onSuccess,
 }: TransferModalProps) {
+    const mounted = useMountedRef();
     const [recipientInput, setRecipientInput] = useState('');
     const [resolvedHex, setResolvedHex] = useState<string | null>(null);
     const [resolving, setResolving] = useState(false);
@@ -65,7 +67,7 @@ export function TransferModal({
             } catch {
                 return null;
             } finally {
-                setResolving(false);
+                if (mounted.current) setResolving(false);
             }
         }
 
@@ -114,6 +116,7 @@ export function TransferModal({
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
             });
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
             addTransaction({
                 txId: receipt.transactionId, type: 'transferOption', status: 'broadcast',
@@ -122,6 +125,7 @@ export function TransferModal({
             });
             setTxStatus('done');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Transfer failed');
             setTxStatus('error');
         }
@@ -203,6 +207,9 @@ export function TransferModal({
                         <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono">
                             <p className="text-green-300 mb-1">Transfer broadcast!</p>
                             <p className="text-terminal-text-muted break-all">{txId}</p>
+                            <p className="text-terminal-text-muted mt-1.5">
+                                Confirms in next block (~10 min). You can close this — check the transaction pill for updates.
+                            </p>
                             <button className="mt-2 btn-primary px-3 py-1 text-xs rounded" onClick={onSuccess}>
                                 Done
                             </button>

@@ -289,11 +289,11 @@ describe('OptionExpired (settle)', () => {
         ]);
     }
 
-    it('sets status to SETTLED', () => {
+    it('sets status to EXPIRED', () => {
         const tx = singleEventTx('OptionExpired', buildData());
         decodeBlock(mockDb, BLOCK, tx, new Set([POOL_HEX]));
         const [, , , status] = mockUpdateStatus.mock.calls[0]!;
-        expect(status).toBe(OptionStatus.SETTLED);
+        expect(status).toBe(OptionStatus.EXPIRED);
     });
 
     it('emits exactly 1 statement (no fee event)', () => {

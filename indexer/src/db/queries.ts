@@ -244,9 +244,10 @@ export async function getOptionsByUser(
     db: D1Database,
     userAddress: string,
 ): Promise<OptionRow[]> {
+    const normalized = userAddress.toLowerCase();
     const { results } = await db
         .prepare('SELECT * FROM options WHERE writer = ? OR buyer = ? ORDER BY pool_address, option_id')
-        .bind(userAddress, userAddress)
+        .bind(normalized, normalized)
         .all<OptionRow>();
     return results;
 }

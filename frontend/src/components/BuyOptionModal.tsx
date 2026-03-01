@@ -6,6 +6,7 @@
  *   2. buyOption(optionId)
  */
 import { useEffect, useState, useMemo } from 'react';
+import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import { Address } from '@btc-vision/transaction';
@@ -54,6 +55,7 @@ export function BuyOptionModal({
     onClose,
     onSuccess,
 }: BuyOptionModalProps) {
+    const mounted = useMountedRef();
     const [poolHex, setPoolHex] = useState<string | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'buying' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
@@ -68,10 +70,10 @@ export function BuyOptionModal({
         } else {
             provider
                 .getPublicKeyInfo(poolAddress, true)
-                .then((info: { toString(): string }) => setPoolHex(info.toString()))
-                .catch(() => setPoolHex(null));
+                .then((info: { toString(): string }) => { if (mounted.current) setPoolHex(info.toString()); })
+                .catch(() => { if (mounted.current) setPoolHex(null); });
         }
-    }, [poolAddress, provider]);
+    }, [poolAddress, provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const totalCost = calcTotalCost(option.premium, poolInfo.buyFeeBps);
     const fee = totalCost - option.premium;
@@ -134,11 +136,13 @@ export function BuyOptionModal({
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
             });
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
             trackApproval(receipt.transactionId, `Approve PILL for Buy #${option.id}`);
             refetchToken();
             setTxStatus('idle');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Approval failed');
             setTxStatus('error');
         }
@@ -165,10 +169,12 @@ export function BuyOptionModal({
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
             });
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
             trackAction(receipt.transactionId, 'buyOption', `Buy Option #${option.id}`);
             setTxStatus('done');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Purchase failed');
             setTxStatus('error');
         }

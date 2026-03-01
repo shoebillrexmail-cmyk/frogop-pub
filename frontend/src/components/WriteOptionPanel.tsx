@@ -6,6 +6,7 @@
  *   2. Submit writeOption() transaction
  */
 import { useState, useEffect } from 'react';
+import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import { Address } from '@btc-vision/transaction';
@@ -81,6 +82,7 @@ export function WriteOptionPanel({
     onClose,
     onSuccess,
 }: WriteOptionPanelProps) {
+    const mounted = useMountedRef();
     const [optionType, setOptionType] = useState<number>(OptionType.CALL);
     const [amountStr, setAmountStr] = useState('1');
     const [strikeStr, setStrikeStr] = useState('');
@@ -102,12 +104,23 @@ export function WriteOptionPanel({
         if (initialValues.premiumStr !== undefined) setPremiumStr(initialValues.premiumStr);
         if (initialValues.selectedDays !== undefined) setSelectedDays(initialValues.selectedDays);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: seed once on mount
+
+    // Restore form values from a resumable approval transaction (close/reopen)
+    useEffect(() => {
+        if (!resumableMeta) return;
+        if (resumableMeta['optionType'] !== undefined) setOptionType(Number(resumableMeta['optionType']));
+        if (resumableMeta['amount'] !== undefined) setAmountStr(resumableMeta['amount']);
+        if (resumableMeta['strike'] !== undefined) setStrikeStr(resumableMeta['strike']);
+        if (resumableMeta['premium'] !== undefined) setPremiumStr(resumableMeta['premium']);
+        if (resumableMeta['days'] !== undefined) setSelectedDays(Number(resumableMeta['days']));
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: restore once on mount
+
     const [validationError, setValidationError] = useState<string | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'writing' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
 
-    const { trackApproval, trackAction } = useTransactionFlow(poolAddress);
+    const { trackApproval, trackAction, resumableMeta } = useTransactionFlow(poolAddress);
 
     const amount = parseBigIntTokens(amountStr);
     const strike = parseBigIntTokens(strikeStr);
@@ -130,12 +143,12 @@ export function WriteOptionPanel({
             setPoolHex(poolAddress);
         } else {
             provider.getPublicKeyInfo(poolAddress, true).then((info: { toString(): string }) => {
-                setPoolHex(info.toString());
+                if (mounted.current) setPoolHex(info.toString());
             }).catch(() => {
-                setPoolHex(null);
+                if (mounted.current) setPoolHex(null);
             });
         }
-    }, [poolAddress, provider]);
+    }, [poolAddress, provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // CALL locks MOTO (underlying), PUT locks PILL (premiumToken)
     const collateralToken = optionType === OptionType.CALL ? poolInfo.underlying : poolInfo.premiumToken;
@@ -188,11 +201,19 @@ export function WriteOptionPanel({
                 network,
             });
 
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
-            trackApproval(receipt.transactionId, `Approve ${collateralSymbol} for Write`, { amount: amountStr });
+            trackApproval(receipt.transactionId, `Approve ${collateralSymbol} for Write`, {
+                optionType: String(optionType),
+                strike: strikeStr,
+                amount: amountStr,
+                premium: premiumStr,
+                days: String(selectedDays),
+            });
             refetchToken();
             setTxStatus('idle');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Approval failed');
             setTxStatus('error');
         }
@@ -241,10 +262,12 @@ export function WriteOptionPanel({
                 network,
             });
 
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
             trackAction(receipt.transactionId, 'writeOption', 'Write Option');
             setTxStatus('done');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Write option failed');
             setTxStatus('error');
         }
@@ -257,7 +280,6 @@ export function WriteOptionPanel({
             {/* Backdrop */}
             <div
                 className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-                onClick={onClose}
                 data-testid="panel-backdrop"
             />
 

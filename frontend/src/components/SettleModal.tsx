@@ -5,6 +5,7 @@
  * No approval needed — collateral is already in the contract.
  */
 import { useState } from 'react';
+import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import type { Address } from '@btc-vision/transaction';
@@ -42,6 +43,7 @@ export function SettleModal({
     onClose,
     onSuccess,
 }: SettleModalProps) {
+    const mounted = useMountedRef();
     const [txStatus, setTxStatus] = useState<'idle' | 'settling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
@@ -77,6 +79,7 @@ export function SettleModal({
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
             });
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
             addTransaction({
                 txId: receipt.transactionId, type: 'settle', status: 'broadcast',
@@ -85,6 +88,7 @@ export function SettleModal({
             });
             setTxStatus('done');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Settle failed');
             setTxStatus('error');
         }
@@ -149,6 +153,9 @@ export function SettleModal({
                         <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono">
                             <p className="text-green-300 mb-1">Settlement broadcast!</p>
                             <p className="text-terminal-text-muted break-all">{txId}</p>
+                            <p className="text-terminal-text-muted mt-1.5">
+                                Confirms in next block (~10 min). You can close this — check the transaction pill for updates.
+                            </p>
                             <button className="mt-2 btn-primary px-3 py-1 text-xs rounded" onClick={onSuccess}>
                                 Done
                             </button>

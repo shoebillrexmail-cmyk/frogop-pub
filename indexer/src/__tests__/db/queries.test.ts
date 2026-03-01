@@ -509,3 +509,52 @@ describe('Option transfers', () => {
         expect(daveTransfers).toHaveLength(1);
     });
 });
+
+// ---------------------------------------------------------------------------
+describe('Address case-insensitive queries', () => {
+    beforeEach(async () => {
+        await upsertPool(d1(), makePool(POOL_ADDR));
+    });
+
+    it('getOptionsByUser matches regardless of hex case (decoder stores lowercase)', async () => {
+        // Decoder normalizes all addresses to lowercase before inserting
+        await db.batch([
+            stmtInsertOption(d1(), makeOption(10, {
+                writer: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+                buyer:  '0xfedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210',
+                status: 1,
+            })),
+        ]);
+
+        // Query with UPPERCASE — getOptionsByUser normalizes to lowercase → match
+        const writerResults = await getOptionsByUser(d1(),
+            '0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890',
+        );
+        expect(writerResults).toHaveLength(1);
+        expect(writerResults[0]?.option_id).toBe(10);
+
+        // Query with mixed case — should also match buyer
+        const buyerResults = await getOptionsByUser(d1(),
+            '0xFEDCBA9876543210fedcba9876543210fedcba9876543210fedcba9876543210',
+        );
+        expect(buyerResults).toHaveLength(1);
+        expect(buyerResults[0]?.option_id).toBe(10);
+    });
+
+    it('getOptionsByUser with uppercase query matches lowercase DB data', async () => {
+        // Insert with lowercase addresses (normal case after decoder normalization)
+        await db.batch([
+            stmtInsertOption(d1(), makeOption(11, {
+                writer: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+                status: 0,
+            })),
+        ]);
+
+        // Query with uppercase — getOptionsByUser normalizes to lowercase
+        const results = await getOptionsByUser(d1(),
+            '0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890',
+        );
+        expect(results).toHaveLength(1);
+        expect(results[0]?.option_id).toBe(11);
+    });
+});

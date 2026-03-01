@@ -7,6 +7,7 @@
  * Two-step: Approve PILL → exercise()
  */
 import { useEffect, useState } from 'react';
+import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import { Address } from '@btc-vision/transaction';
@@ -50,6 +51,7 @@ export function ExerciseModal({
     onClose,
     onSuccess,
 }: ExerciseModalProps) {
+    const mounted = useMountedRef();
     const [poolHex, setPoolHex] = useState<string | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'exercising' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
@@ -63,10 +65,10 @@ export function ExerciseModal({
         } else {
             provider
                 .getPublicKeyInfo(poolAddress, true)
-                .then((info: { toString(): string }) => setPoolHex(info.toString()))
-                .catch(() => setPoolHex(null));
+                .then((info: { toString(): string }) => { if (mounted.current) setPoolHex(info.toString()); })
+                .catch(() => { if (mounted.current) setPoolHex(null); });
         }
-    }, [poolAddress, provider]);
+    }, [poolAddress, provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const isCall = option.optionType === OptionType.CALL;
     // Normalize: both are 18-decimal, product is 36-decimal → divide by 10^18
@@ -122,11 +124,13 @@ export function ExerciseModal({
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
             });
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
             trackApproval(receipt.transactionId, `Approve ${payToken} for Exercise #${option.id}`);
             refetchToken();
             setTxStatus('idle');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Approval failed');
             setTxStatus('error');
         }
@@ -153,10 +157,12 @@ export function ExerciseModal({
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
             });
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
             trackAction(receipt.transactionId, 'exercise', `Exercise Option #${option.id}`);
             setTxStatus('done');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Exercise failed');
             setTxStatus('error');
         }

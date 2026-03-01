@@ -5,6 +5,7 @@
  * totals collateral returned and fees, and calls batchCancel on the pool contract.
  */
 import { useState, useEffect } from 'react';
+import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import type { Address } from '@btc-vision/transaction';
@@ -54,6 +55,7 @@ export function BatchCancelModal({
     onClose,
     onSuccess,
 }: BatchCancelModalProps) {
+    const mounted = useMountedRef();
     const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'cancelling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
@@ -61,8 +63,10 @@ export function BatchCancelModal({
     const { addTransaction } = useTransactionContext();
 
     useEffect(() => {
-        provider.getBlockNumber().then(setCurrentBlock).catch(() => setCurrentBlock(null));
-    }, [provider]);
+        provider.getBlockNumber()
+            .then((b) => { if (mounted.current) setCurrentBlock(b); })
+            .catch(() => { if (mounted.current) setCurrentBlock(null); });
+    }, [provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const feeBps = poolInfo.cancelFeeBps;
 
@@ -108,6 +112,7 @@ export function BatchCancelModal({
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
             });
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
             addTransaction({
                 txId: receipt.transactionId,
@@ -122,6 +127,7 @@ export function BatchCancelModal({
             });
             setTxStatus('done');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Batch cancel failed');
             setTxStatus('error');
         }
@@ -201,6 +207,9 @@ export function BatchCancelModal({
                         <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono">
                             <p className="text-green-300 mb-1">Batch cancellation broadcast!</p>
                             <p className="text-terminal-text-muted break-all">{txId}</p>
+                            <p className="text-terminal-text-muted mt-1.5">
+                                Confirms in next block (~10 min). You can close this — check the transaction pill for updates.
+                            </p>
                             <button className="mt-2 btn-primary px-3 py-1 text-xs rounded" onClick={onSuccess}>
                                 Done
                             </button>

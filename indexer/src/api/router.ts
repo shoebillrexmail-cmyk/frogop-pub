@@ -21,7 +21,9 @@ import {
 function getAllowedOrigin(origin: string | null): string {
     if (!origin) return '';
     if (origin === 'https://frogop.net') return origin;
+    if (/^https:\/\/[^.]+\.workers\.dev$/.test(origin)) return origin;
     if (/^https:\/\/[^.]+\.pages\.dev$/.test(origin)) return origin;
+    if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return origin;
     return '';
 }
 

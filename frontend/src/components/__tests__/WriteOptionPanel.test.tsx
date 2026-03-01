@@ -109,11 +109,11 @@ describe('WriteOptionPanel', () => {
         expect(screen.getByTestId('type-put')).toBeInTheDocument();
     });
 
-    it('closes when backdrop is clicked', () => {
+    it('backdrop click does NOT close the panel', () => {
         const onClose = vi.fn();
         render(<WriteOptionPanel {...DEFAULT_PROPS} onClose={onClose} />);
         fireEvent.click(screen.getByTestId('panel-backdrop'));
-        expect(onClose).toHaveBeenCalledOnce();
+        expect(onClose).not.toHaveBeenCalled();
     });
 
     it('closes when ✕ button is clicked', () => {

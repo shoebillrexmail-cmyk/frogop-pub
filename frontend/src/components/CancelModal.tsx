@@ -7,6 +7,7 @@
  * If the option has expired (expiryBlock <= currentBlock), the fee drops to 0%.
  */
 import { useState, useEffect } from 'react';
+import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import type { Address } from '@btc-vision/transaction';
@@ -46,6 +47,7 @@ export function CancelModal({
     onClose,
     onSuccess,
 }: CancelModalProps) {
+    const mounted = useMountedRef();
     const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'cancelling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
@@ -54,8 +56,10 @@ export function CancelModal({
 
     // Fetch current block to determine if expired (0% fee)
     useEffect(() => {
-        provider.getBlockNumber().then(setCurrentBlock).catch(() => setCurrentBlock(null));
-    }, [provider]);
+        provider.getBlockNumber()
+            .then((b) => { if (mounted.current) setCurrentBlock(b); })
+            .catch(() => { if (mounted.current) setCurrentBlock(null); });
+    }, [provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const isCall = option.optionType === OptionType.CALL;
     // Fixed-point: (strike * amount) / 1e18 — both are 18-decimal
@@ -92,6 +96,7 @@ export function CancelModal({
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
             });
+            if (!mounted.current) return;
             setTxId(receipt.transactionId);
             addTransaction({
                 txId: receipt.transactionId, type: 'cancelOption', status: 'broadcast',
@@ -100,6 +105,7 @@ export function CancelModal({
             });
             setTxStatus('done');
         } catch (err) {
+            if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Cancel failed');
             setTxStatus('error');
         }

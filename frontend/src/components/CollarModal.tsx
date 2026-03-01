@@ -5,7 +5,7 @@
  * Step 1: Write CALL at 120% spot → opens WriteOptionPanel
  * Step 2: Buy PUT at 80% spot → opens BuyOptionModal with best matching put
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import type { OptionData, PoolInfo } from '../services/types.ts';
 import {
     calcCollarParams,
@@ -32,8 +32,31 @@ export function CollarModal({
     onBuyPut,
     onClose,
 }: CollarModalProps) {
-    const [callDone, setCallDone] = useState(false);
-    const [putDone, setPutDone] = useState(false);
+    const STORAGE_KEY = 'frogop_collar_progress';
+
+    const [callDone, setCallDone] = useState(() => {
+        try {
+            const stored = sessionStorage.getItem(STORAGE_KEY);
+            return stored ? (JSON.parse(stored) as { callDone?: boolean }).callDone === true : false;
+        } catch { return false; }
+    });
+    const [putDone, setPutDone] = useState(() => {
+        try {
+            const stored = sessionStorage.getItem(STORAGE_KEY);
+            return stored ? (JSON.parse(stored) as { putDone?: boolean }).putDone === true : false;
+        } catch { return false; }
+    });
+
+    // Persist step progress to sessionStorage
+    useEffect(() => {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ callDone, putDone }));
+    }, [callDone, putDone]);
+
+    const handleReset = useCallback(() => {
+        setCallDone(false);
+        setPutDone(false);
+        sessionStorage.removeItem(STORAGE_KEY);
+    }, []);
 
     const collar = useMemo(
         () => (motoPillRatio && motoPillRatio > 0 ? calcCollarParams(motoPillRatio, motoBal) : null),
@@ -205,7 +228,7 @@ export function CollarModal({
                         <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono text-center">
                             <p className="text-green-300">Collar strategy complete!</p>
                             <button
-                                onClick={onClose}
+                                onClick={() => { sessionStorage.removeItem(STORAGE_KEY); onClose(); }}
                                 className="mt-2 btn-primary px-4 py-1.5 text-xs rounded"
                             >
                                 Done
@@ -213,14 +236,25 @@ export function CollarModal({
                         </div>
                     )}
 
-                    {/* Close button */}
+                    {/* Close / Reset buttons */}
                     {!allDone && (
-                        <button
-                            onClick={onClose}
-                            className="w-full btn-secondary py-2 text-sm rounded"
-                        >
-                            Close
-                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onClose}
+                                className="flex-1 btn-secondary py-2 text-sm rounded"
+                            >
+                                Close
+                            </button>
+                            {(callDone || putDone) && (
+                                <button
+                                    onClick={handleReset}
+                                    className="text-xs font-mono text-terminal-text-muted hover:text-terminal-text-primary underline px-2"
+                                    data-testid="collar-reset"
+                                >
+                                    Reset
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>

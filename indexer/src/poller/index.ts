@@ -50,11 +50,17 @@ export async function pollNewBlocks(env: Env): Promise<void> {
     const catching_up = to < latestBlock;
     console.log(`[poller] Syncing blocks ${from} → ${to} (latest=${latestBlock}, behind=${latestBlock - to})`);
 
-    // Build swap label map for event decoding (routerHex → label per token)
+    // Build swap label map for event decoding.
+    // SwapExecuted events use the token contract address, not the router.
+    // Map each token address (lowercased) → label, plus the router itself.
     const swapLabelMap = new Map<string, string>();
     if (swapConfig) {
+        for (const [tokenHex, label] of swapConfig.tokenMap) {
+            swapLabelMap.set(tokenHex.toLowerCase(), label);
+        }
+        // Also map the router address in case SwapExecuted comes from there
         const firstLabel = swapConfig.tokenMap.values().next().value as string;
-        swapLabelMap.set(swapConfig.routerHex, firstLabel);
+        swapLabelMap.set(swapConfig.routerHex.toLowerCase(), firstLabel);
     }
 
     // Collect ALL block statements into a single batch to minimize D1 subrequests.
@@ -156,7 +162,14 @@ async function resolvePoolAddresses(env: Env, provider: JSONRpcProvider): Promis
     for (const addr of bech32Addresses) {
         try {
             const pubKeyInfo = await provider.getPublicKeyInfo(addr, true);
-            if (pubKeyInfo) hexSet.add(pubKeyInfo.toString());
+            if (pubKeyInfo) {
+                // getPublicKeyInfo returns hex WITHOUT 0x prefix, but OPNet events
+                // use 0x-prefixed hex in event.contractAddress — must match.
+                const raw = pubKeyInfo.toString().toLowerCase();
+                const hex = raw.startsWith('0x') ? raw : '0x' + raw;
+                hexSet.add(hex);
+                console.log(`[poller] Resolved ${addr} → ${hex}`);
+            }
         } catch (err) {
             console.error(`[poller] Failed to resolve address ${addr}:`, err);
         }
@@ -179,7 +192,7 @@ export interface SwapConfig {
 }
 
 function resolveSwapConfig(env: Env): SwapConfig | null {
-    const router = (env.NATIVESWAP_CONTRACT ?? '').trim();
+    const router = (env.NATIVESWAP_CONTRACT ?? '').trim().toLowerCase();
     if (!router) return null;
 
     const tokenAddrs = (env.NATIVESWAP_TOKEN_ADDRESSES ?? '').split(' ').filter(Boolean);
@@ -190,7 +203,7 @@ function resolveSwapConfig(env: Env): SwapConfig | null {
     for (let i = 0; i < tokenAddrs.length; i++) {
         const label = labels[i];
         if (!label) continue;
-        tokenMap.set(tokenAddrs[i]!, label);
+        tokenMap.set(tokenAddrs[i]!.toLowerCase(), label);
     }
 
     if (tokenMap.size > 0) {

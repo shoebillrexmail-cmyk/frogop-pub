@@ -46,6 +46,7 @@ const DEFAULT_PROPS = {
 describe('CollarModal', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        sessionStorage.clear();
     });
 
     it('renders the modal with both strategy legs', () => {
