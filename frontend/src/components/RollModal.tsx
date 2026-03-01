@@ -53,7 +53,6 @@ export function RollModal({
     const [txStatus, setTxStatus] = useState<'idle' | 'rolling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
-    const [newOptionId, setNewOptionId] = useState<string | null>(null);
     const { addTransaction } = useTransactionContext();
 
     const [newStrike, setNewStrike] = useState(option.strikePrice.toString());
@@ -61,10 +60,13 @@ export function RollModal({
     const [newExpiry, setNewExpiry] = useState('');
 
     useEffect(() => {
+        let mounted = true;
         provider.getBlockNumber().then((b) => {
+            if (!mounted) return;
             setCurrentBlock(b);
-            if (!newExpiry) setNewExpiry((b + 500n).toString());
-        }).catch(() => setCurrentBlock(null));
+            setNewExpiry((prev) => prev || (b + 500n).toString());
+        }).catch(() => { if (mounted) setCurrentBlock(null); });
+        return () => { mounted = false; };
     }, [provider]);
 
     const isCall = option.optionType === OptionType.CALL;
@@ -287,9 +289,6 @@ export function RollModal({
                     {txStatus === 'done' && txId && (
                         <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono">
                             <p className="text-green-300 mb-1">Roll broadcast!</p>
-                            {newOptionId && (
-                                <p className="text-terminal-text-secondary mb-1">New Option ID: {newOptionId}</p>
-                            )}
                             <p className="text-terminal-text-muted break-all">{txId}</p>
                             <button className="mt-2 btn-primary px-3 py-1 text-xs rounded" onClick={onSuccess}>
                                 Done

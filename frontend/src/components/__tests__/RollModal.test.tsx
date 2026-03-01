@@ -54,12 +54,6 @@ const OPEN_OPTION: OptionData = {
     status: OptionStatus.OPEN,
 };
 
-const PUT_OPTION: OptionData = {
-    ...OPEN_OPTION,
-    id: 6n,
-    optionType: OptionType.PUT,
-};
-
 const makeAddress = (hex: string) => ({ toString: () => hex });
 const WALLET_HEX = '0xbeef000000000000000000000000000000000000000000000000000000000002';
 

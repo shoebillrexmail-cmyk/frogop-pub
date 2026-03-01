@@ -8,7 +8,6 @@ import {
     getLogger,
     formatAddress,
     POOL_SELECTORS,
-    TOKEN_SELECTORS,
 } from './config.js';
 import {
     DeploymentHelper,
@@ -103,19 +102,6 @@ async function readOptionCount(
 ): Promise<bigint> {
     const result = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
     if (isCallError(result)) throw new Error(`Count call error: ${result.error}`);
-    return result.result.readU256();
-}
-
-async function readBalance(
-    provider: JSONRpcProvider,
-    tokenAddr: string,
-    ownerHex: string,
-): Promise<bigint> {
-    const w = new BinaryWriter();
-    w.writeAddress(Address.fromString(ownerHex));
-    const cd = Buffer.from(w.getBuffer() as Uint8Array).toString('hex');
-    const result = await provider.call(tokenAddr, TOKEN_SELECTORS.balanceOf + cd);
-    if (isCallError(result)) throw new Error(`balanceOf error: ${result.error}`);
     return result.result.readU256();
 }
 

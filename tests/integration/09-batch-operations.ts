@@ -190,12 +190,12 @@ async function main() {
 
         // Buy option B (index 1) and C (index 2)
         for (const idx of [1, 2]) {
-            const buyCalldata = createBuyOptionCalldata(optionIds[idx]);
+            const buyCalldata = createBuyOptionCalldata(optionIds[idx]!);
             await buyerHelper.callContract(poolAddress, buyCalldata, 50_000n);
-            log.info(`  Bought option ${optionIds[idx]}`);
+            log.info(`  Bought option ${optionIds[idx]!}`);
         }
 
-        return { bought: [optionIds[1].toString(), optionIds[2].toString()] };
+        return { bought: [optionIds[1]!.toString(), optionIds[2]!.toString()] };
     });
 
     // =====================================================================
@@ -205,11 +205,11 @@ async function main() {
     await runTest('batchCancel: Cancel OPEN option in batch', async () => {
         if (optionIds.length < 1) throw new Error('No options');
 
-        const calldata = createBatchCancelCalldata([optionIds[0]]);
+        const calldata = createBatchCancelCalldata([optionIds[0]!]);
         const { txId } = await writerHelper.callContract(poolAddress, calldata, 50_000n);
 
         // Verify status is CANCELLED (4)
-        const option = await readOption(provider, poolCallAddr, optionIds[0]);
+        const option = await readOption(provider, poolCallAddr, optionIds[0]!);
         if (option.status !== 4) {
             log.warn(`  Option status is ${option.status}, expected 4 (CANCELLED)`);
         }
@@ -225,7 +225,7 @@ async function main() {
         if (optionIds.length < 1) throw new Error('No options');
 
         try {
-            const calldata = createBatchCancelCalldata([optionIds[0]]);
+            const calldata = createBatchCancelCalldata([optionIds[0]!]);
             await writerHelper.callContract(poolAddress, calldata, 50_000n);
             return { result: 'TX broadcast - verify on-chain revert for Not open' };
         } catch (error) {
@@ -244,12 +244,12 @@ async function main() {
     await runTest('batchSettle: Settle expired options', async () => {
         if (optionIds.length < 3) throw new Error('Not enough options');
 
-        const calldata = createBatchSettleCalldata([optionIds[1], optionIds[2]]);
+        const calldata = createBatchSettleCalldata([optionIds[1]!, optionIds[2]!]);
         const { txId } = await writerHelper.callContract(poolAddress, calldata, 50_000n);
 
         // Check statuses - they may or may not be settled depending on block height
-        const optB = await readOption(provider, poolCallAddr, optionIds[1]);
-        const optC = await readOption(provider, poolCallAddr, optionIds[2]);
+        const optB = await readOption(provider, poolCallAddr, optionIds[1]!);
+        const optC = await readOption(provider, poolCallAddr, optionIds[2]!);
 
         log.info(`  Option B status: ${optB.status}`);
         log.info(`  Option C status: ${optC.status}`);
@@ -267,7 +267,7 @@ async function main() {
 
     await runTest('batchSettle: Skip non-settleable options gracefully', async () => {
         // Use a non-existent ID and the already-cancelled option
-        const calldata = createBatchSettleCalldata([99999n, optionIds[0]]);
+        const calldata = createBatchSettleCalldata([99999n, optionIds[0]!]);
         const { txId } = await writerHelper.callContract(poolAddress, calldata, 50_000n);
 
         // Both should be skipped (99999 doesn't exist, optionIds[0] is CANCELLED)

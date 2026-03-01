@@ -324,7 +324,7 @@ class OptionsPoolTestRuntime extends ContractRuntime {
         writer.writeSelector(this.batchCancelSelector);
         writer.writeU256(BigInt(optionIds.length));
         for (let i = 0; i < 5; i++) {
-            writer.writeU256(i < optionIds.length ? optionIds[i] : 0n);
+            writer.writeU256(i < optionIds.length ? optionIds[i]! : 0n);
         }
 
         const result = await this.executeThrowOnError({
@@ -342,7 +342,7 @@ class OptionsPoolTestRuntime extends ContractRuntime {
         writer.writeSelector(this.batchSettleSelector);
         writer.writeU256(BigInt(optionIds.length));
         for (let i = 0; i < 5; i++) {
-            writer.writeU256(i < optionIds.length ? optionIds[i] : 0n);
+            writer.writeU256(i < optionIds.length ? optionIds[i]! : 0n);
         }
 
         const result = await this.executeThrowOnError({
@@ -408,7 +408,7 @@ class OptionsPoolTestRuntime extends ContractRuntime {
         writer.writeSelector(this.batchCancelSelector);
         writer.writeU256(BigInt(optionIds.length));
         for (let i = 0; i < 5; i++) {
-            writer.writeU256(i < optionIds.length ? optionIds[i] : 0n);
+            writer.writeU256(i < optionIds.length ? optionIds[i]! : 0n);
         }
 
         try {
@@ -428,7 +428,7 @@ class OptionsPoolTestRuntime extends ContractRuntime {
         writer.writeSelector(this.batchSettleSelector);
         writer.writeU256(BigInt(optionIds.length));
         for (let i = 0; i < 5; i++) {
-            writer.writeU256(i < optionIds.length ? optionIds[i] : 0n);
+            writer.writeU256(i < optionIds.length ? optionIds[i]! : 0n);
         }
 
         try {
