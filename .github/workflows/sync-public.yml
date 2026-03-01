@@ -1,0 +1,53 @@
+name: Sync to public repo
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  sync:
+    name: Sync to frogop-pub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Create clean snapshot
+        run: |
+          EXCLUDED=(
+            "docs/"
+            ".github/workflows/"
+            "SPRINTBOARD.md"
+            "AGENTS.md"
+            "indexer/.wrangler/"
+            "tests/dist/"
+            "proxy/"
+            "docker-compose.dev.yml"
+            "docker-compose.prod.yml"
+            "frontend/Dockerfile.dev"
+            "frontend/Dockerfile.prod"
+            "frontend/nginx/"
+            "scripts/"
+          )
+
+          STAGING=$(mktemp -d)
+          git archive HEAD | tar -x -C "$STAGING"
+
+          for path in "${EXCLUDED[@]}"; do
+            rm -rf "${STAGING:?}/$path"
+          done
+
+          echo "STAGING=$STAGING" >> "$GITHUB_ENV"
+
+      - name: Commit and push to public repo
+        run: |
+          cd "$STAGING"
+          git init -q
+          git checkout -q -b master
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Sync from private repo — $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git remote add public "https://x-access-token:${{ secrets.PUBLIC_REPO_TOKEN }}@github.com/shoebillrexmail-cmyk/frogop-pub.git"
+          git push --force public master
