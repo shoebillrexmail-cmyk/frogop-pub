@@ -76,8 +76,8 @@ afterEach(() => {
 describe('encodeGetQuoteCalldata', () => {
     it('encodes selector + address + sats correctly', () => {
         const result = encodeGetQuoteCalldata('0xabcdef', 100_000n);
-        // Selector: 0c8b6164
-        expect(result).toMatch(/^0x0c8b6164/);
+        // Selector: 51852102 = encodeSelector('getQuote(address,uint64)')
+        expect(result).toMatch(/^0x51852102/);
         // Address should be left-padded to 64 hex chars (32 bytes)
         expect(result.length).toBe(2 + 8 + 64 + 16); // 0x + selector + addr + sats
     });

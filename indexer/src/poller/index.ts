@@ -203,8 +203,8 @@ function resolveSwapConfig(env: Env): SwapConfig | null {
 // Spot price polling (getQuote via raw provider.call)
 // ---------------------------------------------------------------------------
 
-/** ABICoder.encodeSelector('getQuote') — precomputed 4-byte selector */
-const GET_QUOTE_SELECTOR = '0c8b6164';
+/** ABICoder.encodeSelector('getQuote(address,uint64)') — precomputed 4-byte selector */
+const GET_QUOTE_SELECTOR = '51852102';
 
 export function encodeGetQuoteCalldata(tokenHex: string, satoshis: bigint): string {
     // selector (4 bytes) + token address (32 bytes, zero-padded left) + satoshis (8 bytes, big-endian)
