@@ -37,16 +37,18 @@ function StrategyCard({
     disabled,
     testId,
     children,
+    action,
 }: {
     title: string;
     tagline: string;
     disabled: boolean;
     testId: string;
     children: React.ReactNode;
+    action: React.ReactNode;
 }) {
     return (
         <div
-            className={`bg-terminal-bg-elevated border rounded-xl p-4 space-y-3 ${
+            className={`flex flex-col bg-terminal-bg-elevated border rounded-xl p-4 gap-3 ${
                 disabled
                     ? 'border-terminal-border-subtle opacity-60'
                     : 'border-terminal-border-subtle hover:border-accent/50 transition-colors'
@@ -57,7 +59,8 @@ function StrategyCard({
                 <h4 className="text-sm font-bold text-terminal-text-primary font-mono">{title}</h4>
                 <p className="text-xs text-terminal-text-muted font-mono">{tagline}</p>
             </div>
-            {children}
+            <div className="flex-1">{children}</div>
+            <div className="mt-auto">{action}</div>
         </div>
     );
 }
@@ -101,6 +104,16 @@ export function QuickStrategies({
                 tagline="Earn yield on MOTO"
                 disabled={noPrice}
                 testId="strategy-covered-call"
+                action={
+                    <button
+                        onClick={() => coveredCall && onCoveredCall(coveredCall)}
+                        disabled={noPrice || !coveredCall || !walletConnected}
+                        className="w-full btn-primary py-2 text-xs font-mono rounded disabled:opacity-50"
+                        data-testid="strategy-covered-call-btn"
+                    >
+                        {walletConnected ? 'Use Strategy' : 'Connect wallet to trade'}
+                    </button>
+                }
             >
                 <p className="text-[10px] text-gray-500 font-mono">120% of spot (OTM)</p>
                 {noPrice ? (
@@ -122,14 +135,6 @@ export function QuickStrategies({
                         <p className="text-[10px] text-terminal-text-muted mt-1">Max profit: premium + appreciation to strike</p>
                     </div>
                 ) : null}
-                <button
-                    onClick={() => coveredCall && onCoveredCall(coveredCall)}
-                    disabled={noPrice || !coveredCall || !walletConnected}
-                    className="w-full btn-primary py-2 text-xs font-mono rounded disabled:opacity-50"
-                    data-testid="strategy-covered-call-btn"
-                >
-                    {walletConnected ? 'Use Strategy' : 'Connect wallet to trade'}
-                </button>
             </StrategyCard>
 
             {/* Protective Put */}
@@ -138,6 +143,45 @@ export function QuickStrategies({
                 tagline="Insure your MOTO"
                 disabled={noPrice}
                 testId="strategy-protective-put"
+                action={
+                    !walletConnected ? (
+                        <button
+                            disabled
+                            className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
+                            data-testid="strategy-protective-put-btn"
+                        >
+                            Connect wallet to trade
+                        </button>
+                    ) : bestPut ? (
+                        <button
+                            onClick={() => onProtectivePut(bestPut)}
+                            disabled={noPrice}
+                            className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
+                            data-testid="strategy-protective-put-btn"
+                        >
+                            Buy Put
+                        </button>
+                    ) : onWritePut && !noPrice ? (
+                        <button
+                            onClick={() => {
+                                const params = calcWritePutParams(motoPillRatio!, motoBal);
+                                if (params) onWritePut(params);
+                            }}
+                            className="w-full btn-primary py-2 text-xs font-mono rounded"
+                            data-testid="strategy-write-put-btn"
+                        >
+                            Write a Put
+                        </button>
+                    ) : (
+                        <button
+                            disabled
+                            className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
+                            data-testid="strategy-protective-put-btn"
+                        >
+                            Buy Put
+                        </button>
+                    )
+                }
             >
                 <p className="text-[10px] text-gray-500 font-mono">80–95% of spot (OTM)</p>
                 {noPrice ? (
@@ -169,43 +213,6 @@ export function QuickStrategies({
                         )}
                     </div>
                 )}
-                {!walletConnected ? (
-                    <button
-                        disabled
-                        className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
-                        data-testid="strategy-protective-put-btn"
-                    >
-                        Connect wallet to trade
-                    </button>
-                ) : bestPut ? (
-                    <button
-                        onClick={() => onProtectivePut(bestPut)}
-                        disabled={noPrice}
-                        className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
-                        data-testid="strategy-protective-put-btn"
-                    >
-                        Buy Put
-                    </button>
-                ) : onWritePut && !noPrice ? (
-                    <button
-                        onClick={() => {
-                            const params = calcWritePutParams(motoPillRatio!, motoBal);
-                            if (params) onWritePut(params);
-                        }}
-                        className="w-full btn-primary py-2 text-xs font-mono rounded"
-                        data-testid="strategy-write-put-btn"
-                    >
-                        Write a Put
-                    </button>
-                ) : (
-                    <button
-                        disabled
-                        className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
-                        data-testid="strategy-protective-put-btn"
-                    >
-                        Buy Put
-                    </button>
-                )}
             </StrategyCard>
 
             {/* Collar */}
@@ -214,6 +221,16 @@ export function QuickStrategies({
                 tagline="Lock in a price range"
                 disabled={noPrice}
                 testId="strategy-collar"
+                action={
+                    <button
+                        onClick={onCollar}
+                        disabled={noPrice || !collar || !walletConnected}
+                        className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
+                        data-testid="strategy-collar-btn"
+                    >
+                        {walletConnected ? 'Setup Collar' : 'Connect wallet to trade'}
+                    </button>
+                }
             >
                 <p className="text-[10px] text-gray-500 font-mono">CALL 120% / PUT 80%</p>
                 {noPrice ? (
@@ -236,14 +253,6 @@ export function QuickStrategies({
                         </div>
                     </div>
                 ) : null}
-                <button
-                    onClick={onCollar}
-                    disabled={noPrice || !collar || !walletConnected}
-                    className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
-                    data-testid="strategy-collar-btn"
-                >
-                    {walletConnected ? 'Setup Collar' : 'Connect wallet to trade'}
-                </button>
             </StrategyCard>
         </div>
     );
