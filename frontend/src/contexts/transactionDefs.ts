@@ -5,6 +5,7 @@
  * the TransactionProvider component (required by React Fast Refresh).
  */
 import { createContext } from 'react';
+import type { ActiveFlow, FlowActionType, ResumeRequest } from './flowDefs.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,6 +38,23 @@ export interface TransactionContextValue {
     getFlowTransaction: (flowId: string, step: number) => TrackedTransaction | undefined;
     findResumableApproval: (poolAddress: string, optionId?: string) => TrackedTransaction | undefined;
     clearOld: () => void;
+
+    // Active Flow lock
+    activeFlow: ActiveFlow | null;
+    claimFlow: (params: {
+        actionType: FlowActionType;
+        poolAddress: string;
+        optionId?: string;
+        label: string;
+        formState?: Record<string, string>;
+    }) => ActiveFlow | null;
+    updateFlow: (updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => void;
+    abandonFlow: () => void;
+
+    // Resume
+    resumeRequest: ResumeRequest | null;
+    requestResume: () => void;
+    clearResumeRequest: () => void;
 }
 
 // ---------------------------------------------------------------------------

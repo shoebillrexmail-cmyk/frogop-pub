@@ -4,7 +4,7 @@
  * Settle is available when: buyer never exercised and the grace period has passed.
  * No approval needed — collateral is already in the contract.
  */
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -44,6 +44,7 @@ export function SettleModal({
     onSuccess,
 }: SettleModalProps) {
     const mounted = useMountedRef();
+    const sendingRef = useRef(false);
     const [txStatus, setTxStatus] = useState<'idle' | 'settling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
@@ -59,7 +60,8 @@ export function SettleModal({
     const busy = txStatus === 'settling';
 
     async function handleSettle() {
-        if (!address) return;
+        if (!address || sendingRef.current) return;
+        sendingRef.current = true;
         setTxError(null);
         setTxStatus('settling');
         try {
@@ -91,6 +93,8 @@ export function SettleModal({
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Settle failed');
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 

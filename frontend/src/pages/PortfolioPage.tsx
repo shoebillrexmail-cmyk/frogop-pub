@@ -50,8 +50,8 @@ export function PortfolioPage() {
     const error   = poolError ?? optError;
     const refetch = useCallback(() => { poolRefetch(); optRefetch(); }, [poolRefetch, optRefetch]);
 
-    // Auto-refetch when a TX for this pool confirms
-    const { transactions } = useTransactionContext();
+    // Resume flow and auto-refetch
+    const { transactions, resumeRequest, clearResumeRequest, abandonFlow } = useTransactionContext();
     const confirmedCountRef = useRef(0);
     useEffect(() => {
         if (!POOL_ADDRESS) return;
@@ -91,6 +91,22 @@ export function PortfolioPage() {
     const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
     const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
     const [settleTarget, setSettleTarget] = useState<OptionData | null>(null);
+
+    // Handle exercise resume from flow card
+    useEffect(() => {
+        if (!resumeRequest || resumeRequest.actionType !== 'exercise') return;
+        if (!POOL_ADDRESS || resumeRequest.poolAddress !== POOL_ADDRESS) return;
+        clearResumeRequest();
+        if (resumeRequest.optionId) {
+            const opt = purchasedOptions.find((o) => o.id.toString() === resumeRequest.optionId);
+            if (opt) {
+                setExerciseTarget(opt);
+            } else {
+                abandonFlow();
+                alert('Option no longer available. Flow abandoned.');
+            }
+        }
+    }, [resumeRequest, purchasedOptions, clearResumeRequest, abandonFlow]);
 
     // -------------------------------------------------------------------------
     // Connect gate

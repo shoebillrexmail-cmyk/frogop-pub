@@ -4,7 +4,7 @@
  * Shows list of settleable options and a single "Settle All" button.
  * Reports how many were actually settled on success (non-atomic: skips unsettleable).
  */
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -54,6 +54,7 @@ export function BatchSettleModal({
     onSuccess,
 }: BatchSettleModalProps) {
     const mounted = useMountedRef();
+    const sendingRef = useRef(false);
     const [txStatus, setTxStatus] = useState<'idle' | 'settling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
@@ -65,7 +66,8 @@ export function BatchSettleModal({
     const overLimit = options.length > MAX_BATCH;
 
     async function handleBatchSettle() {
-        if (!address || options.length === 0 || overLimit) return;
+        if (!address || options.length === 0 || overLimit || sendingRef.current) return;
+        sendingRef.current = true;
         setTxError(null);
         setTxStatus('settling');
         try {
@@ -110,6 +112,8 @@ export function BatchSettleModal({
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Batch settle failed');
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 

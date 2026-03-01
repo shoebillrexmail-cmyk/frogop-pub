@@ -5,7 +5,7 @@
  *   1. Approve PILL (if allowance < total cost)
  *   2. buyOption(optionId)
  */
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -16,6 +16,7 @@ import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { formatTokenAmount } from '../config/index.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
+import { useActiveFlow } from '../hooks/useActiveFlow.ts';
 import { calcTotalCost, calcBreakeven, calcDelta, calcTheta, blocksToYears } from '../utils/optionMath.js';
 import { PnLChart } from './PnLChart.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
@@ -56,12 +57,22 @@ export function BuyOptionModal({
     onSuccess,
 }: BuyOptionModalProps) {
     const mounted = useMountedRef();
+    const sendingRef = useRef(false);
     const [poolHex, setPoolHex] = useState<string | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'buying' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
 
     const { trackApproval, trackAction, approvalConfirmed } = useTransactionFlow(poolAddress, option.id.toString());
+
+    const {
+        canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow,
+    } = useActiveFlow({
+        actionType: 'buyOption',
+        poolAddress,
+        optionId: option.id.toString(),
+        label: `Buy Option #${option.id}`,
+    });
 
     // Resolve pool bech32 → hex
     useEffect(() => {
@@ -89,7 +100,7 @@ export function BuyOptionModal({
     const pillBalance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
     const hasBalance = pillBalance !== null && pillBalance >= totalCost;
-    const needsApproval = !approvalConfirmed && allowance !== null && allowance < totalCost;
+    const needsApproval = !approvalConfirmed && !approvalReady && allowance !== null && allowance < totalCost;
     const busy = txStatus === 'approving' || txStatus === 'buying';
 
     // Greeks (computed only when spot price available)
@@ -116,7 +127,11 @@ export function BuyOptionModal({
     const [showChart, setShowChart] = useState(false);
 
     async function handleApprove() {
-        if (!address || !poolHex) return;
+        if (!address || !poolHex || sendingRef.current) return;
+        if (!canStartFlow) return;
+        const claimed = claimFlow();
+        if (!claimed) return;
+        sendingRef.current = true;
         setTxError(null);
         setTxStatus('approving');
         try {
@@ -139,20 +154,26 @@ export function BuyOptionModal({
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
             trackApproval(receipt.transactionId, `Approve PILL for Buy #${option.id}`);
+            updateFlow({ approvalTxId: receipt.transactionId });
             refetchToken();
             setTxStatus('idle');
         } catch (err) {
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Approval failed');
+            updateFlow({ status: 'approval_failed' });
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 
     async function handleBuy() {
-        if (!address) return;
+        if (!address || sendingRef.current) return;
+        sendingRef.current = true;
         setTxError(null);
         setTxStatus('buying');
         try {
+            if (isMyFlow) updateFlow({ status: 'action_pending' });
             const poolContract = getContract(
                 poolAddress,
                 POOL_WRITE_ABI,
@@ -172,11 +193,15 @@ export function BuyOptionModal({
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
             trackAction(receipt.transactionId, 'buyOption', `Buy Option #${option.id}`);
+            if (isMyFlow) updateFlow({ actionTxId: receipt.transactionId });
             setTxStatus('done');
         } catch (err) {
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Purchase failed');
+            if (isMyFlow) updateFlow({ status: 'action_failed' });
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 
@@ -306,6 +331,13 @@ export function BuyOptionModal({
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {/* Flow blocked warning */}
+                    {!canStartFlow && (
+                        <p className="text-yellow-400 text-xs font-mono" data-testid="flow-blocked">
+                            Another transaction flow is active. Complete or abandon it first.
+                        </p>
                     )}
 
                     {/* Insufficient balance warning */}

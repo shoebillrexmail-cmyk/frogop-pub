@@ -71,8 +71,8 @@ export function PoolsPage() {
     const [chartInterval, setChartInterval] = useState('1d');
     const { candles } = usePriceCandles(chartToken, chartInterval);
 
-    // Auto-refetch when a TX for this pool confirms
-    const { transactions } = useTransactionContext();
+    // Resume flow routing
+    const { transactions, resumeRequest, clearResumeRequest, abandonFlow } = useTransactionContext();
     const confirmedCountRef = useRef(0);
     useEffect(() => {
         if (!selectedPoolAddr) return;
@@ -92,6 +92,49 @@ export function PoolsPage() {
     const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
     const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
     const [settleTarget, setSettleTarget] = useState<OptionData | null>(null);
+
+    // Handle resume requests from the flow card
+    useEffect(() => {
+        if (!resumeRequest || !selectedPoolAddr) return;
+        if (resumeRequest.poolAddress !== selectedPoolAddr) return;
+        clearResumeRequest();
+
+        if (resumeRequest.actionType === 'writeOption') {
+            const formState = resumeRequest.formState;
+            if (formState) {
+                setWriteInitialValues({
+                    optionType: formState['optionType'] !== undefined ? Number(formState['optionType']) : undefined,
+                    amountStr: formState['amount'],
+                    strikeStr: formState['strike'],
+                    premiumStr: formState['premium'],
+                    selectedDays: formState['days'] !== undefined ? Number(formState['days']) : undefined,
+                });
+            }
+            setWriteOpen(true);
+            return;
+        }
+
+        if (resumeRequest.actionType === 'buyOption' && resumeRequest.optionId) {
+            const opt = options.find((o) => o.id.toString() === resumeRequest.optionId);
+            if (opt) {
+                setBuyTarget(opt);
+            } else {
+                abandonFlow();
+                alert('Option no longer available. Flow abandoned.');
+            }
+            return;
+        }
+
+        if (resumeRequest.actionType === 'exercise' && resumeRequest.optionId) {
+            const opt = options.find((o) => o.id.toString() === resumeRequest.optionId);
+            if (opt) {
+                setExerciseTarget(opt);
+            } else {
+                abandonFlow();
+                alert('Option no longer available. Flow abandoned.');
+            }
+        }
+    }, [resumeRequest, selectedPoolAddr, options, clearResumeRequest, abandonFlow]);
 
     // address.toString() = 0x-prefixed MLDSA hash; used for action visibility
     const walletHex = address ? address.toString() : null;
@@ -361,6 +404,7 @@ export function PoolsPage() {
                     options={options}
                     motoPillRatio={motoPillRatio}
                     motoBal={null}
+                    walletAddress={walletAddress}
                     onWriteCall={handleCollarWriteCall}
                     onBuyPut={handleCollarBuyPut}
                     onClose={() => setCollarOpen(false)}

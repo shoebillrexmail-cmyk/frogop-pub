@@ -5,7 +5,7 @@
  * Accepts bech32 (opt1...) or hex (0x...) recipient address.
  * Resolves bech32 to hex via provider.getPublicKeyInfo().
  */
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -39,6 +39,7 @@ export function TransferModal({
     onSuccess,
 }: TransferModalProps) {
     const mounted = useMountedRef();
+    const sendingRef = useRef(false);
     const [recipientInput, setRecipientInput] = useState('');
     const [resolvedHex, setResolvedHex] = useState<string | null>(null);
     const [resolving, setResolving] = useState(false);
@@ -95,7 +96,8 @@ export function TransferModal({
     }
 
     async function handleTransfer() {
-        if (!address || !resolvedHex) return;
+        if (!address || !resolvedHex || sendingRef.current) return;
+        sendingRef.current = true;
         setTxError(null);
         setTxStatus('transferring');
         try {
@@ -128,6 +130,8 @@ export function TransferModal({
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Transfer failed');
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 

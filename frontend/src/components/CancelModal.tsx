@@ -6,7 +6,7 @@
  * Cancel fee = cancelFeeBps % of collateral (ceiling division to match contract).
  * If the option has expired (expiryBlock <= currentBlock), the fee drops to 0%.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -48,6 +48,7 @@ export function CancelModal({
     onSuccess,
 }: CancelModalProps) {
     const mounted = useMountedRef();
+    const sendingRef = useRef(false);
     const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'cancelling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
@@ -76,7 +77,8 @@ export function CancelModal({
     const busy = txStatus === 'cancelling';
 
     async function handleCancel() {
-        if (!address) return;
+        if (!address || sendingRef.current) return;
+        sendingRef.current = true;
         setTxError(null);
         setTxStatus('cancelling');
         try {
@@ -108,6 +110,8 @@ export function CancelModal({
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Cancel failed');
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 

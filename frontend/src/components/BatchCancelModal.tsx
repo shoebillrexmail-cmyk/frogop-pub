@@ -4,7 +4,7 @@
  * Shows a list of selected options with collateral breakdown per option,
  * totals collateral returned and fees, and calls batchCancel on the pool contract.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -56,6 +56,7 @@ export function BatchCancelModal({
     onSuccess,
 }: BatchCancelModalProps) {
     const mounted = useMountedRef();
+    const sendingRef = useRef(false);
     const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'cancelling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
@@ -85,7 +86,8 @@ export function BatchCancelModal({
     const overLimit = options.length > MAX_BATCH;
 
     async function handleBatchCancel() {
-        if (!address || options.length === 0 || overLimit) return;
+        if (!address || options.length === 0 || overLimit || sendingRef.current) return;
+        sendingRef.current = true;
         setTxError(null);
         setTxStatus('cancelling');
         try {
@@ -130,6 +132,8 @@ export function BatchCancelModal({
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Batch cancel failed');
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 

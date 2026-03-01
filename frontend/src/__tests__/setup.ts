@@ -26,6 +26,13 @@ vi.mock('../hooks/useTransactionContext.ts', () => ({
         findResumableApproval: vi.fn(() => null),
         clearOld: vi.fn(),
         recentTransactions: [],
+        activeFlow: null,
+        claimFlow: vi.fn(() => ({ flowId: 'test-flow', actionType: 'writeOption', poolAddress: '', optionId: null, status: 'approval_pending', approvalTxId: null, actionTxId: null, claimedAt: new Date().toISOString(), label: '', formState: null })),
+        updateFlow: vi.fn(),
+        abandonFlow: vi.fn(),
+        resumeRequest: null,
+        requestResume: vi.fn(),
+        clearResumeRequest: vi.fn(),
     })),
 }));
 
@@ -37,6 +44,21 @@ vi.mock('../hooks/useTransactionFlow.ts', () => ({
         trackAction: vi.fn(),
         approvalConfirmed: false,
         resumableFlowId: null,
+        resumableMeta: null,
+    })),
+}));
+
+// Global mock for useActiveFlow — used by two-step modals.
+vi.mock('../hooks/useActiveFlow.ts', () => ({
+    useActiveFlow: vi.fn(() => ({
+        canStartFlow: true,
+        isMyFlow: false,
+        approvalReady: false,
+        activeFlow: null,
+        resumedFormState: null,
+        claimFlow: vi.fn(() => ({ flowId: 'test-flow', actionType: 'writeOption', poolAddress: '', optionId: null, status: 'approval_pending', approvalTxId: null, actionTxId: null, claimedAt: new Date().toISOString(), label: '', formState: null })),
+        updateFlow: vi.fn(),
+        abandonFlow: vi.fn(),
     })),
 }));
 

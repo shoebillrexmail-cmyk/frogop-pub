@@ -19,6 +19,7 @@ interface CollarModalProps {
     options: OptionData[];
     motoPillRatio: number | null;
     motoBal: number | null;
+    walletAddress: string | null;
     onWriteCall: (values: WriteOptionInitialValues) => void;
     onBuyPut: (option: OptionData) => void;
     onClose: () => void;
@@ -28,35 +29,39 @@ export function CollarModal({
     options,
     motoPillRatio,
     motoBal,
+    walletAddress,
     onWriteCall,
     onBuyPut,
     onClose,
 }: CollarModalProps) {
-    const STORAGE_KEY = 'frogop_collar_progress';
+    const storageKey = walletAddress ? `frogop_collar_${walletAddress}` : null;
 
     const [callDone, setCallDone] = useState(() => {
+        if (!storageKey) return false;
         try {
-            const stored = sessionStorage.getItem(STORAGE_KEY);
+            const stored = localStorage.getItem(storageKey);
             return stored ? (JSON.parse(stored) as { callDone?: boolean }).callDone === true : false;
         } catch { return false; }
     });
     const [putDone, setPutDone] = useState(() => {
+        if (!storageKey) return false;
         try {
-            const stored = sessionStorage.getItem(STORAGE_KEY);
+            const stored = localStorage.getItem(storageKey);
             return stored ? (JSON.parse(stored) as { putDone?: boolean }).putDone === true : false;
         } catch { return false; }
     });
 
-    // Persist step progress to sessionStorage
+    // Persist step progress to wallet-scoped localStorage
     useEffect(() => {
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ callDone, putDone }));
-    }, [callDone, putDone]);
+        if (!storageKey) return;
+        localStorage.setItem(storageKey, JSON.stringify({ callDone, putDone }));
+    }, [callDone, putDone, storageKey]);
 
     const handleReset = useCallback(() => {
         setCallDone(false);
         setPutDone(false);
-        sessionStorage.removeItem(STORAGE_KEY);
-    }, []);
+        if (storageKey) localStorage.removeItem(storageKey);
+    }, [storageKey]);
 
     const collar = useMemo(
         () => (motoPillRatio && motoPillRatio > 0 ? calcCollarParams(motoPillRatio, motoBal) : null),
@@ -228,7 +233,7 @@ export function CollarModal({
                         <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono text-center">
                             <p className="text-green-300">Collar strategy complete!</p>
                             <button
-                                onClick={() => { sessionStorage.removeItem(STORAGE_KEY); onClose(); }}
+                                onClick={() => { if (storageKey) localStorage.removeItem(storageKey); onClose(); }}
                                 className="mt-2 btn-primary px-4 py-1.5 text-xs rounded"
                             >
                                 Done

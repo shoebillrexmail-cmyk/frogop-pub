@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import type { TrackedTransaction, TxStatus } from '../contexts/TransactionContext.tsx';
+import { FlowResumeCard } from './FlowResumeCard.tsx';
 
 function statusIcon(status: TxStatus): string {
     switch (status) {
@@ -42,7 +43,7 @@ function elapsed(createdAt: string): string {
 }
 
 export function TransactionToast() {
-    const { recentTransactions, pendingCount } = useTransactionContext();
+    const { recentTransactions, pendingCount, activeFlow, requestResume, abandonFlow } = useTransactionContext();
     const [expanded, setExpanded] = useState(false);
     const [, setTick] = useState(0);
 
@@ -68,16 +69,24 @@ export function TransactionToast() {
         (tx) => tx.status !== 'failed',
     ).slice(0, 8);
 
-    if (visible.length === 0 && pendingCount === 0) return null;
+    const hasFlow = activeFlow !== null;
+    if (visible.length === 0 && pendingCount === 0 && !hasFlow) return null;
 
     return (
         <div className="fixed bottom-4 right-4 z-50 font-mono">
             {/* Expanded dropdown */}
-            {expanded && visible.length > 0 && (
+            {expanded && (visible.length > 0 || hasFlow) && (
                 <div className="mb-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl shadow-lg overflow-hidden max-w-xs w-72">
                     <div className="px-3 py-2 border-b border-terminal-border-subtle text-xs text-terminal-text-muted">
                         Transactions
                     </div>
+                    {hasFlow && (
+                        <FlowResumeCard
+                            flow={activeFlow}
+                            onResume={requestResume}
+                            onAbandon={abandonFlow}
+                        />
+                    )}
                     <div className="max-h-64 overflow-y-auto">
                         {visible.map((tx: TrackedTransaction) => (
                             <div
@@ -103,7 +112,7 @@ export function TransactionToast() {
             )}
 
             {/* Floating pill */}
-            {(pendingCount > 0 || visible.length > 0) && (
+            {(pendingCount > 0 || visible.length > 0 || hasFlow) && (
                 <button
                     onClick={toggle}
                     className="flex items-center gap-2 px-4 py-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-full shadow-lg hover:border-accent transition-colors"

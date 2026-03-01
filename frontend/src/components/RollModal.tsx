@@ -9,7 +9,7 @@
  * PUT collateral = strikePrice x underlyingAmount, so changing strike changes
  * collateral and may require a top-up or produce a surplus.
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -51,6 +51,7 @@ export function RollModal({
     onSuccess,
 }: RollModalProps) {
     const mounted = useMountedRef();
+    const sendingRef = useRef(false);
     const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'rolling' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
@@ -109,7 +110,8 @@ export function RollModal({
     const busy = txStatus === 'rolling';
 
     async function handleRoll() {
-        if (!address || !inputValid) return;
+        if (!address || !inputValid || sendingRef.current) return;
+        sendingRef.current = true;
         setTxError(null);
         setTxStatus('rolling');
         try {
@@ -152,6 +154,8 @@ export function RollModal({
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Roll failed');
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 

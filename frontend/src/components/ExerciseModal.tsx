@@ -6,7 +6,7 @@
  *
  * Two-step: Approve PILL → exercise()
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -17,6 +17,7 @@ import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { formatTokenAmount } from '../config/index.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
+import { useActiveFlow } from '../hooks/useActiveFlow.ts';
 import { calcExercisePnl } from '../utils/optionMath.js';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
@@ -52,12 +53,22 @@ export function ExerciseModal({
     onSuccess,
 }: ExerciseModalProps) {
     const mounted = useMountedRef();
+    const sendingRef = useRef(false);
     const [poolHex, setPoolHex] = useState<string | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'exercising' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
 
     const { trackApproval, trackAction, approvalConfirmed } = useTransactionFlow(poolAddress, option.id.toString());
+
+    const {
+        canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow,
+    } = useActiveFlow({
+        actionType: 'exercise',
+        poolAddress,
+        optionId: option.id.toString(),
+        label: `Exercise Option #${option.id}`,
+    });
 
     useEffect(() => {
         if (poolAddress.startsWith('0x')) {
@@ -100,11 +111,15 @@ export function ExerciseModal({
     const tokenBalance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
     const hasBalance = tokenBalance !== null && tokenBalance >= payAmount;
-    const needsApproval = !approvalConfirmed && allowance !== null && allowance < payAmount;
+    const needsApproval = !approvalConfirmed && !approvalReady && allowance !== null && allowance < payAmount;
     const busy = txStatus === 'approving' || txStatus === 'exercising';
 
     async function handleApprove() {
-        if (!address || !poolHex) return;
+        if (!address || !poolHex || sendingRef.current) return;
+        if (!canStartFlow) return;
+        const claimed = claimFlow();
+        if (!claimed) return;
+        sendingRef.current = true;
         setTxError(null);
         setTxStatus('approving');
         try {
@@ -127,20 +142,26 @@ export function ExerciseModal({
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
             trackApproval(receipt.transactionId, `Approve ${payToken} for Exercise #${option.id}`);
+            updateFlow({ approvalTxId: receipt.transactionId });
             refetchToken();
             setTxStatus('idle');
         } catch (err) {
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Approval failed');
+            updateFlow({ status: 'approval_failed' });
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 
     async function handleExercise() {
-        if (!address) return;
+        if (!address || sendingRef.current) return;
+        sendingRef.current = true;
         setTxError(null);
         setTxStatus('exercising');
         try {
+            if (isMyFlow) updateFlow({ status: 'action_pending' });
             const poolContract = getContract(
                 poolAddress,
                 POOL_WRITE_ABI,
@@ -160,11 +181,15 @@ export function ExerciseModal({
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
             trackAction(receipt.transactionId, 'exercise', `Exercise Option #${option.id}`);
+            if (isMyFlow) updateFlow({ actionTxId: receipt.transactionId });
             setTxStatus('done');
         } catch (err) {
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Exercise failed');
+            if (isMyFlow) updateFlow({ status: 'action_failed' });
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 
@@ -283,6 +308,13 @@ export function ExerciseModal({
                             );
                         })()}
                     </div>
+
+                    {/* Flow blocked warning */}
+                    {!canStartFlow && (
+                        <p className="text-yellow-400 text-xs font-mono" data-testid="flow-blocked">
+                            Another transaction flow is active. Complete or abandon it first.
+                        </p>
+                    )}
 
                     {/* Insufficient balance */}
                     {!tokenLoading && tokenBalance !== null && !hasBalance && (

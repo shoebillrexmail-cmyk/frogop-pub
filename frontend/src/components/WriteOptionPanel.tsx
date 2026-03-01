@@ -5,7 +5,7 @@
  *   1. Approve MOTO collateral (if allowance insufficient)
  *   2. Submit writeOption() transaction
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -16,6 +16,7 @@ import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount, BLOCK_CONSTANTS } from '../config/index.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
+import { useActiveFlow } from '../hooks/useActiveFlow.ts';
 import { useSuggestedPremium } from '../hooks/useSuggestedPremium.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
@@ -83,6 +84,7 @@ export function WriteOptionPanel({
     onSuccess,
 }: WriteOptionPanelProps) {
     const mounted = useMountedRef();
+    const sendingRef = useRef(false);
     const [optionType, setOptionType] = useState<number>(OptionType.CALL);
     const [amountStr, setAmountStr] = useState('1');
     const [strikeStr, setStrikeStr] = useState('');
@@ -121,6 +123,24 @@ export function WriteOptionPanel({
     const [txId, setTxId] = useState<string | null>(null);
 
     const { trackApproval, trackAction, resumableMeta } = useTransactionFlow(poolAddress);
+
+    const {
+        canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow, resumedFormState,
+    } = useActiveFlow({
+        actionType: 'writeOption',
+        poolAddress,
+        label: 'Write Option',
+    });
+
+    // Restore form values from a resumed active flow
+    useEffect(() => {
+        if (!resumedFormState) return;
+        if (resumedFormState['optionType'] !== undefined) setOptionType(Number(resumedFormState['optionType']));
+        if (resumedFormState['amount'] !== undefined) setAmountStr(resumedFormState['amount']);
+        if (resumedFormState['strike'] !== undefined) setStrikeStr(resumedFormState['strike']);
+        if (resumedFormState['premium'] !== undefined) setPremiumStr(resumedFormState['premium']);
+        if (resumedFormState['days'] !== undefined) setSelectedDays(Number(resumedFormState['days']));
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps -- restore once on mount
 
     const amount = parseBigIntTokens(amountStr);
     const strike = parseBigIntTokens(strikeStr);
@@ -163,7 +183,7 @@ export function WriteOptionPanel({
 
     const balance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
-    const needsApproval = collateral !== null && allowance !== null && allowance < collateral;
+    const needsApproval = !approvalReady && collateral !== null && allowance !== null && allowance < collateral;
 
     function validate(): string | null {
         if (!amount || amount <= 0n) return 'Amount must be greater than 0';
@@ -178,7 +198,18 @@ export function WriteOptionPanel({
     }
 
     async function handleApprove() {
-        if (!address || !poolHex || !collateral) return;
+        if (!address || !poolHex || !collateral || sendingRef.current) return;
+        if (!canStartFlow) return;
+        const formState = {
+            optionType: String(optionType),
+            strike: strikeStr,
+            amount: amountStr,
+            premium: premiumStr,
+            days: String(selectedDays),
+        };
+        const claimed = claimFlow(formState);
+        if (!claimed) return;
+        sendingRef.current = true;
         setValidationError(null);
         setTxError(null);
         setTxStatus('approving');
@@ -203,19 +234,17 @@ export function WriteOptionPanel({
 
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
-            trackApproval(receipt.transactionId, `Approve ${collateralSymbol} for Write`, {
-                optionType: String(optionType),
-                strike: strikeStr,
-                amount: amountStr,
-                premium: premiumStr,
-                days: String(selectedDays),
-            });
+            trackApproval(receipt.transactionId, `Approve ${collateralSymbol} for Write`, formState);
+            updateFlow({ approvalTxId: receipt.transactionId });
             refetchToken();
             setTxStatus('idle');
         } catch (err) {
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Approval failed');
+            updateFlow({ status: 'approval_failed' });
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 
@@ -225,7 +254,8 @@ export function WriteOptionPanel({
             setValidationError(err);
             return;
         }
-        if (!address) return;
+        if (!address || sendingRef.current) return;
+        sendingRef.current = true;
 
         const strike = parseBigIntTokens(strikeStr)!;
         const premium = parseBigIntTokens(premiumStr)!;
@@ -236,6 +266,7 @@ export function WriteOptionPanel({
         setTxStatus('writing');
 
         try {
+            if (isMyFlow) updateFlow({ status: 'action_pending' });
             // Contract expects absolute block number, not relative duration
             const currentBlock = await provider.getBlockNumber();
             const expiry = BigInt(currentBlock) + duration;
@@ -265,11 +296,15 @@ export function WriteOptionPanel({
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
             trackAction(receipt.transactionId, 'writeOption', 'Write Option');
+            if (isMyFlow) updateFlow({ actionTxId: receipt.transactionId });
             setTxStatus('done');
         } catch (err) {
             if (!mounted.current) return;
             setTxError(err instanceof Error ? err.message : 'Write option failed');
+            if (isMyFlow) updateFlow({ status: 'action_failed' });
             setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
         }
     }
 
@@ -493,6 +528,13 @@ export function WriteOptionPanel({
                             </span>
                         </div>
                     </div>
+
+                    {/* Flow blocked warning */}
+                    {!canStartFlow && (
+                        <p className="text-yellow-400 text-xs font-mono" data-testid="flow-blocked">
+                            Another transaction flow is active. Complete or abandon it first.
+                        </p>
+                    )}
 
                     {/* Validation error */}
                     {validationError && (
