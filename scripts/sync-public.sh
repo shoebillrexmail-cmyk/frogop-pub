@@ -24,6 +24,8 @@ EXCLUDED_PATHS=(
     "frontend/Dockerfile.dev"
     "frontend/Dockerfile.prod"
     "frontend/nginx/"
+    "scripts/"
+    "indexer/wrangler.toml"
 )
 
 # Verify we're in the repo root

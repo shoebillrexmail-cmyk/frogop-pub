@@ -29,6 +29,7 @@ jobs:
             "frontend/Dockerfile.prod"
             "frontend/nginx/"
             "scripts/"
+            "indexer/wrangler.toml"
           )
 
           STAGING=$(mktemp -d)
