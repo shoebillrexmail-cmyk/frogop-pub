@@ -5,7 +5,7 @@
  * One RPC call per block: getBlock(n, prefetchTxs=true) returns all events embedded
  * on tx.events[] — confirmed via live testnet RPC. No per-tx getTransactionReceipt.
  */
-import { JSONRpcProvider, CallResult } from 'opnet';
+import { JSONRpcProvider } from 'opnet';
 import { networks, type Network } from '@btc-vision/bitcoin';
 import type { Env, BlockTx, TxEvent, PriceCandleRow } from '../types/index.js';
 
@@ -232,8 +232,14 @@ export async function pollPrices(
         try {
             const calldata = encodeGetQuoteCalldata(tokenHex, 100_000n);
             const result = await provider.call(swapConfig.routerHex, calldata);
-            if (result && result instanceof CallResult && result.result) {
-                const price = result.result.readU256().toString();
+
+            // Duck-type the result: bundled instanceof can fail across module boundaries
+            const reader = result && typeof result === 'object' && 'result' in result
+                ? (result as { result?: { readU256?: () => bigint } }).result
+                : undefined;
+
+            if (reader && typeof reader.readU256 === 'function') {
+                const price = reader.readU256().toString();
                 prices[label] = price;
                 stmts.push(stmtInsertPriceSnapshot(env.DB, {
                     token: label,
@@ -241,6 +247,9 @@ export async function pollPrices(
                     timestamp,
                     price,
                 }));
+                console.log(`[poller] ${label} price: ${price}`);
+            } else {
+                console.warn(`[poller] getQuote returned unexpected result for ${label}:`, typeof result, result);
             }
         } catch (err) {
             console.warn(`[poller] getQuote failed for ${label}:`, err);
