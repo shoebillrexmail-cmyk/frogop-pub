@@ -110,7 +110,13 @@ export function WriteOptionPanel({
     const { trackApproval, trackAction } = useTransactionFlow(poolAddress);
 
     const amount = parseBigIntTokens(amountStr);
-    const collateral = amount; // 1:1 collateral for CALL; same simplified for PUT
+    const strike = parseBigIntTokens(strikeStr);
+
+    // CALL collateral = underlyingAmount (MOTO)
+    // PUT collateral  = strikePrice * underlyingAmount (PILL) — raw multiplication, no 1e18 scaling
+    const collateral = amount && (optionType === OptionType.CALL
+        ? amount
+        : strike ? strike * amount / (10n ** 18n) : null);
 
     // Black-Scholes suggested premium
     const { suggestedPremium, annualizedVol } = useSuggestedPremium(
@@ -131,9 +137,12 @@ export function WriteOptionPanel({
         }
     }, [poolAddress, provider]);
 
-    // Query MOTO balance and allowance
+    // CALL locks MOTO (underlying), PUT locks PILL (premiumToken)
+    const collateralToken = optionType === OptionType.CALL ? poolInfo.underlying : poolInfo.premiumToken;
+    const collateralSymbol = optionType === OptionType.CALL ? 'MOTO' : 'PILL';
+
     const { info: tokenInfo, loading: tokenLoading, refetch: refetchToken } = useTokenInfo({
-        tokenAddress: poolInfo.underlying,
+        tokenAddress: collateralToken,
         spenderHex: poolHex,
         walletAddress: address,
         provider,
@@ -145,12 +154,13 @@ export function WriteOptionPanel({
 
     function validate(): string | null {
         if (!amount || amount <= 0n) return 'Amount must be greater than 0';
-        const strike = parseBigIntTokens(strikeStr);
-        if (!strike || strike <= 0n) return 'Strike price must be greater than 0';
+        const strikeVal = parseBigIntTokens(strikeStr);
+        if (!strikeVal || strikeVal <= 0n) return 'Strike price must be greater than 0';
         const premium = parseBigIntTokens(premiumStr);
         if (!premium || premium < 0n) return 'Premium must be 0 or greater';
         if (selectedDays < 1 || selectedDays > 365) return 'Expiry must be between 1 and 365 days';
-        if (balance !== null && amount > balance) return 'Insufficient MOTO balance';
+        if (balance !== null && collateral !== null && collateral > balance)
+            return `Insufficient ${collateralSymbol} balance`;
         return null;
     }
 
@@ -162,7 +172,7 @@ export function WriteOptionPanel({
 
         try {
             const tokenContract = getContract(
-                poolInfo.underlying,
+                collateralToken,
                 TOKEN_APPROVE_ABI,
                 provider,
                 network,
@@ -179,7 +189,7 @@ export function WriteOptionPanel({
             });
 
             setTxId(receipt.transactionId);
-            trackApproval(receipt.transactionId, `Approve MOTO for Write`, { amount: amountStr });
+            trackApproval(receipt.transactionId, `Approve ${collateralSymbol} for Write`, { amount: amountStr });
             refetchToken();
             setTxStatus('idle');
         } catch (err) {
@@ -303,11 +313,10 @@ export function WriteOptionPanel({
                         </label>
                         <div className="flex items-center gap-2 border border-terminal-border-subtle rounded px-3 py-2">
                             <input
-                                type="number"
-                                min="0"
-                                step="0.0001"
+                                type="text"
+                                inputMode="decimal"
                                 value={amountStr}
-                                onChange={(e) => setAmountStr(e.target.value)}
+                                onChange={(e) => setAmountStr(e.target.value.replace(',', '.'))}
                                 className="flex-1 bg-transparent text-terminal-text-primary font-mono text-sm outline-none"
                                 placeholder="1.0"
                                 data-testid="input-amount"
@@ -323,11 +332,10 @@ export function WriteOptionPanel({
                         </label>
                         <div className="flex items-center gap-2 border border-terminal-border-subtle rounded px-3 py-2">
                             <input
-                                type="number"
-                                min="0"
-                                step="0.0001"
+                                type="text"
+                                inputMode="decimal"
                                 value={strikeStr}
-                                onChange={(e) => setStrikeStr(e.target.value)}
+                                onChange={(e) => setStrikeStr(e.target.value.replace(',', '.'))}
                                 className="flex-1 bg-transparent text-terminal-text-primary font-mono text-sm outline-none"
                                 placeholder="50.0"
                                 data-testid="input-strike"
@@ -343,11 +351,10 @@ export function WriteOptionPanel({
                         </label>
                         <div className="flex items-center gap-2 border border-terminal-border-subtle rounded px-3 py-2">
                             <input
-                                type="number"
-                                min="0"
-                                step="0.0001"
+                                type="text"
+                                inputMode="decimal"
                                 value={premiumStr}
-                                onChange={(e) => setPremiumStr(e.target.value)}
+                                onChange={(e) => setPremiumStr(e.target.value.replace(',', '.'))}
                                 className="flex-1 bg-transparent text-terminal-text-primary font-mono text-sm outline-none"
                                 placeholder="5.0"
                                 data-testid="input-premium"
@@ -446,20 +453,20 @@ export function WriteOptionPanel({
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Collateral</span>
                             <span className="text-terminal-text-primary">
-                                {collateral ? `${formatBigInt(collateral)} MOTO` : '—'}
+                                {collateral ? `${formatBigInt(collateral)} ${collateralSymbol}` : '—'}
                             </span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Your balance</span>
                             <span className={balance !== null && collateral !== null && balance >= collateral ? 'text-green-400' : 'text-rose-400'}>
-                                {tokenLoading ? '...' : balance !== null ? `${formatBigInt(balance)} MOTO` : '—'}
+                                {tokenLoading ? '...' : balance !== null ? `${formatBigInt(balance)} ${collateralSymbol}` : '—'}
                                 {balance !== null && collateral !== null && balance >= collateral ? ' ✓' : ''}
                             </span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Allowance</span>
                             <span className={needsApproval ? 'text-yellow-400' : 'text-terminal-text-secondary'}>
-                                {tokenLoading ? '...' : allowance !== null ? `${formatBigInt(allowance)} MOTO` : '—'}
+                                {tokenLoading ? '...' : allowance !== null ? `${formatBigInt(allowance)} ${collateralSymbol}` : '—'}
                                 {needsApproval ? ' ← req' : ''}
                             </span>
                         </div>
@@ -516,7 +523,7 @@ export function WriteOptionPanel({
                                     className="w-full btn-primary py-2.5 text-sm rounded disabled:opacity-50"
                                     data-testid="btn-approve"
                                 >
-                                    {txStatus === 'approving' ? 'Approving…' : 'Approve MOTO'}
+                                    {txStatus === 'approving' ? 'Approving…' : `Approve ${collateralSymbol}`}
                                 </button>
                             )}
                             {!needsApproval && (
