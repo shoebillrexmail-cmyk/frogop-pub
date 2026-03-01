@@ -16,6 +16,8 @@ async function main() {
         { name: 'Factory state tests', cmd: 'npx tsx tests/integration/04-option-operations.ts' },
         { name: 'Pool creation & view tests', cmd: 'npx tsx tests/integration/05-pool-creation.ts' },
         { name: 'Full lifecycle tests', cmd: 'npx tsx tests/integration/06-full-lifecycle.ts' },
+        { name: 'Query method tests', cmd: 'npx tsx tests/integration/07-query-methods.ts' },
+        { name: 'Option transfer tests', cmd: 'npx tsx tests/integration/08-option-transfer.ts' },
     ];
 
     const results: { name: string; passed: boolean }[] = [];
