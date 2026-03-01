@@ -30,6 +30,7 @@ jobs:
             "frontend/nginx/"
             "scripts/"
             "indexer/wrangler.toml"
+            "frontend/wrangler.toml"
           )
 
           STAGING=$(mktemp -d)

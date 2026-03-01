@@ -26,6 +26,7 @@ EXCLUDED_PATHS=(
     "frontend/nginx/"
     "scripts/"
     "indexer/wrangler.toml"
+    "frontend/wrangler.toml"
 )
 
 # Verify we're in the repo root
