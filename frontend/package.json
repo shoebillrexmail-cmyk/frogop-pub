@@ -16,6 +16,7 @@
     "@btc-vision/bitcoin": "^7.0.0-rc.6",
     "@btc-vision/transaction": "^1.8.0-rc.8",
     "@btc-vision/walletconnect": "^1.10.3",
+    "@stdlib/math-base-special-erfc": "^0.2.5",
     "lightweight-charts": "^5.1.0",
     "opnet": "^1.8.1-rc.11",
     "react": "^19.2.0",

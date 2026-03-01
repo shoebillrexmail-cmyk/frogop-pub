@@ -220,6 +220,8 @@ export function PoolsPage() {
                     address={address}
                     provider={provider}
                     network={network}
+                    motoPillRatio={motoPillRatio}
+                    currentBlock={currentBlock ?? undefined}
                     onClose={() => setBuyTarget(null)}
                     onSuccess={() => {
                         setBuyTarget(null);
@@ -292,6 +294,7 @@ export function PoolsPage() {
                     address={address}
                     provider={provider}
                     network={network}
+                    motoPillRatio={motoPillRatio}
                     onClose={() => setWriteOpen(false)}
                     onSuccess={() => {
                         setWriteOpen(false);

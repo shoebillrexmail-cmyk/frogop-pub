@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { type OptionData, OptionStatus, OptionType } from '../services/types.ts';
 import { formatTokenAmount, blocksToCountdown } from '../config/index.ts';
+import { calcBreakeven, calcYield } from '../utils/optionMath.js';
 
 type FilterStatus = 'ALL' | 'OPEN' | 'PURCHASED' | 'EXPIRED' | 'CANCELLED';
 
@@ -17,6 +18,8 @@ interface OptionsTableProps {
     gracePeriodBlocks?: bigint;
     /** MOTO/PILL price ratio for strike equivalent display */
     motoPillRatio?: number | null;
+    /** Per-option unrealized P&L in PILL (from usePnL hook) */
+    pnlMap?: Map<bigint, number>;
     /** Show the status filter bar (default: true) */
     showFilter?: boolean;
     onBuy?: (option: OptionData) => void;
@@ -157,31 +160,13 @@ function RowAction({
     return null;
 }
 
-function calcBreakeven(option: OptionData): bigint | null {
-    if (option.status !== OptionStatus.OPEN && option.status !== OptionStatus.PURCHASED) return null;
-    if (option.optionType === OptionType.CALL) return option.strikePrice + option.premium;
-    // PUT: strikePrice - premium (clamped to 0)
-    return option.strikePrice > option.premium ? option.strikePrice - option.premium : 0n;
-}
-
-function calcYield(option: OptionData): number | null {
-    if (option.premium <= 0n || option.underlyingAmount <= 0n) return null;
-    if (option.optionType === OptionType.CALL) {
-        // premium PILL earned per MOTO locked
-        return Number(option.premium) / Number(option.underlyingAmount) * 100;
-    }
-    // PUT: premium PILL earned per PILL locked (strikePrice * underlyingAmount)
-    const collateral = option.strikePrice * option.underlyingAmount;
-    if (collateral <= 0n) return null;
-    return Number(option.premium) / Number(collateral) * 100;
-}
-
 export function OptionsTable({
     options,
     walletHex,
     currentBlock,
     gracePeriodBlocks,
     motoPillRatio,
+    pnlMap,
     showFilter = true,
     onBuy,
     onCancel,
@@ -240,6 +225,7 @@ export function OptionsTable({
                                 <th className="text-left py-2 pr-4">Amount</th>
                                 <th className="text-left py-2 pr-4">Breakeven</th>
                                 <th className="text-left py-2 pr-4">Yield</th>
+                                {pnlMap && <th className="text-left py-2 pr-4">P&L</th>}
                                 <th className="text-left py-2 pr-4">Status</th>
                                 <th className="text-left py-2">Action</th>
                             </tr>
@@ -294,6 +280,19 @@ export function OptionsTable({
                                             return y !== null ? <>{y.toFixed(2)}%</> : <span className="text-terminal-text-muted">—</span>;
                                         })()}
                                     </td>
+                                    {pnlMap && (
+                                        <td className="py-2 pr-4 text-xs font-mono">
+                                            {(() => {
+                                                const pnl = pnlMap.get(option.id);
+                                                if (pnl === undefined) return <span className="text-terminal-text-muted">—</span>;
+                                                return (
+                                                    <span className={pnl >= 0 ? 'text-green-400' : 'text-rose-400'}>
+                                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} PILL
+                                                    </span>
+                                                );
+                                            })()}
+                                        </td>
+                                    )}
                                     <td className="py-2 pr-4">
                                         <StatusBadge status={option.status} />
                                     </td>

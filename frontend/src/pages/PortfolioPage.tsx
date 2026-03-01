@@ -12,6 +12,8 @@ import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { useBlockTracker } from '../hooks/useBlockTracker.ts';
 import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
+import { usePriceRatio } from '../hooks/usePriceRatio.ts';
+import { usePnL } from '../hooks/usePnL.ts';
 import { PortfolioSkeleton } from '../components/LoadingSkeletons.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
 import { BalancesCard } from '../components/BalancesCard.tsx';
@@ -76,6 +78,14 @@ export function PortfolioPage() {
         walletAddress: address,
         provider: provider ?? null,
     });
+
+    // MOTO/PILL price ratio (indexer first, on-chain fallback)
+    const { motoPillRatio } = usePriceRatio(null, null, null, null, null);
+
+    // Unrealized P&L for purchased options
+    const { totalPnlPill, perOption: pnlMap } = usePnL(
+        purchasedOptions, motoPillRatio, currentBlock ?? undefined,
+    );
 
     // Modal targets — must be declared before any early returns (Rules of Hooks)
     const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
@@ -226,6 +236,26 @@ export function PortfolioPage() {
                         )}
                     </section>
 
+                    {/* Total Unrealized P&L */}
+                    {totalPnlPill !== null && (
+                        <div
+                            className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-5"
+                            data-testid="total-pnl-card"
+                        >
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-terminal-text-muted font-mono uppercase tracking-wider">
+                                    Unrealized P&L
+                                </span>
+                                <span
+                                    className={`text-lg font-bold font-mono ${totalPnlPill >= 0 ? 'text-green-400' : 'text-rose-400'}`}
+                                    data-testid="total-pnl-value"
+                                >
+                                    {totalPnlPill >= 0 ? '+' : ''}{totalPnlPill.toFixed(2)} PILL
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
                     {/* My Purchased Options */}
                     <section data-testid="purchased-section">
                         <h2 className="text-xs font-bold text-terminal-text-muted font-mono uppercase tracking-wider mb-3">
@@ -253,6 +283,7 @@ export function PortfolioPage() {
                                 walletHex={walletHex}
                                 currentBlock={currentBlock ?? undefined}
                                 gracePeriodBlocks={poolInfo?.gracePeriodBlocks}
+                                pnlMap={pnlMap.size > 0 ? pnlMap : undefined}
                                 showFilter={false}
                                 onBuy={() => {}}
                                 onCancel={handleCancel}

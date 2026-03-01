@@ -65,6 +65,36 @@ vi.mock('../components/PriceChart.tsx', () => ({
     PriceChart: () => null,
 }));
 
+// Global mock for PnLChart — uses lightweight-charts (no canvas in jsdom).
+vi.mock('../components/PnLChart.tsx', () => ({
+    PnLChart: () => null,
+}));
+
+// Global mock for useSuggestedPremium — used by WriteOptionPanel.
+vi.mock('../hooks/useSuggestedPremium.ts', () => ({
+    useSuggestedPremium: vi.fn(() => ({
+        suggestedPremium: null,
+        annualizedVol: 0.8,
+    })),
+}));
+
+// Global mock for usePnL — used by PortfolioPage.
+vi.mock('../hooks/usePnL.ts', () => ({
+    usePnL: vi.fn(() => ({
+        totalPnlPill: null,
+        perOption: new Map(),
+    })),
+}));
+
+// Global mock for usePriceRatio — used by PoolsPage, PortfolioPage.
+vi.mock('../hooks/usePriceRatio.ts', () => ({
+    usePriceRatio: vi.fn(() => ({
+        motoPillRatio: null,
+        loading: false,
+        error: null,
+    })),
+}));
+
 // Global mock for useWebSocketProvider — used by Layout and pages.
 vi.mock('../hooks/useWebSocketProvider.ts', () => ({
     useWebSocketProvider: vi.fn(() => ({

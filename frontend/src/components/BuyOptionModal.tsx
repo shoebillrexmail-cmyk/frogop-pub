@@ -5,7 +5,7 @@
  *   1. Approve PILL (if allowance < total cost)
  *   2. buyOption(optionId)
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import { Address } from '@btc-vision/transaction';
@@ -15,6 +15,8 @@ import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { formatTokenAmount } from '../config/index.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
+import { calcTotalCost, calcBreakeven, calcDelta, calcTheta, blocksToYears } from '../utils/optionMath.js';
+import { PnLChart } from './PnLChart.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface BuyOptionModalProps {
@@ -25,17 +27,15 @@ interface BuyOptionModalProps {
     address: Address | null;
     provider: AbstractRpcProvider;
     network: WalletConnectNetwork;
+    /** MOTO/PILL spot ratio for PnL chart and Greeks */
+    motoPillRatio?: number | null;
+    /** Current block for time-to-expiry calculation */
+    currentBlock?: bigint;
     onClose: () => void;
     onSuccess: () => void;
 }
 
 const MAX_SAT = 10_000_000n;
-
-/** Total cost = premium + ceil(premium * buyFeeBps / 10000) to match contract */
-function calcTotalCost(premium: bigint, buyFeeBps: bigint): bigint {
-    const fee = buyFeeBps > 0n ? (premium * buyFeeBps + 9999n) / 10000n : 0n;
-    return premium + fee;
-}
 
 function fmt(v: bigint) {
     return formatTokenAmount(v);
@@ -49,6 +49,8 @@ export function BuyOptionModal({
     address,
     provider,
     network,
+    motoPillRatio,
+    currentBlock,
     onClose,
     onSuccess,
 }: BuyOptionModalProps) {
@@ -87,6 +89,29 @@ export function BuyOptionModal({
     const hasBalance = pillBalance !== null && pillBalance >= totalCost;
     const needsApproval = !approvalConfirmed && allowance !== null && allowance < totalCost;
     const busy = txStatus === 'approving' || txStatus === 'buying';
+
+    // Greeks (computed only when spot price available)
+    const greeks = useMemo(() => {
+        if (!motoPillRatio || motoPillRatio <= 0 || !currentBlock) return null;
+        const blocksLeft = Number(option.expiryBlock - currentBlock);
+        if (blocksLeft <= 0) return null;
+        const timeYears = blocksToYears(blocksLeft);
+        const strike = Number(option.strikePrice) / 1e18;
+        const params = {
+            spot: motoPillRatio,
+            strike,
+            timeYears,
+            volatility: 0.8,
+            optionType: option.optionType,
+        };
+        return {
+            delta: calcDelta(params),
+            theta: calcTheta(params),
+        };
+    }, [option, motoPillRatio, currentBlock]);
+
+    // PnL chart toggle
+    const [showChart, setShowChart] = useState(false);
 
     async function handleApprove() {
         if (!address || !poolHex) return;
@@ -208,12 +233,7 @@ export function BuyOptionModal({
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Breakeven</span>
                             <span className="text-cyan-300 text-xs">
-                                {fmt(option.optionType === OptionType.CALL
-                                    ? option.strikePrice + option.premium
-                                    : option.strikePrice > option.premium
-                                        ? option.strikePrice - option.premium
-                                        : 0n
-                                )} PILL
+                                {fmt(calcBreakeven(option) ?? 0n)} PILL
                             </span>
                         </div>
                     </div>
@@ -253,6 +273,34 @@ export function BuyOptionModal({
                             </div>
                         )}
                     </div>
+
+                    {/* PnL Chart + Greeks */}
+                    {motoPillRatio != null && motoPillRatio > 0 && (
+                        <div className="space-y-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowChart(!showChart)}
+                                className="text-xs font-mono text-cyan-400 hover:text-cyan-300"
+                                data-testid="toggle-pnl-chart"
+                            >
+                                {showChart ? 'Hide' : 'Show'} P&L at Expiry
+                            </button>
+                            {showChart && (
+                                <PnLChart
+                                    option={option}
+                                    motoPillRatio={motoPillRatio}
+                                    buyFeeBps={poolInfo.buyFeeBps}
+                                    height={180}
+                                />
+                            )}
+                            {greeks && (
+                                <div className="flex gap-4 text-[10px] font-mono text-terminal-text-muted" data-testid="greeks">
+                                    <span>Delta: <span className="text-terminal-text-secondary">{greeks.delta.toFixed(3)}</span></span>
+                                    <span>Theta: <span className="text-terminal-text-secondary">{greeks.theta.toFixed(4)}/day</span></span>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Insufficient balance warning */}
                     {!tokenLoading && pillBalance !== null && !hasBalance && (

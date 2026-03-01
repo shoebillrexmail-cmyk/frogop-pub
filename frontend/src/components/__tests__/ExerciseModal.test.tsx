@@ -51,17 +51,17 @@ const CALL_OPTION: OptionData = {
     writer: '0xdead000000000000000000000000000000000000000000000000000000000001',
     buyer: '0xbeef000000000000000000000000000000000000000000000000000000000002',
     optionType: OptionType.CALL,
-    strikePrice: 50n,                // raw (50 PILL per MOTO)
-    underlyingAmount: 10n ** 18n,    // 1 MOTO
+    strikePrice: 50n * 10n ** 18n,   // 50 PILL per MOTO (18-decimal)
+    underlyingAmount: 10n ** 18n,    // 1 MOTO (18-decimal)
     premium: 5n * 10n ** 18n,
     expiryBlock: 900000n,
     status: OptionStatus.PURCHASED,
 };
 
-// pillCost = 50 * 1e18 = 50 PILL
-const PILL_COST = CALL_OPTION.strikePrice * CALL_OPTION.underlyingAmount;
-// exerciseFee = 1e18 * 10 / 10000 = 0.001 MOTO
-const EXERCISE_FEE = (CALL_OPTION.underlyingAmount * POOL_INFO.exerciseFeeBps) / 10000n;
+// strikeValue = (50e18 * 1e18) / 1e18 = 50e18 = 50 PILL
+const PILL_COST = (CALL_OPTION.strikePrice * CALL_OPTION.underlyingAmount) / (10n ** 18n);
+// exerciseFee = ceil(1e18 * 10 / 10000) = 1e15 (0.001 MOTO)
+const EXERCISE_FEE = (CALL_OPTION.underlyingAmount * POOL_INFO.exerciseFeeBps + 9999n) / 10000n;
 
 const PUT_OPTION: OptionData = {
     ...CALL_OPTION,
@@ -235,8 +235,8 @@ describe('ExerciseModal', () => {
         });
     });
 
-    it('pillCost computed correctly: strikePrice * underlyingAmount', () => {
-        // pillCost = 50 * 1e18 = 50e18
+    it('pillCost computed correctly: (strikePrice * underlyingAmount) / 1e18', () => {
+        // strikeValue = (50e18 * 1e18) / 1e18 = 50e18 = 50 PILL
         expect(PILL_COST).toBe(50n * 10n ** 18n);
     });
 
