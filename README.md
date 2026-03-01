@@ -66,7 +66,7 @@ frogop/
 │   └── src/db/             # D1 schema & queries
 ├── tests/                  # Unit + integration tests
 │   ├── runtime/            # Test runtime helpers
-│   └── integration/        # Testnet integration suite (10 test files)
+│   └── integration/        # Testnet integration suite (11 test files)
 └── abis/                   # Generated ABI files (JSON, TypeScript, type defs)
 ```
 
@@ -100,7 +100,13 @@ Build outputs:
 - `build/*.wasm` — Compiled WebAssembly bytecode (deployed to Bitcoin)
 - `abis/*.abi.json` / `*.abi.ts` / `*.d.ts` — Contract interface definitions
 
-### Run Frontend
+### Run Everything (Dev Mode)
+
+```bash
+npm run dev       # Runs indexer (port 8787) + frontend (port 5173) concurrently
+```
+
+### Run Frontend Only
 
 ```bash
 cd frontend
@@ -119,6 +125,9 @@ cd frontend && npm test
 
 # Indexer tests
 cd indexer && npm test
+
+# Integration tests (testnet — requires OPNET_MNEMONIC in .env)
+npm run test:integration
 ```
 
 ## Contracts

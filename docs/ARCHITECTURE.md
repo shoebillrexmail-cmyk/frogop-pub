@@ -10,10 +10,10 @@
 │  ┌────────────────────────────────────────────────────────────────────┐ │
 │  │                      OptionsFactory.wasm                            │ │
 │  │                                                                     │ │
-│  │  createPool(underlying, premiumToken) → poolAddress                │ │
+│  │  registerPool(poolAddress) → void                                  │ │
 │  │  getPool(underlying, premiumToken) → poolAddress                   │ │
-│  │  allPools(index) → poolAddress                                     │ │
-│  │  poolCount() → u256                                                │ │
+│  │  getPoolByIndex(index) → poolAddress                               │ │
+│  │  getPoolCount() → u256                                             │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │                              │                                           │
 │                              │ deploys                                   │
@@ -29,11 +29,14 @@
 │  │  └── paused: bool                 // Emergency stop                │ │
 │  │                                                                     │ │
 │  │  METHODS:                                                           │ │
-│  │  ├── writeOption(type, strike, expiry, amount) → optionId         │ │
+│  │  ├── writeOption(type, strike, expiry, amount, premium) → id      │ │
 │  │  ├── buyOption(optionId) → success                                 │ │
 │  │  ├── exercise(optionId) → success                                  │ │
-│  │  ├── cancel(optionId) → success                                    │ │
-│  │  └── settle(optionId) → success                                    │ │
+│  │  ├── cancelOption(optionId) → success                              │ │
+│  │  ├── settle(optionId) → success                                    │ │
+│  │  ├── getOption(optionId) → Option                                  │ │
+│  │  ├── getOptionsBatch(startId, count) → Option[]                   │ │
+│  │  └── updateFeeRecipient(newRecipient) → void                      │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │                              │                                           │
 │          ┌───────────────────┼───────────────────┐                      │
@@ -284,6 +287,102 @@ public batchExercise(calldata: Calldata): BytesWriter {
     // Process multiple exercises in single transaction
 }
 ```
+
+## Frontend Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      Frontend (React 19 + Vite 7)                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Pages:   Landing │ Pools │ Portfolio │ About                       │
+│                                                                      │
+│  Components:                                                         │
+│  ├── WriteOptionPanel    (create options, strategy templates)        │
+│  ├── OptionsTable        (filterable, sortable, action buttons)     │
+│  ├── BuyOptionModal      (premium display, P&L chart, Greeks)       │
+│  ├── ExerciseModal       (ITM check, proceed/cancel)                │
+│  ├── CancelModal / SettleModal                                      │
+│  ├── PriceChart          (lightweight-charts, OHLCV candles)        │
+│  └── TransactionToast    (TX tracking, receipt polling)             │
+│                                                                      │
+│  Hooks:                                                              │
+│  ├── usePool             (pool info + options, paginated)           │
+│  ├── useUserOptions      (indexer fast-path for portfolio)          │
+│  ├── useTransactionFlow  (2-step approval + localStorage resume)   │
+│  ├── useBlockTracker     (WS blocks + HTTP fallback)                │
+│  └── useSuggestedPremium (Black-Scholes based)                      │
+│                                                                      │
+│  Services:                                                           │
+│  ├── PoolService         (RPC: getOption, getOptionsBatch, views)   │
+│  ├── IndexerService      (REST: /pools, /user, /prices)             │
+│  └── FactoryService      (RPC: getPoolCount, getPoolByIndex)        │
+│                                                                      │
+│  State: Zustand (optionFilters) │ React Context (WS, TX, Wallet)    │
+│  Wallet: @btc-vision/walletconnect (OPWallet browser extension)     │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## Indexer Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│               Indexer (Cloudflare Workers + D1 SQLite)                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Trigger: Cron (*/5 * * * *) ───► Poller                            │
+│                                                                      │
+│  Poller:                                                             │
+│  ├── Fetches blocks from last_indexed → chain tip (max 20/run)     │
+│  ├── Decodes pool events (OptionWritten, OptionPurchased, etc.)     │
+│  ├── Decodes NativeSwap SwapExecuted events                         │
+│  ├── Polls NativeSwap getQuote for spot prices                      │
+│  └── Batched D1 writes (single db.batch() per cron)                │
+│                                                                      │
+│  Database (D1 SQLite):                                               │
+│  ├── pools          (address, underlying, premium, created_at)      │
+│  ├── options        (pool, id, writer, buyer, type, status, ...)   │
+│  ├── transfers      (pool, option_id, from, to, block, tx)         │
+│  ├── prices         (token, price, block_height, timestamp)         │
+│  ├── candles        (token, interval, open, high, low, close, vol) │
+│  └── indexer_state  (last_indexed_block)                            │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## Indexer REST API
+
+Base URL: `https://api.frogop.net`
+
+| Method | Endpoint | Description | Query Params |
+|--------|----------|-------------|--------------|
+| GET | `/health` | Health check + last indexed block | — |
+| GET | `/pools` | List all tracked pools | — |
+| GET | `/pools/:address` | Single pool details | — |
+| GET | `/pools/:address/options` | Options for a pool | `writer`, `buyer`, `status`, `page`, `limit` |
+| GET | `/pools/:address/options/:id` | Single option details | — |
+| GET | `/pools/:address/options/:id/transfers` | Transfer history for option | — |
+| GET | `/user/:address/options` | All options for user (writer or buyer) | — |
+| GET | `/user/:address/transfers` | All transfers for user | — |
+| GET | `/prices/:token/candles` | OHLCV candles | `interval` (1h/4h/1d/1w), `from`, `to`, `limit` |
+| GET | `/prices/:token/latest` | Latest spot price | — |
+| GET | `/prices/:token/history` | Raw price history | `from`, `to`, `limit` |
+
+Tokens: `MOTO`, `PILL`, `MOTO_PILL` (cross-rate). CORS: `frogop.net`, `*.workers.dev`, `*.pages.dev`, `localhost`.
+
+## Fee System
+
+| Action | Fee (bps) | Applied To | Recipient |
+|--------|-----------|------------|-----------|
+| Write | 0 | — | — |
+| Buy | 100 (1%) | Premium — deducted before writer receives | feeRecipient |
+| Exercise | 10 (0.1%) | Buyer's proceeds | feeRecipient |
+| Cancel (before expiry) | 100 (1%) | Collateral — deducted from writer's refund | feeRecipient |
+| Cancel (after expiry) | 0 | — | — |
+| Settle | 0 | — | — |
+
+Fees use ceiling division. `feeRecipient` is set at pool deployment and updatable by current recipient only.
 
 ## Next Steps
 
