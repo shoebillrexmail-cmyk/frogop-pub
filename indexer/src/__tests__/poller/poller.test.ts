@@ -171,10 +171,13 @@ describe('pollNewBlocks — per-block behaviour', () => {
         mockProvider.getBlock.mockResolvedValue(null);
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         await pollNewBlocks(mockEnv);
-        // processBlock batch should NOT have been called (block was skipped)
-        // but pruneOldData still runs — verify no cursor stmt in any batch call
-        const allBatchArgs = mockBatch.mock.calls.flatMap(c => c[0] as unknown[]);
-        expect(allBatchArgs.every((s: unknown) => (s as Record<string, unknown>)['_cursor'] === undefined)).toBe(true);
+        // Block was skipped (no event stmts) but cursor still advances
+        // so we don't retry null blocks forever
+        expect(mockBatch).toHaveBeenCalled();
+        const [batchArgs] = mockBatch.mock.calls[0]!;
+        expect(batchArgs).toHaveLength(1);
+        expect((batchArgs[0] as Record<string, unknown>)['_cursor']).toBe(100);
+        expect(warnSpy).toHaveBeenCalled();
         warnSpy.mockRestore();
     });
 });
