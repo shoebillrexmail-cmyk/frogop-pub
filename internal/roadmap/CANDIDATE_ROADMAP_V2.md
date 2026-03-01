@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document synthesizes findings from industry research (`docs/options_research.md`) with FrogOp's completed Phase 1 implementation and OPNet's verified platform capabilities. Each proposed feature has been validated against OPNet documentation for technical feasibility.
+This document synthesizes findings from industry research (`internal/research/options_research.md`) with FrogOp's completed Phase 1 implementation and OPNet's verified platform capabilities. Each proposed feature has been validated against OPNet documentation for technical feasibility.
 
 ### Current State (Phase 1 — Complete)
 

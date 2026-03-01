@@ -403,5 +403,5 @@ describe('NativeSwapBridge', () => {
 ## Next Steps
 
 - [Mode 1: NativeSwap Details](../modes/mode-1-nativeswap.md)
-- [Phase 2 Roadmap](../roadmap/PHASE_2_NATIVE.md)
+- [Phase 2 Roadmap](../../internal/roadmap/PHASE_2_NATIVE.md)
 - [OptionsPool Contract](./OptionsPool.md)

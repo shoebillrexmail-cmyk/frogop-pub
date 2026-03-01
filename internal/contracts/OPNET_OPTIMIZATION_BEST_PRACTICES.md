@@ -394,6 +394,6 @@ Before deploying, verify:
 
 ## References
 
-- [AGENTS.md](../AGENTS.md) - Project-specific rules
+- [AGENTS.md](../../AGENTS.md) - Project-specific rules
 - [OPNET_COMPLEXITY_BEST_PRACTICES.md](./OPNET_COMPLEXITY_BEST_PRACTICES.md) - Complexity guidelines
-- [THREAT_MODEL.md](../security/THREAT_MODEL.md) - Security considerations
+- [THREAT_MODEL.md](../../docs/security/THREAT_MODEL.md) - Security considerations

@@ -536,11 +536,11 @@ Total estimated: Phase 1.5 + 2 + 3 ≈ 32 weeks (~8 months, solo)
 
 | Document | Purpose |
 |----------|---------|
-| [../ARCHITECTURE.md](../ARCHITECTURE.md) | System architecture |
-| [../security/THREAT_MODEL.md](../security/THREAT_MODEL.md) | Security threat model |
-| [../security/AUDIT_CHECKLIST.md](../security/AUDIT_CHECKLIST.md) | Contract audit checklist |
-| [../contracts/OptionsPool.md](../contracts/OptionsPool.md) | OptionsPool contract spec |
-| [../contracts/OptionsFactory.md](../contracts/OptionsFactory.md) | OptionsFactory contract spec |
+| [ARCHITECTURE.md](../../docs/ARCHITECTURE.md) | System architecture |
+| [THREAT_MODEL.md](../../docs/security/THREAT_MODEL.md) | Security threat model |
+| [AUDIT_CHECKLIST.md](../security/AUDIT_CHECKLIST.md) | Contract audit checklist |
+| [OptionsPool.md](../../docs/contracts/OptionsPool.md) | OptionsPool contract spec |
+| [OptionsFactory.md](../../docs/contracts/OptionsFactory.md) | OptionsFactory contract spec |
 
 ### Historical (Phase 1)
 
@@ -549,12 +549,12 @@ Total estimated: Phase 1.5 + 2 + 3 ≈ 32 weeks (~8 months, solo)
 | [SPRINT_BOARD.md](./SPRINT_BOARD.md) | Phase 1 sprint-by-sprint execution log (historical) |
 | [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) | Phase 1 agile implementation plan (historical) |
 | [GAS_OPTIMIZATION_REFACTOR.md](./GAS_OPTIMIZATION_REFACTOR.md) | Gas optimization decisions and results |
-| [../options_research.md](../options_research.md) | Industry research on decentralized options |
+| [options_research.md](../research/options_research.md) | Industry research on decentralized options |
 
 ### Deployment
 
 | Document | Purpose |
 |----------|---------|
-| [../deployment/DEPLOY.md](../deployment/DEPLOY.md) | Contract deployment guide |
-| [../deployment/INDEXER_DEPLOY.md](../deployment/INDEXER_DEPLOY.md) | Indexer deployment to Cloudflare |
-| [../deployment/CLOUDFLARE_PAGES.md](../deployment/CLOUDFLARE_PAGES.md) | Frontend deployment to Cloudflare Pages |
+| [DEPLOY.md](../../docs/deployment/DEPLOY.md) | Contract deployment guide |
+| [INDEXER_DEPLOY.md](../../docs/deployment/INDEXER_DEPLOY.md) | Indexer deployment to Cloudflare |
+| [CLOUDFLARE_PAGES.md](../../docs/deployment/CLOUDFLARE_PAGES.md) | Frontend deployment to Cloudflare Pages |

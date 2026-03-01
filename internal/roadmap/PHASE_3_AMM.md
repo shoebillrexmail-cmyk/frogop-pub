@@ -405,5 +405,5 @@ Phase 3 is complete when:
 
 - [Phase 1: MVP](./PHASE_1_MVP.md)
 - [Phase 2: NativeSwap](./PHASE_2_NATIVE.md)
-- [AMMPool Contract](../contracts/AMMPool.md)
-- [Mode 2: AMM Details](../modes/mode-2-amm.md)
+- [AMMPool Contract](../../docs/contracts/AMMPool.md)
+- [Mode 2: AMM Details](../../docs/modes/mode-2-amm.md)

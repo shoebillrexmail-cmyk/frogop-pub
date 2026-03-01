@@ -746,7 +746,7 @@ Gap analysis revealed the frontend is incomplete and missing critical user-facin
 - [ ] Token transfers work correctly
 - [ ] Gas usage within 20% of baseline
 - [ ] Custom test tokens deployed (FROG-U, FROG-P)
-- [ ] Documentation updated in `docs/tests/`
+- [ ] Documentation updated in `internal/tests/`
 
 ---
 

@@ -399,5 +399,5 @@ This checklist does not guarantee security. Always engage professional auditors 
 
 ## Next Steps
 
-- [Threat Model](./THREAT_MODEL.md)
-- [CSV Timelocks](./CSV_TIMELOCKS.md)
+- [Threat Model](../../docs/security/THREAT_MODEL.md)
+- [CSV Timelocks](../../docs/security/CSV_TIMELOCKS.md)

@@ -112,4 +112,4 @@ For full test coverage, deploy to testnet with:
 3. OptionsPool instances
 4. Fund test accounts with tokens
 
-See [REGTEST_TEST_PLAN.md](./REGTEST_TEST_PLAN.md) for details.
+See the integration test documentation for details.

@@ -41,9 +41,9 @@ FrogOp enables trustless options trading with two integration modes:
 
 | Phase | Features | Status |
 |-------|----------|--------|
-| [Phase 1: MVP](./roadmap/PHASE_1_MVP.md) | Core options (Calls + Puts, OP20-only) | Planning |
-| [Phase 2: Native](./roadmap/PHASE_2_NATIVE.md) | NativeSwap BTC integration | Future |
-| [Phase 3: AMM](./roadmap/PHASE_3_AMM.md) | Liquidity pools, LP rewards | Future |
+| [Phase 1: MVP](../internal/roadmap/PHASE_1_MVP.md) | Core options (Calls + Puts, OP20-only) | Planning |
+| [Phase 2: Native](../internal/roadmap/PHASE_2_NATIVE.md) | NativeSwap BTC integration | Future |
+| [Phase 3: AMM](../internal/roadmap/PHASE_3_AMM.md) | Liquidity pools, LP rewards | Future |
 
 ## Technology Stack
 
@@ -71,7 +71,7 @@ npm test
 
 ## Security
 
-See [Threat Model](./security/THREAT_MODEL.md) and [Audit Checklist](./security/AUDIT_CHECKLIST.md).
+See [Threat Model](./security/THREAT_MODEL.md) and [Audit Checklist](../internal/security/AUDIT_CHECKLIST.md).
 
 ## License
 

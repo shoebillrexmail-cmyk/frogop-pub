@@ -413,4 +413,4 @@ Phase 1 is complete when:
 
 - [Phase 2: NativeSwap Integration](./PHASE_2_NATIVE.md)
 - [Phase 3: AMM Pools](./PHASE_3_AMM.md)
-- [OptionsPool Contract](../contracts/OptionsPool.md)
+- [OptionsPool Contract](../../docs/contracts/OptionsPool.md)

@@ -373,4 +373,4 @@ function usePoolDiscovery(factoryAddress: Address) {
 
 - [OptionsPool Contract](./OptionsPool.md)
 - [AMMPool Contract](./AMMPool.md)
-- [Phase 1 MVP](../roadmap/PHASE_1_MVP.md)
+- [Phase 1 MVP](../../internal/roadmap/PHASE_1_MVP.md)

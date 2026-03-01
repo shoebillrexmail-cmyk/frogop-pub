@@ -535,5 +535,5 @@ function useLiquidity(poolAddress: Address) {
 ## Next Steps
 
 - [Mode 2: AMM Details](../modes/mode-2-amm.md)
-- [Phase 3 Roadmap](../roadmap/PHASE_3_AMM.md)
+- [Phase 3 Roadmap](../../internal/roadmap/PHASE_3_AMM.md)
 - [OptionsPool Contract](./OptionsPool.md)

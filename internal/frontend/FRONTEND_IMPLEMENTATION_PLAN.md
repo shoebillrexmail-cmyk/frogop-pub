@@ -507,7 +507,7 @@ npm run build
 
 FroGop frontend is deployed via **Cloudflare Workers with static assets** — free tier, global CDN, auto-deploy on push to `master`.
 
-See [`docs/deployment/CLOUDFLARE_PAGES.md`](../deployment/CLOUDFLARE_PAGES.md) for the full setup guide.
+See [`docs/deployment/CLOUDFLARE_PAGES.md`](../../docs/deployment/CLOUDFLARE_PAGES.md) for the full setup guide.
 
 ```
 Push to master

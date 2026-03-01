@@ -62,5 +62,5 @@ Output: `dist/`
 
 ## Related
 
-- [Frontend Implementation Plan](../docs/frontend/FRONTEND_IMPLEMENTATION_PLAN.md)
-- [Phase 1: MVP](../docs/roadmap/PHASE_1_MVP.md)
+- [Frontend Implementation Plan](../internal/frontend/FRONTEND_IMPLEMENTATION_PLAN.md)
+- [Phase 1: MVP](../internal/roadmap/PHASE_1_MVP.md)

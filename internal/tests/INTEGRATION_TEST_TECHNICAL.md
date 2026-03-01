@@ -349,7 +349,7 @@ curl -X POST https://regtest.opnet.org/faucet -d "address=<your-address>"
 ## Next Steps
 
 1. ✅ Complete integration tests on regtest
-2. ✅ Document results in `docs/tests/`
+2. ✅ Document results in `internal/tests/`
 3. ✅ Verify all write methods work
 4. ✅ Validate gas usage
 5. ✅ Proceed to Sprint 6 (Frontend MVP)

@@ -465,4 +465,4 @@ function validateAmount(amount: u256, minAmount: u256): bool {
 ## Next Steps
 
 - [Phase 1 Technical Spec](./PHASE_1_TECHNICAL_SPEC.md)
-- [OptionsPool Contract](../contracts/OptionsPool.md)
+- [OptionsPool Contract](../../docs/contracts/OptionsPool.md)

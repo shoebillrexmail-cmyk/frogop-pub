@@ -92,9 +92,29 @@ npm run build:pool         # Build OptionsPool only
 ### Test
 
 ```bash
-npm test                   # Run all tests
+# Contract unit tests
+npm test                   # Run all tests (build + factory + pool)
 npm run test:factory       # Test OptionsFactory only
 npm run test:pool          # Test OptionsPool only
+
+# Integration tests (testnet — requires OPNET_MNEMONIC in .env)
+npm run test:integration   # Run all integration tests (01–11)
+npm run test:integration:full   # Run 06-full-lifecycle only
+
+# Frontend tests
+cd frontend && npm test                # Run all frontend tests
+cd frontend && npm run test:coverage   # Coverage report
+
+# Indexer tests
+cd indexer && npm test                 # Run all indexer tests
+```
+
+### Development
+
+```bash
+npm run dev                # Run indexer + frontend concurrently
+npm run dev:frontend       # Frontend only (Vite, port 5173)
+npm run dev:indexer         # Indexer only (Wrangler, port 8787)
 ```
 
 ### Lint & Typecheck
@@ -120,25 +140,35 @@ Fix ALL errors before creating commits or PRs.
 
 ```
 frogop/
-├── src/
-│   └── contracts/
-│       ├── factory/           # OptionsFactory contract
-│       │   ├── contract.ts    # Contract implementation
-│       │   └── index.ts       # Entry point
-│       └── pool/              # OptionsPool contract
-│           ├── contract.ts    # Contract implementation
-│           └── index.ts       # Entry point
+├── src/contracts/             # Smart contracts (AssemblyScript → WASM)
+│   ├── factory/               # OptionsFactory — pool registry & enumeration
+│   │   └── index.ts
+│   └── pool/                  # OptionsPool — full options lifecycle
+│       └── index.ts
+├── frontend/                  # React 19 + Vite 7 + Tailwind 4 SPA
+│   ├── src/components/        # UI (modals, tables, charts, strategies)
+│   ├── src/pages/             # Landing, Pools, Portfolio, About
+│   ├── src/hooks/             # Contract interaction & WS hooks
+│   ├── src/services/          # RPC service layer, ABI encoding
+│   └── src/utils/             # Option math, Black-Scholes, strategies
+├── indexer/                   # Cloudflare Workers price indexer + D1
+│   ├── src/api/               # REST API (15 endpoints)
+│   ├── src/poller/            # Block polling & event decoding
+│   ├── src/decoder/           # NativeSwap event decoder
+│   └── src/db/                # D1 schema & queries
 ├── tests/
+│   ├── integration/           # Testnet integration suite (11 test files)
 │   ├── runtime/               # Test helpers
 │   ├── OptionsFactory.test.ts
 │   └── OptionsPool.test.ts
-├── docs/
-│   ├── contracts/             # Contract documentation
-│   ├── roadmap/               # Planning documents
-│   ├── security/              # Security documentation
-│   └── tests/                 # Test documentation
-├── abis/                      # Generated ABIs
-└── build/                     # Compiled WASM
+├── docs/                      # Documentation
+│   ├── contracts/             # Contract specifications
+│   ├── deployment/            # Deploy guides (contracts, indexer, frontend)
+│   ├── frontend/              # Frontend design & user flows
+│   ├── roadmap/               # Unified roadmap + phase specs
+│   └── security/              # Threat model & audit checklist
+├── abis/                      # Generated ABIs (JSON, TS, type defs)
+└── build/                     # Compiled WASM (OptionsFactory, OptionsPool)
 ```
 
 ---
@@ -153,11 +183,11 @@ When making changes to contracts or architecture, you MUST update the relevant d
 |-------------|-----------------|
 | Contract methods/ABI | `docs/contracts/[ContractName].md`, `README.md` |
 | Architecture changes | `docs/ARCHITECTURE.md`, `README.md` |
-| New features | `docs/roadmap/IMPLEMENTATION_PLAN.md` |
+| New features | `internal/roadmap/IMPLEMENTATION_PLAN.md` |
 | Security changes | `docs/security/THREAT_MODEL.md` |
-| Test changes | `docs/tests/UNIT_TESTS_STATUS.md` |
+| Test changes | `internal/tests/UNIT_TESTS_STATUS.md` |
 | Completing a story / new tasks | `SPRINTBOARD.md` (project root) |
-| Gas optimizations | `docs/roadmap/GAS_OPTIMIZATION_REFACTOR.md` |
+| Gas optimizations | `internal/roadmap/GAS_OPTIMIZATION_REFACTOR.md` |
 
 ### Documentation Checklist
 
@@ -226,13 +256,13 @@ export class MyContract extends OP_NET {
 
 | Document | Purpose | When to Update |
 |----------|---------|----------------|
-| `docs/roadmap/IMPLEMENTATION_PLAN.md` | Full implementation plan with stories, tasks, estimates | When adding/removing features, changing scope |
-| `docs/roadmap/SPRINT_BOARD.md` | Current sprint status, completed/pending stories | After completing stories, starting new sprint |
-| `docs/roadmap/GAS_OPTIMIZATION_REFACTOR.md` | Gas optimization analysis and plan | When optimizing contracts, measuring gas |
+| `internal/roadmap/IMPLEMENTATION_PLAN.md` | Full implementation plan with stories, tasks, estimates | When adding/removing features, changing scope |
+| `internal/roadmap/SPRINT_BOARD.md` | Current sprint status, completed/pending stories | After completing stories, starting new sprint |
+| `internal/roadmap/GAS_OPTIMIZATION_REFACTOR.md` | Gas optimization analysis and plan | When optimizing contracts, measuring gas |
 
 ### Current Sprint
 
-**Check `docs/roadmap/SPRINT_BOARD.md` for current sprint status.**
+**Check `internal/roadmap/SPRINT_BOARD.md` for current sprint status.**
 
 Before starting work:
 1. Read the current sprint goal
@@ -250,10 +280,11 @@ After completing work:
 |------|-------------|--------|
 | Epic 1 | Smart Contracts | ✅ Done |
 | Epic 2 | Security | ✅ Done |
-| Epic 3 | Testing | 🔄 Partial |
-| Epic 6 | Gas Optimization | ✅ Done |
+| Epic 3 | Testing | ✅ Done |
+| Epic 4 | Frontend MVP | ✅ Done |
 | Epic 5 | Integration Testing | ✅ Done (testnet) |
-| Epic 4 | Frontend MVP | 🔄 In Progress |
+| Epic 6 | Gas Optimization | ✅ Done |
+| Epic 7 | Indexer + Price Tracking | ✅ Done |
 
 ### Integration Tests (Epic 5 — Complete)
 
@@ -274,8 +305,8 @@ Full lifecycle verified: writeOption → getOption → cancelOption (status=4, f
 
 ### Must Read
 
-1. **[docs/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md](docs/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md)** - Optimization lessons learned (READ THIS FIRST)
-2. **[docs/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md](docs/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md)** - OPNet complexity and gas optimization
+1. **[internal/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md](internal/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md)** - Optimization lessons learned (READ THIS FIRST)
+2. **[internal/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md](internal/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md)** - OPNet complexity and gas optimization
 3. **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
 4. **[docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md)** - Security considerations
 5. **[SPRINTBOARD.md](SPRINTBOARD.md)** - Current task backlog and in-progress work
@@ -284,8 +315,8 @@ Full lifecycle verified: writeOption → getOption → cancelOption (status=4, f
 
 - **[docs/contracts/OptionsFactory.md](docs/contracts/OptionsFactory.md)** - Factory specification
 - **[docs/contracts/OptionsPool.md](docs/contracts/OptionsPool.md)** - Pool specification
-- **[docs/roadmap/GAS_OPTIMIZATION_REFACTOR.md](docs/roadmap/GAS_OPTIMIZATION_REFACTOR.md)** - Gas optimization plan
-- **[docs/tests/UNIT_TESTS_STATUS.md](docs/tests/UNIT_TESTS_STATUS.md)** - Test coverage
+- **[internal/roadmap/GAS_OPTIMIZATION_REFACTOR.md](internal/roadmap/GAS_OPTIMIZATION_REFACTOR.md)** - Gas optimization plan
+- **[internal/tests/UNIT_TESTS_STATUS.md](internal/tests/UNIT_TESTS_STATUS.md)** - Test coverage
 
 ---
 
@@ -363,7 +394,7 @@ git push origin feat/my-feature
 
 - Architecture: See `docs/ARCHITECTURE.md`
 - Security: See `docs/security/THREAT_MODEL.md`
-- OPNet Patterns: See `docs/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md`
-- Planning: See `docs/roadmap/IMPLEMENTATION_PLAN.md`
+- OPNet Patterns: See `internal/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md`
+- Planning: See `internal/roadmap/IMPLEMENTATION_PLAN.md`
 - Current Sprint: See `SPRINTBOARD.md`
-- Gas Optimization: See `docs/roadmap/GAS_OPTIMIZATION_REFACTOR.md`
+- Gas Optimization: See `internal/roadmap/GAS_OPTIMIZATION_REFACTOR.md`

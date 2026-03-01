@@ -133,7 +133,7 @@ process.on('beforeExit', () => {
         }
     };
 
-    const baselinePath = path.join(__dirname, '../docs/gas-baseline.json');
+    const baselinePath = path.join(__dirname, '../internal/research/gas-baseline.json');
     fs.writeFileSync(baselinePath, JSON.stringify(baseline, null, 2));
     console.log(`\nBaseline saved to: ${baselinePath}`);
 });

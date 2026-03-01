@@ -77,7 +77,7 @@
 - [x] No behavior changes
 - [x] PoolCreated event added
 
-**See**: [gas-baseline.json](../gas-baseline.json) | [GAS_OPTIMIZATION_REFACTOR.md](./GAS_OPTIMIZATION_REFACTOR.md)
+**See**: [gas-baseline.json](../research/gas-baseline.json) | [GAS_OPTIMIZATION_REFACTOR.md](./GAS_OPTIMIZATION_REFACTOR.md)
 
 ---
 
@@ -408,7 +408,7 @@ For full test coverage of token transfers:
 3. **Wait for framework** - Future unit-test-framework may support mock tokens
 
 ### Documentation Updated
-- `docs/tests/UNIT_TESTS_STATUS.md` - Documents limitation and test status
+- `internal/tests/UNIT_TESTS_STATUS.md` - Documents limitation and test status
 
 ---
 
@@ -513,7 +513,7 @@ Using the wrong one for `balanceOf()` returns 0 with no error.
 
 **Fix applied in**: `02b-acquire-tokens.ts`, `06-full-lifecycle.ts`
 
-See `docs/tests/INTEGRATION_TEST_TECHNICAL.md` § "Lessons Learned" for full details.
+See `internal/tests/INTEGRATION_TEST_TECHNICAL.md` § "Lessons Learned" for full details.
 
 ### Issue Resolved (Pool Template)
 **Problem:** Pool template deployment failing with `Cannot read properties of undefined`.
@@ -563,7 +563,7 @@ npm run test:integration:full        # 06 - Full option lifecycle
 - [ ] exercise/settle tested (requires block advancement)
 - [ ] Gas usage within expected range
 - [x] Write option + cancel option flow tested (via test 06 with NativeSwap-acquired tokens)
-- [x] Documentation updated in `docs/tests/`
+- [x] Documentation updated in `internal/tests/`
 
 ---
 
@@ -846,7 +846,7 @@ if (fee > u256.Zero) {
 
 ## Sprint 6: Frontend MVP - IN PROGRESS 🔄
 
-**Implementation Plan**: `docs/frontend/FRONTEND_IMPLEMENTATION_PLAN.md` (v1.0)
+**Implementation Plan**: `internal/frontend/FRONTEND_IMPLEMENTATION_PLAN.md` (v1.0)
 
 **Status**: Basic UI complete, contract integration next
 
@@ -999,8 +999,8 @@ frogop/
 
 | # | Task | Status |
 |---|------|--------|
-| 6.14.1 | Write `docs/frontend/USER_FLOWS.md` — state machine + all 6 flows with ASCII sketches | ✅ Done |
-| 6.14.2 | Write `docs/frontend/PAGE_DESIGNS.md` — Pools and Portfolio page layout | ✅ Done |
+| 6.14.1 | Write `internal/frontend/USER_FLOWS.md` — state machine + all 6 flows with ASCII sketches | ✅ Done |
+| 6.14.2 | Write `internal/frontend/PAGE_DESIGNS.md` — Pools and Portfolio page layout | ✅ Done |
 | 6.14.3 | Update README.md — frontend section, project structure, docs links | ✅ Done |
 
 ---

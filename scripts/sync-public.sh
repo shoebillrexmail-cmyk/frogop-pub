@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # sync-public.sh — Push current master to the public frogop-pub repo,
-# stripping out docs/, .github/workflows/, and internal planning files.
+# stripping out internal/, .github/workflows/, and private planning files.
 #
 # Usage:  bash scripts/sync-public.sh
 #
@@ -12,7 +12,7 @@ set -euo pipefail
 
 REMOTE="public"
 EXCLUDED_PATHS=(
-    "docs/"
+    "internal/"
     ".github/workflows/"
     "SPRINTBOARD.md"
     "AGENTS.md"

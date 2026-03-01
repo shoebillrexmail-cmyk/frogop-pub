@@ -587,4 +587,4 @@ private checkExerciseDelay(option: Option): void {
 
 - [Mode Comparison](./mode-comparison.md)
 - [AMMPool Contract](../contracts/AMMPool.md)
-- [Phase 3 Roadmap](../roadmap/PHASE_3_AMM.md)
+- [Phase 3 Roadmap](../../internal/roadmap/PHASE_3_AMM.md)

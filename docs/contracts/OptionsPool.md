@@ -549,4 +549,4 @@ function useWriteOption(poolAddress: Address) {
 
 - [OptionsFactory Contract](./OptionsFactory.md)
 - [Security Threat Model](../security/THREAT_MODEL.md)
-- [Phase 1 MVP](../roadmap/PHASE_1_MVP.md)
+- [Phase 1 MVP](../../internal/roadmap/PHASE_1_MVP.md)

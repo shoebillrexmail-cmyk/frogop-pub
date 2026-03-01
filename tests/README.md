@@ -216,6 +216,5 @@ await factory.createPool(underlying, premiumToken);
 
 ## References
 
-- [docs/tests/UNIT_TESTS_STATUS.md](../docs/tests/UNIT_TESTS_STATUS.md) - Detailed status
-- [docs/tests/REGTEST_TEST_PLAN.md](../docs/tests/REGTEST_TEST_PLAN.md) - Integration testing
+- [internal/tests/UNIT_TESTS_STATUS.md](../internal/tests/UNIT_TESTS_STATUS.md) - Detailed status
 - OPNet Unit Test Framework docs

@@ -328,4 +328,4 @@ describe('CSV Integration', () => {
 
 - [NativeSwapBridge Contract](../contracts/NativeSwapBridge.md)
 - [Threat Model](./THREAT_MODEL.md)
-- [Phase 2 Roadmap](../roadmap/PHASE_2_NATIVE.md)
+- [Phase 2 Roadmap](../../internal/roadmap/PHASE_2_NATIVE.md)

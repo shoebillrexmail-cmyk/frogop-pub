@@ -377,5 +377,5 @@ Phase 2 is complete when:
 
 - [Phase 1: MVP](./PHASE_1_MVP.md)
 - [Phase 3: AMM Pools](./PHASE_3_AMM.md)
-- [NativeSwapBridge Contract](../contracts/NativeSwapBridge.md)
-- [CSV Timelocks](../security/CSV_TIMELOCKS.md)
+- [NativeSwapBridge Contract](../../docs/contracts/NativeSwapBridge.md)
+- [CSV Timelocks](../../docs/security/CSV_TIMELOCKS.md)

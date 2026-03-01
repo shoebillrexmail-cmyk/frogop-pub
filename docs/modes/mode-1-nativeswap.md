@@ -378,4 +378,4 @@ private canSettle(option: Option): bool {
 
 - [Mode 2: AMM Pool](./mode-2-amm.md)
 - [NativeSwapBridge Contract](../contracts/NativeSwapBridge.md)
-- [Phase 2 Roadmap](../roadmap/PHASE_2_NATIVE.md)
+- [Phase 2 Roadmap](../../internal/roadmap/PHASE_2_NATIVE.md)

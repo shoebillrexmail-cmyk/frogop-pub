@@ -211,4 +211,4 @@ Eventually, both modes can coexist:
 
 - [Mode 1: NativeSwap Details](./mode-1-nativeswap.md)
 - [Mode 2: AMM Details](./mode-2-amm.md)
-- [Phase 1 MVP Roadmap](../roadmap/PHASE_1_MVP.md)
+- [Phase 1 MVP Roadmap](../../internal/roadmap/PHASE_1_MVP.md)

@@ -393,6 +393,6 @@ private checkUtilization(): void {
 
 ## Next Steps
 
-- [Audit Checklist](./AUDIT_CHECKLIST.md)
+- [Audit Checklist](../../internal/security/AUDIT_CHECKLIST.md)
 - [CSV Timelocks](./CSV_TIMELOCKS.md)
 - [Architecture](../ARCHITECTURE.md)
