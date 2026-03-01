@@ -230,9 +230,9 @@ describe('Pipeline — object-keyed events format', () => {
         // This tests the object-keyed format in collectBlockStatements
         const writtenData = buildOptionWrittenBlock(BLOCK, POOL_HEX).transactions[0]!.events[0]!.data;
 
-        // Create block with object-keyed events
+        // Create block with object-keyed events (rawTransactions matches SDK Block.rawTransactions)
         const objectKeyedBlock = {
-            transactions: [{
+            rawTransactions: [{
                 id: '0xtx_objkeyed',
                 events: {
                     [POOL_HEX]: [{

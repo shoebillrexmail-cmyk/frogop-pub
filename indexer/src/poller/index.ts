@@ -104,9 +104,26 @@ export async function collectBlockStatements(
         return [];
     }
 
-    // OPNet getBlock response: transactions array with embedded events.
-    // tx.events can be either an array or an object keyed by contract address.
-    const rawTxs = (block as unknown as { transactions?: unknown[] }).transactions ?? [];
+    // CRITICAL: use rawTransactions, NOT transactions.
+    // The SDK's parsed .transactions getter converts events to NetEvent objects
+    // (Uint8Array data, bech32 keys) — incompatible with our base64/hex decoder.
+    // rawTransactions preserves the original RPC format: base64 data, hex addresses.
+    const rawTxs = (block as unknown as { rawTransactions?: unknown[] }).rawTransactions ?? [];
+    if (rawTxs.length > 0) {
+        // Log event count per block for diagnostics (only first few blocks)
+        let totalEvents = 0;
+        for (const tx of rawTxs) {
+            const t = tx as Record<string, unknown>;
+            const ev = t['events'];
+            if (Array.isArray(ev)) { totalEvents += ev.length; }
+            else if (ev && typeof ev === 'object') {
+                for (const v of Object.values(ev)) { if (Array.isArray(v)) totalEvents += v.length; }
+            }
+        }
+        if (totalEvents > 0) {
+            console.log(`[poller] Block ${blockNumber}: ${rawTxs.length} tx(s), ${totalEvents} raw event(s)`);
+        }
+    }
     const txs: BlockTx[] = rawTxs.map((tx: unknown) => {
         const t = tx as Record<string, unknown>;
         const rawEvents = t['events'];
@@ -122,7 +139,7 @@ export async function collectBlockStatements(
                 });
             }
         } else if (rawEvents && typeof rawEvents === 'object') {
-            // Events keyed by contract address: { "opt1...": [...], ... }
+            // Events keyed by contract address: { "0xabc...": [...], ... }
             for (const [contractAddr, events] of Object.entries(rawEvents)) {
                 if (!Array.isArray(events)) continue;
                 for (const ev of events) {

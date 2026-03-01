@@ -65,9 +65,9 @@ const mockEnv: Env = {
     NATIVESWAP_LABELS:         'MOTO,PILL',
 };
 
-/** Build a fake block with a transactions array */
+/** Build a fake block with a rawTransactions array (matches SDK Block.rawTransactions) */
 function fakeBlock(txs: Array<{ id: string; events: unknown[] }> = []) {
-    return { transactions: txs };
+    return { rawTransactions: txs };
 }
 
 beforeEach(() => {
