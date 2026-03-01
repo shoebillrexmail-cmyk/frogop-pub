@@ -160,6 +160,13 @@ class OptionTransferredEvent extends NetEvent {
     }
 }
 
+/** Emitted when an option is rolled (cancelled + new option created atomically) */
+class OptionRolledEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('OptionRolled', data);
+    }
+}
+
 /** Emitted when the fee recipient address is updated */
 class FeeRecipientUpdatedEvent extends NetEvent {
     constructor(data: BytesWriter) {
@@ -1008,6 +1015,151 @@ export class OptionsPool extends ReentrancyGuard {
 
         const result = new BytesWriter(1);
         result.writeBoolean(true);
+        return result;
+    }
+
+    // -------------------------------------------------------------------------
+    // ROLL OPTION
+    // -------------------------------------------------------------------------
+
+    @method(
+        { name: 'optionId', type: ABIDataTypes.UINT256 },
+        { name: 'newStrikePrice', type: ABIDataTypes.UINT256 },
+        { name: 'newExpiryBlock', type: ABIDataTypes.UINT64 },
+        { name: 'newPremium', type: ABIDataTypes.UINT256 },
+    )
+    @returns({ name: 'newOptionId', type: ABIDataTypes.UINT256 })
+    @emit('OptionRolled')
+    public rollOption(calldata: Calldata): BytesWriter {
+        const optionId = calldata.readU256();
+        const newStrikePrice = calldata.readU256();
+        const newExpiryBlock = calldata.readU64();
+        const newPremium = calldata.readU256();
+
+        if (!this.options.exists(optionId)) {
+            throw new Revert('Option not found');
+        }
+
+        const option = this.options.get(optionId);
+        const caller = Blockchain.tx.sender;
+
+        if (!caller.equals(option.writer)) {
+            throw new Revert('Not writer');
+        }
+        if (option.status != OPEN) {
+            throw new Revert('Not open');
+        }
+
+        if (newStrikePrice == u256.Zero || newPremium == u256.Zero) {
+            throw new Revert('Values must be > 0');
+        }
+
+        const currentBlock = Blockchain.block.number;
+        if (newExpiryBlock <= currentBlock) {
+            throw new Revert('Expiry in past');
+        }
+        if (newExpiryBlock > currentBlock + MAX_EXPIRY_BLOCKS) {
+            throw new Revert('Expiry too far');
+        }
+
+        // Determine collateral token and compute old / new collateral
+        let collateralToken: Address;
+        let oldCollateral: u256;
+        let newCollateral: u256;
+
+        if (option.optionType == CALL) {
+            collateralToken = this._underlying.value;
+            oldCollateral = option.underlyingAmount;
+            newCollateral = option.underlyingAmount; // immutable for CALL
+        } else {
+            collateralToken = this._premiumToken.value;
+            oldCollateral = SafeMath.mul(option.strikePrice, option.underlyingAmount);
+            newCollateral = SafeMath.mul(newStrikePrice, option.underlyingAmount);
+        }
+
+        // Compute cancel fee on old collateral (0 if expired)
+        let fee: u256;
+        if (currentBlock >= option.expiryBlock) {
+            fee = u256.Zero;
+        } else {
+            fee = SafeMath.div(
+                SafeMath.add(
+                    SafeMath.mul(oldCollateral, u256.fromU64(CANCEL_FEE_BPS)),
+                    u256.fromU64(9999)
+                ),
+                u256.fromU64(10000)
+            );
+        }
+
+        // Mark old option as CANCELLED
+        this.options.setStatus(optionId, CANCELLED);
+
+        // Send cancel fee to feeRecipient
+        if (fee > u256.Zero) {
+            this._transfer(collateralToken, this.feeRecipientStore.value, fee);
+        }
+
+        // Handle net collateral transfer
+        const refundAfterFee = SafeMath.sub(oldCollateral, fee);
+        if (u256.gt(newCollateral, refundAfterFee)) {
+            // Writer needs to top up the difference
+            const topUp = SafeMath.sub(newCollateral, refundAfterFee);
+            this._transferFrom(collateralToken, caller, Blockchain.contractAddress, topUp);
+        } else if (u256.lt(newCollateral, refundAfterFee)) {
+            // Surplus returned to writer
+            const surplus = SafeMath.sub(refundAfterFee, newCollateral);
+            this._transfer(collateralToken, caller, surplus);
+        }
+        // If equal: no transfer needed
+
+        // Create new option with incremented nextId
+        const newOptionId = this._nextId.value;
+        this._nextId.value = SafeMath.add(newOptionId, u256.One);
+
+        const newOption = new Option();
+        newOption.id = newOptionId;
+        newOption.writer = caller;
+        newOption.buyer = Address.zero();
+        newOption.strikePrice = newStrikePrice;
+        newOption.underlyingAmount = option.underlyingAmount;
+        newOption.premium = newPremium;
+        newOption.expiryBlock = newExpiryBlock;
+        newOption.createdBlock = currentBlock;
+        newOption.optionType = option.optionType;
+        newOption.status = OPEN;
+
+        this.options.set(newOptionId, newOption);
+
+        // Emit backward-compatible events for indexer
+        const cancelEvent = new BytesWriter(128);
+        cancelEvent.writeU256(optionId);
+        cancelEvent.writeAddress(caller);
+        cancelEvent.writeU256(SafeMath.sub(oldCollateral, fee));
+        cancelEvent.writeU256(fee);
+        Blockchain.emit(new OptionCancelledEvent(cancelEvent));
+
+        const writeEvent = new BytesWriter(200);
+        writeEvent.writeU256(newOptionId);
+        writeEvent.writeAddress(caller);
+        writeEvent.writeU8(option.optionType);
+        writeEvent.writeU256(newStrikePrice);
+        writeEvent.writeU256(option.underlyingAmount);
+        writeEvent.writeU256(newPremium);
+        writeEvent.writeU64(newExpiryBlock);
+        Blockchain.emit(new OptionWrittenEvent(writeEvent));
+
+        // Emit OptionRolled event
+        const rollEvent = new BytesWriter(228); // 32+32+32+32+8+32 = 168 + padding
+        rollEvent.writeU256(optionId);
+        rollEvent.writeU256(newOptionId);
+        rollEvent.writeAddress(caller);
+        rollEvent.writeU256(newStrikePrice);
+        rollEvent.writeU64(newExpiryBlock);
+        rollEvent.writeU256(newPremium);
+        Blockchain.emit(new OptionRolledEvent(rollEvent));
+
+        const result = new BytesWriter(32);
+        result.writeU256(newOptionId);
         return result;
     }
 

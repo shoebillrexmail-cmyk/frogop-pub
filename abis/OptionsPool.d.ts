@@ -25,6 +25,9 @@ export type OptionExpiredEvent = {
 export type OptionTransferredEvent = {
     readonly data: string;
 };
+export type OptionRolledEvent = {
+    readonly data: string;
+};
 
 // ------------------------------------------------------------------
 // Call Results
@@ -211,6 +214,16 @@ export type TransferOption = CallResult<
 >;
 
 /**
+ * @description Represents the result of the rollOption function call.
+ */
+export type RollOption = CallResult<
+    {
+        newOptionId: bigint;
+    },
+    OPNetEvent<OptionRolledEvent>[]
+>;
+
+/**
  * @description Represents the result of the batchCancel function call.
  */
 export type BatchCancel = CallResult<
@@ -263,6 +276,12 @@ export interface IOptionsPool extends IOP_NETContract {
     exercise(optionId: bigint): Promise<Exercise>;
     settle(optionId: bigint): Promise<Settle>;
     transferOption(optionId: bigint, to: Address): Promise<TransferOption>;
+    rollOption(
+        optionId: bigint,
+        newStrikePrice: bigint,
+        newExpiryBlock: bigint,
+        newPremium: bigint,
+    ): Promise<RollOption>;
     batchCancel(count: bigint, id0: bigint, id1: bigint, id2: bigint, id3: bigint, id4: bigint): Promise<BatchCancel>;
     batchSettle(count: bigint, id0: bigint, id1: bigint, id2: bigint, id3: bigint, id4: bigint): Promise<BatchSettle>;
 }

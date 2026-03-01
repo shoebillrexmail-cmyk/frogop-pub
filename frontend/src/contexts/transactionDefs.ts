@@ -10,7 +10,7 @@ import { createContext } from 'react';
 // Types
 // ---------------------------------------------------------------------------
 
-export type TxType = 'approve' | 'writeOption' | 'buyOption' | 'cancelOption' | 'exercise' | 'settle' | 'transferOption' | 'batchCancel' | 'batchSettle';
+export type TxType = 'approve' | 'writeOption' | 'buyOption' | 'cancelOption' | 'exercise' | 'settle' | 'transferOption' | 'batchCancel' | 'batchSettle' | 'rollOption';
 export type TxStatus = 'broadcast' | 'pending' | 'confirmed' | 'failed';
 
 export interface TrackedTransaction {

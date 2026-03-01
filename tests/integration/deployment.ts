@@ -440,6 +440,21 @@ export function createBatchSettleCalldata(optionIds: bigint[]): Uint8Array {
     return writer.getBuffer();
 }
 
+export function createRollOptionCalldata(
+    optionId: bigint,
+    newStrikePrice: bigint,
+    newExpiryBlock: bigint,
+    newPremium: bigint
+): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(POOL_SELECTORS.rollOption);
+    writer.writeU256(optionId);
+    writer.writeU256(newStrikePrice);
+    writer.writeU64(newExpiryBlock);
+    writer.writeU256(newPremium);
+    return writer.getBuffer();
+}
+
 export function getWasmPath(contractName: string): string {
     return path.join(process.cwd(), 'build', `${contractName}.wasm`);
 }

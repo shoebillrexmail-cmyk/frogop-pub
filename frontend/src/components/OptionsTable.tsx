@@ -26,6 +26,7 @@ interface OptionsTableProps {
     onCancel?: (option: OptionData) => void;
     onExercise?: (option: OptionData) => void;
     onSettle?: (option: OptionData) => void;
+    onRoll?: (option: OptionData) => void;
     onBatchCancel?: (options: OptionData[]) => void;
     onBatchSettle?: (options: OptionData[]) => void;
 }
@@ -78,6 +79,7 @@ function RowAction({
     onCancel,
     onExercise,
     onSettle,
+    onRoll,
 }: {
     option: OptionData;
     walletHex: string | null;
@@ -87,6 +89,7 @@ function RowAction({
     onCancel?: (o: OptionData) => void;
     onExercise?: (o: OptionData) => void;
     onSettle?: (o: OptionData) => void;
+    onRoll?: (o: OptionData) => void;
 }) {
     const isWriter = walletHex !== null && option.writer.toLowerCase() === walletHex.toLowerCase();
     const isBuyer =
@@ -101,13 +104,22 @@ function RowAction({
     if (option.status === OptionStatus.OPEN) {
         if (isWriter) {
             return (
-                <button
-                    className="btn-secondary px-3 py-1 text-xs rounded"
-                    onClick={() => onCancel?.(option)}
-                    data-testid={`cancel-${option.id}`}
-                >
-                    Cancel
-                </button>
+                <div className="flex gap-1">
+                    <button
+                        className="btn-secondary px-3 py-1 text-xs rounded"
+                        onClick={() => onCancel?.(option)}
+                        data-testid={`cancel-${option.id}`}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        className="btn-secondary px-3 py-1 text-xs rounded"
+                        onClick={() => onRoll?.(option)}
+                        data-testid={`roll-${option.id}`}
+                    >
+                        Roll
+                    </button>
+                </div>
             );
         }
         return (
@@ -174,6 +186,7 @@ export function OptionsTable({
     onCancel,
     onExercise,
     onSettle,
+    onRoll,
     onBatchCancel,
     onBatchSettle,
 }: OptionsTableProps) {
@@ -385,6 +398,7 @@ export function OptionsTable({
                                             onCancel={onCancel}
                                             onExercise={onExercise}
                                             onSettle={onSettle}
+                                            onRoll={onRoll}
                                         />
                                     </td>
                                 </tr>

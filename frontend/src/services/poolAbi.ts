@@ -81,6 +81,17 @@ export const POOL_WRITE_ABI: BitcoinInterfaceAbi = [
         ],
         outputs: [{ name: 'settledCount', type: ABIDataTypes.UINT256 }],
     },
+    {
+        name: 'rollOption',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'optionId', type: ABIDataTypes.UINT256 },
+            { name: 'newStrikePrice', type: ABIDataTypes.UINT256 },
+            { name: 'newExpiryBlock', type: ABIDataTypes.UINT64 },
+            { name: 'newPremium', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'newOptionId', type: ABIDataTypes.UINT256 }],
+    },
 ];
 
 /** ABI for OP20 token approve (increaseAllowance) */

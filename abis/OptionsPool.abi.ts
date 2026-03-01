@@ -36,6 +36,11 @@ export const OptionsPoolEvents = [
         values: [{ name: 'data', type: ABIDataTypes.STRING }],
         type: BitcoinAbiTypes.Event,
     },
+    {
+        name: 'OptionRolled',
+        values: [{ name: 'data', type: ABIDataTypes.STRING }],
+        type: BitcoinAbiTypes.Event,
+    },
 ];
 
 export const OptionsPoolAbi = [
@@ -179,6 +184,17 @@ export const OptionsPoolAbi = [
             { name: 'to', type: ABIDataTypes.ADDRESS },
         ],
         outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'rollOption',
+        inputs: [
+            { name: 'optionId', type: ABIDataTypes.UINT256 },
+            { name: 'newStrikePrice', type: ABIDataTypes.UINT256 },
+            { name: 'newExpiryBlock', type: ABIDataTypes.UINT64 },
+            { name: 'newPremium', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'newOptionId', type: ABIDataTypes.UINT256 }],
         type: BitcoinAbiTypes.Function,
     },
     {

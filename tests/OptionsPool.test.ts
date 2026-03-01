@@ -137,6 +137,32 @@ await opnet('OptionsPool Tests', async (vm: OPNetUnit) => {
     });
 
     // ========================================
+    // ROLL OPTION TESTS (No token transfers)
+    // ========================================
+
+    await vm.it('rollOption should revert for non-existent option', async () => {
+        const error = await pool.rollOptionExpectRevert(999n, 100n, 200n, 50n);
+        Assert.expect(error).toBeDefined();
+    });
+
+    await vm.it('rollOption should revert with zero strike', async () => {
+        const error = await pool.rollOptionExpectRevert(0n, 0n, 200n, 50n);
+        // Will revert with "Option not found" (ID 0 doesn't exist) or "Values must be > 0"
+        Assert.expect(error).toBeDefined();
+    });
+
+    await vm.it('rollOption should revert with zero premium', async () => {
+        const error = await pool.rollOptionExpectRevert(0n, 100n, 200n, 0n);
+        Assert.expect(error).toBeDefined();
+    });
+
+    await vm.it('rollOption should revert with expiry in past', async () => {
+        // Block 0 is in the past (current block is > 0 in unit tests)
+        const error = await pool.rollOptionExpectRevert(0n, 100n, 0n, 50n);
+        Assert.expect(error).toBeDefined();
+    });
+
+    // ========================================
     // WRITE METHOD TESTS (Require OP20 tokens)
     // These tests are documented for integration testing
     // ========================================

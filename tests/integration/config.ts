@@ -221,6 +221,8 @@ export const POOL_SELECTORS = {
     batchSettle: computeSelectorU32('batchSettle(uint256,uint256,uint256,uint256,uint256,uint256)'),
     batchCancelView: computeSelector('batchCancel(uint256,uint256,uint256,uint256,uint256,uint256)'),
     batchSettleView: computeSelector('batchSettle(uint256,uint256,uint256,uint256,uint256,uint256)'),
+    rollOption: computeSelectorU32('rollOption(uint256,uint256,uint64,uint256)'),
+    rollOptionView: computeSelector('rollOption(uint256,uint256,uint64,uint256)'),
 };
 
 /** OptionsFactory method selectors */

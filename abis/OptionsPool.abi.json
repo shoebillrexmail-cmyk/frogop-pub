@@ -320,6 +320,36 @@
             ]
         },
         {
+            "name": "rollOption",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "newStrikePrice",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "newExpiryBlock",
+                    "type": "UINT64"
+                },
+                {
+                    "name": "newPremium",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "newOptionId",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
             "name": "batchCancel",
             "type": "Function",
             "payable": false,
@@ -459,6 +489,16 @@
         },
         {
             "name": "OptionTransferred",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionRolled",
             "values": [
                 {
                     "name": "data",

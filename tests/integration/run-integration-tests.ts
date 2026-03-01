@@ -19,6 +19,7 @@ async function main() {
         { name: 'Query method tests', cmd: 'npx tsx tests/integration/07-query-methods.ts' },
         { name: 'Option transfer tests', cmd: 'npx tsx tests/integration/08-option-transfer.ts' },
         { name: 'Batch operation tests', cmd: 'npx tsx tests/integration/09-batch-operations.ts' },
+        { name: 'Roll option tests', cmd: 'npx tsx tests/integration/10-roll-option.ts' },
     ];
 
     const results: { name: string; passed: boolean }[] = [];

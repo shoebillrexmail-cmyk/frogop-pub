@@ -25,6 +25,7 @@ class OptionsPoolTestRuntime extends ContractRuntime {
     private readonly transferOptionSelector: number;
     private readonly batchCancelSelector: number;
     private readonly batchSettleSelector: number;
+    private readonly rollOptionSelector: number;
     private readonly _underlying: Address;
     private readonly _premiumToken: Address;
 
@@ -64,6 +65,7 @@ class OptionsPoolTestRuntime extends ContractRuntime {
         this.transferOptionSelector = Number(`0x${this.abiCoder.encodeSelector('transferOption(uint256,address)')}`);
         this.batchCancelSelector = Number(`0x${this.abiCoder.encodeSelector('batchCancel(uint256,uint256,uint256,uint256,uint256,uint256)')}`);
         this.batchSettleSelector = Number(`0x${this.abiCoder.encodeSelector('batchSettle(uint256,uint256,uint256,uint256,uint256,uint256)')}`);
+        this.rollOptionSelector = Number(`0x${this.abiCoder.encodeSelector('rollOption(uint256,uint256,uint64,uint256)')}`);
     }
 
     defineRequiredBytecodes(): void {
@@ -351,6 +353,54 @@ class OptionsPoolTestRuntime extends ContractRuntime {
 
         const reader = new BinaryReader(result.response);
         return reader.readU256();
+    }
+
+    async rollOption(
+        optionId: bigint,
+        newStrikePrice: bigint,
+        newExpiryBlock: bigint,
+        newPremium: bigint,
+    ): Promise<bigint> {
+        const writer = new BinaryWriter();
+        writer.writeSelector(this.rollOptionSelector);
+        writer.writeU256(optionId);
+        writer.writeU256(newStrikePrice);
+        writer.writeU64(newExpiryBlock);
+        writer.writeU256(newPremium);
+
+        const result = await this.executeThrowOnError({
+            calldata: writer.getBuffer(),
+            sender: Blockchain.msgSender,
+            txOrigin: Blockchain.txOrigin,
+        });
+
+        const reader = new BinaryReader(result.response);
+        return reader.readU256();
+    }
+
+    async rollOptionExpectRevert(
+        optionId: bigint,
+        newStrikePrice: bigint,
+        newExpiryBlock: bigint,
+        newPremium: bigint,
+    ): Promise<Error> {
+        const writer = new BinaryWriter();
+        writer.writeSelector(this.rollOptionSelector);
+        writer.writeU256(optionId);
+        writer.writeU256(newStrikePrice);
+        writer.writeU64(newExpiryBlock);
+        writer.writeU256(newPremium);
+
+        try {
+            await this.executeThrowOnError({
+                calldata: writer.getBuffer(),
+                sender: Blockchain.msgSender,
+                txOrigin: Blockchain.txOrigin,
+            });
+            throw new Error('Expected revert but transaction succeeded');
+        } catch (e) {
+            return e as Error;
+        }
     }
 
     async batchCancelExpectRevert(optionIds: bigint[]): Promise<Error> {
