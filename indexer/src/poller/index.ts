@@ -25,6 +25,7 @@ import {
     stmtPruneOldSwapEvents,
     getSnapshotsInRange,
     getSwapEventsInBlockRange,
+    upsertPool,
 } from '../db/queries.js';
 import { decodeBlock } from '../decoder/index.js';
 
@@ -36,6 +37,16 @@ export async function pollNewBlocks(env: Env): Promise<void> {
 
     const poolHexSet = await resolvePoolAddresses(env, provider);
     const swapConfig = resolveSwapConfig(env);
+
+    // Ensure pool rows exist in D1 (FK constraint: options.pool_address → pools.address)
+    for (const hex of poolHexSet) {
+        await upsertPool(env.DB, {
+            address: hex, address_hex: hex,
+            underlying: '', premium_token: '', fee_recipient: '',
+            created_block: 0, created_tx: '',
+            indexed_at: new Date().toISOString(),
+        });
+    }
 
     const lastIndexed = await getLastIndexedBlock(env.DB);
     const latestBlock = Number(await provider.getBlockNumber());

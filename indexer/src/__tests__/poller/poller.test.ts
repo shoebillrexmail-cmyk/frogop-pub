@@ -21,6 +21,7 @@ vi.mock('../../db/queries.js', () => ({
     stmtPruneOldSwapEvents:  vi.fn((_db: unknown, _c: unknown) => ({ _prune: 'swaps' })),
     getSnapshotsInRange:     vi.fn().mockResolvedValue([]),
     getSwapEventsInBlockRange: vi.fn().mockResolvedValue([]),
+    upsertPool:              vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../decoder/index.js', () => ({
