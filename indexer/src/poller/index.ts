@@ -29,12 +29,13 @@ import {
 import { decodeBlock } from '../decoder/index.js';
 
 export async function pollNewBlocks(env: Env): Promise<void> {
-    const maxBlocksPerRun = parseInt(env.MAX_BLOCKS_PER_RUN, 10) || 50;
-    const poolHexSet      = await resolvePoolAddresses(env);
-    const swapConfig      = resolveSwapConfig(env);
+    const maxBlocksPerRun = parseInt(env.MAX_BLOCKS_PER_RUN, 10) || 20;
 
     const network = resolveNetwork(env.OPNET_NETWORK);
     const provider = new JSONRpcProvider({ url: env.OPNET_RPC_URL, network });
+
+    const poolHexSet = await resolvePoolAddresses(env, provider);
+    const swapConfig = resolveSwapConfig(env);
 
     const lastIndexed = await getLastIndexedBlock(env.DB);
     const latestBlock = Number(await provider.getBlockNumber());
@@ -46,41 +47,55 @@ export async function pollNewBlocks(env: Env): Promise<void> {
 
     const from = lastIndexed + 1;
     const to   = Math.min(latestBlock, lastIndexed + maxBlocksPerRun);
-    console.log(`[poller] Syncing blocks ${from} → ${to} (latest=${latestBlock})`);
+    const catching_up = to < latestBlock;
+    console.log(`[poller] Syncing blocks ${from} → ${to} (latest=${latestBlock}, behind=${latestBlock - to})`);
 
     // Build swap label map for event decoding (routerHex → label per token)
-    // For SwapExecuted events, we track the router contract; labels are resolved
-    // from event data, but we still need to know which contracts to watch.
     const swapLabelMap = new Map<string, string>();
     if (swapConfig) {
-        // Map the router address so decodeBlock watches it for SwapExecuted events
-        // Use first label as default — SwapExecuted events include buyer/amounts but
-        // not which token was swapped, so event labeling is best-effort for now.
         const firstLabel = swapConfig.tokenMap.values().next().value as string;
         swapLabelMap.set(swapConfig.routerHex, firstLabel);
     }
 
+    // Collect ALL block statements into a single batch to minimize D1 subrequests.
+    // Previous approach: 1 db.batch() per block = N subrequests.
+    // New approach: 1 db.batch() for all blocks = 1 subrequest.
+    const allStmts: D1PreparedStatement[] = [];
+
     for (let n = from; n <= to; n++) {
-        await processBlock(env.DB, provider, n, poolHexSet, swapLabelMap);
+        const stmts = await collectBlockStatements(provider, n, env.DB, poolHexSet, swapLabelMap);
+        allStmts.push(...stmts);
     }
 
-    // After block sync: poll spot prices + rollup candles + prune old data
+    // Final cursor update for the last block processed
+    allStmts.push(stmtSetLastIndexedBlock(env.DB, to));
+
+    // Commit everything atomically in one D1 batch
+    await env.DB.batch(allStmts);
+    console.log(`[poller] Committed ${allStmts.length} statement(s) for blocks ${from}-${to}`);
+
+    // After block sync: poll spot prices
     await pollPrices(env, provider, swapConfig, latestBlock);
-    await rollUpAllCandles(env.DB);
-    await pruneOldData(env.DB, latestBlock);
+
+    // Only roll up candles + prune when near tip (saves ~20 D1 subrequests during catch-up)
+    if (!catching_up) {
+        await rollUpAllCandles(env.DB);
+        await pruneOldData(env.DB, latestBlock);
+    }
 }
 
-async function processBlock(
-    db: D1Database,
+/** Fetch a block and return D1 statements for its events (no DB writes). */
+async function collectBlockStatements(
     provider: JSONRpcProvider,
     blockNumber: number,
+    db: D1Database,
     trackedPools: Set<string>,
     swapLabelMap: Map<string, string> = new Map(),
-): Promise<void> {
+): Promise<D1PreparedStatement[]> {
     const block = await provider.getBlock(BigInt(blockNumber), true);
     if (!block) {
         console.warn(`[poller] Block ${blockNumber} not found, skipping`);
-        return;
+        return [];
     }
 
     // OPNet getBlock response: transactions array with embedded events.
@@ -121,15 +136,11 @@ async function processBlock(
     // Decode events → D1 prepared statements
     const eventStmts = decodeBlock(db, blockNumber, txs, trackedPools, swapLabelMap);
 
-    // Always update the cursor, even if no events (so we don't re-scan empty blocks)
-    const cursorStmt = stmtSetLastIndexedBlock(db, blockNumber);
-
-    // Commit everything atomically in one D1 batch
-    await db.batch([...eventStmts, cursorStmt]);
-
     if (eventStmts.length > 0) {
-        console.log(`[poller] Block ${blockNumber}: wrote ${eventStmts.length} statement(s)`);
+        console.log(`[poller] Block ${blockNumber}: ${eventStmts.length} event statement(s)`);
     }
+
+    return eventStmts;
 }
 
 // ---------------------------------------------------------------------------
@@ -138,11 +149,9 @@ async function processBlock(
 // OPNet events use 0x hex addresses. Pool addresses in config are bech32 (opt1...).
 // We resolve them once per cron invocation using getPublicKeyInfo.
 // TODO: cache resolved hex in D1 `indexer_state` to avoid repeated RPC calls.
-async function resolvePoolAddresses(env: Env): Promise<Set<string>> {
+async function resolvePoolAddresses(env: Env, provider: JSONRpcProvider): Promise<Set<string>> {
     const bech32Addresses = env.POOL_ADDRESSES.split(' ').filter(Boolean);
-    const network = resolveNetwork(env.OPNET_NETWORK);
-    const provider = new JSONRpcProvider({ url: env.OPNET_RPC_URL, network });
-    const hexSet   = new Set<string>();
+    const hexSet = new Set<string>();
 
     for (const addr of bech32Addresses) {
         try {
