@@ -1,6 +1,6 @@
 name = "frogop-indexer"
 main = "src/worker.ts"
-compatibility_date = "2026-01-01"
+compatibility_date = "2026-03-01"
 
 # nodejs_compat: polyfills Buffer, process, etc. required by opnet + @btc-vision packages
 compatibility_flags = ["nodejs_compat"]
