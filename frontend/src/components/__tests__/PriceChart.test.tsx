@@ -129,7 +129,7 @@ describe('PriceChart', () => {
     });
 
     it('highlights the active token button', () => {
-        const { container } = render(<PriceChart {...defaultProps} token="PILL" />);
+        render(<PriceChart {...defaultProps} token="PILL" />);
         // The active button has bg-accent class
         const pillBtn = screen.getByText('PILL');
         expect(pillBtn.className).toContain('bg-accent');

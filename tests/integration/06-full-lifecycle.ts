@@ -1600,16 +1600,11 @@ async function main() {
         let putOptionId: bigint | null = null;
 
         // Record PILL balances before PUT write
-        let prePutWriterPill = 0n;
         let prePutPoolPill = 0n;
         let prePutFeePill = 0n;
         {
-            const writerCd = buildBalanceOfCalldata(walletHex);
             const poolCd = buildBalanceOfCalldata(poolCallAddr);
             const feeCd = poolFeeRecipientHex ? buildBalanceOfCalldata(poolFeeRecipientHex) : null;
-
-            const wr = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + writerCd);
-            if (!isCallError(wr) && !wr.revert) prePutWriterPill = wr.result.readU256();
 
             const pr = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + poolCd);
             if (!isCallError(pr) && !pr.revert) prePutPoolPill = pr.result.readU256();

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { JSONRpcProvider } from 'opnet';
 import type { CallResult, ICallRequestError } from 'opnet';
-import { Address, AddressTypes, BinaryWriter } from '@btc-vision/transaction';
+import { Address, BinaryWriter } from '@btc-vision/transaction';
 import {
     getConfig,
     loadDeployedContracts,
