@@ -104,13 +104,13 @@ describe('QuickStrategies', () => {
         it('shows best put details when a suitable put exists', () => {
             const put = makeOpenPut(1n, 43.75); // 87.5% of 50
             render(<QuickStrategies {...DEFAULT_PROPS} options={[put]} />);
-            // Should show the put strike
             expect(screen.getByTestId('strategy-protective-put')).toHaveTextContent('43.7500');
         });
 
-        it('disables button when no suitable put found', () => {
+        it('disables Buy Put button when no suitable put found', () => {
             render(<QuickStrategies {...DEFAULT_PROPS} options={[]} />);
             expect(screen.getByTestId('strategy-protective-put-btn')).toBeDisabled();
+            expect(screen.getByTestId('strategy-protective-put-btn')).toHaveTextContent('No puts available');
         });
 
         it('shows no puts message when none available', () => {
@@ -124,6 +124,31 @@ describe('QuickStrategies', () => {
             render(<QuickStrategies {...DEFAULT_PROPS} options={[put]} onProtectivePut={onProtectivePut} />);
             fireEvent.click(screen.getByTestId('strategy-protective-put-btn'));
             expect(onProtectivePut).toHaveBeenCalledWith(put);
+        });
+
+        it('shows Write a Put button when onWritePut is provided', () => {
+            const onWritePut = vi.fn();
+            render(<QuickStrategies {...DEFAULT_PROPS} onWritePut={onWritePut} />);
+            expect(screen.getByTestId('strategy-write-put-btn')).toBeInTheDocument();
+            expect(screen.getByTestId('strategy-write-put-btn')).toHaveTextContent(/Write a Put/);
+        });
+
+        it('shows Write a Put alongside Buy Put when put exists', () => {
+            const put = makeOpenPut(1n, 43.75);
+            const onWritePut = vi.fn();
+            render(<QuickStrategies {...DEFAULT_PROPS} options={[put]} onWritePut={onWritePut} />);
+            // Both buttons visible simultaneously
+            expect(screen.getByTestId('strategy-protective-put-btn')).toBeEnabled();
+            expect(screen.getByTestId('strategy-write-put-btn')).toBeInTheDocument();
+        });
+
+        it('calls onWritePut on Write a Put click', () => {
+            const onWritePut = vi.fn();
+            render(<QuickStrategies {...DEFAULT_PROPS} onWritePut={onWritePut} />);
+            fireEvent.click(screen.getByTestId('strategy-write-put-btn'));
+            expect(onWritePut).toHaveBeenCalledOnce();
+            const args = onWritePut.mock.calls[0][0];
+            expect(args.optionType).toBe(OptionType.PUT);
         });
     });
 

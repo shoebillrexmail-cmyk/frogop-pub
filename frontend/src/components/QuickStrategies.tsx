@@ -144,43 +144,31 @@ export function QuickStrategies({
                 disabled={noPrice}
                 testId="strategy-protective-put"
                 action={
-                    !walletConnected ? (
+                    <div className="space-y-2">
+                        {/* Buy Put — always visible, disabled when no put or no wallet */}
                         <button
-                            disabled
+                            onClick={() => bestPut && onProtectivePut(bestPut)}
+                            disabled={noPrice || !bestPut || !walletConnected}
                             className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
                             data-testid="strategy-protective-put-btn"
                         >
-                            Connect wallet to trade
+                            {!walletConnected ? 'Connect wallet to trade' : bestPut ? 'Buy Put' : 'No puts available'}
                         </button>
-                    ) : bestPut ? (
-                        <button
-                            onClick={() => onProtectivePut(bestPut)}
-                            disabled={noPrice}
-                            className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
-                            data-testid="strategy-protective-put-btn"
-                        >
-                            Buy Put
-                        </button>
-                    ) : onWritePut && !noPrice ? (
-                        <button
-                            onClick={() => {
-                                const params = calcWritePutParams(motoPillRatio!, motoBal);
-                                if (params) onWritePut(params);
-                            }}
-                            className="w-full btn-primary py-2 text-xs font-mono rounded"
-                            data-testid="strategy-write-put-btn"
-                        >
-                            Write a Put
-                        </button>
-                    ) : (
-                        <button
-                            disabled
-                            className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
-                            data-testid="strategy-protective-put-btn"
-                        >
-                            Buy Put
-                        </button>
-                    )
+                        {/* Write a Put — always visible when onWritePut provided */}
+                        {onWritePut && (
+                            <button
+                                onClick={() => {
+                                    const params = calcWritePutParams(motoPillRatio!, motoBal);
+                                    if (params) onWritePut(params);
+                                }}
+                                disabled={noPrice || !walletConnected}
+                                className="w-full btn-outline py-2 text-xs font-mono rounded border border-terminal-border-subtle hover:border-accent/50 disabled:opacity-50 transition-colors"
+                                data-testid="strategy-write-put-btn"
+                            >
+                                {!walletConnected ? 'Connect wallet to write' : 'Write a Put — Earn premium'}
+                            </button>
+                        )}
+                    </div>
                 }
             >
                 <p className="text-[10px] text-gray-500 font-mono">80–95% of spot (OTM)</p>
@@ -202,16 +190,9 @@ export function QuickStrategies({
                         <p className="text-[10px] text-terminal-text-muted">Max loss: premium paid</p>
                     </div>
                 ) : (
-                    <div className="text-xs font-mono space-y-1">
-                        <p className="text-terminal-text-muted">
-                            No puts in the 80–95% range yet.
-                        </p>
-                        {walletConnected && onWritePut && (
-                            <p className="text-terminal-text-muted text-[10px]">
-                                Write one to earn premium while helping others hedge.
-                            </p>
-                        )}
-                    </div>
+                    <p className="text-xs text-terminal-text-muted font-mono">
+                        No puts in the 80–95% range yet — write one to seed liquidity.
+                    </p>
                 )}
             </StrategyCard>
 
