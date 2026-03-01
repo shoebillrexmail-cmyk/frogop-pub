@@ -37,7 +37,7 @@ FACTORY_ADDRESS  = "opt1sqz4wm6z6gy2rrfsqxf0tuh6tkyn32eerkg57nrka"
 MAX_BLOCKS_PER_RUN = "20"
 # NativeSwap price tracking
 # Router: the single NativeSwap contract (0x-prefixed hex)
-NATIVESWAP_CONTRACT = "0xb056ba05448cf4a5468b3e1190b0928443981a93c3aff568467f101e94302422"
+NATIVESWAP_CONTRACT = "0x4397befe4e067390596b3c296e77fe86589487bf3bf3f0a9a93ce794e2d78fb5"
 # Token addresses to poll getQuote for (space-separated, 0x-prefixed hex)
 # MOTO = 0xfd44..., PILL = 0xb09f...
 NATIVESWAP_TOKEN_ADDRESSES = "0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd 0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb"
