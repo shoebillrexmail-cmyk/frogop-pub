@@ -420,11 +420,12 @@ async function main() {
     });
 
     await runTest('Pool: Calculate PUT collateral', async () => {
-        // PUT collateral = strikePrice * underlyingAmount
+        // PUT collateral = (strikePrice * underlyingAmount) / PRECISION
+        // With 18-decimal encoding: (50e18 * 100e18) / 1e18 = 5000e18 = 5000 PILL
         const writer = new BinaryWriter();
         writer.writeU8(1); // PUT
-        writer.writeU256(50n); // strikePrice (raw)
-        writer.writeU256(100n); // underlyingAmount (raw)
+        writer.writeU256(50n * 10n ** 18n); // strikePrice (18-decimal)
+        writer.writeU256(100n * 10n ** 18n); // underlyingAmount (18-decimal)
         const calldata = Buffer.from(writer.getBuffer()).toString('hex');
 
         const result = await provider.call(
@@ -440,7 +441,8 @@ async function main() {
         }
 
         const collateral = result.result.readU256();
-        const expectedCollateral = 50n * 100n; // PUT = strikePrice * underlyingAmount
+        // (50e18 * 100e18) / 1e18 = 5000e18
+        const expectedCollateral = 5000n * 10n ** 18n;
         log.info(`  PUT collateral: ${collateral}`);
 
         if (collateral !== expectedCollateral) {

@@ -72,9 +72,10 @@ export function RollModal({
     const isCall = option.optionType === OptionType.CALL;
     const collateralToken = isCall ? 'MOTO' : 'PILL';
 
+    // Fixed-point: (strike * amount) / 1e18 — both are 18-decimal
     const oldCollateral = isCall
         ? option.underlyingAmount
-        : option.strikePrice * option.underlyingAmount;
+        : (option.strikePrice * option.underlyingAmount) / (10n ** 18n);
 
     const parsedStrike = useMemo(() => {
         try { return BigInt(newStrike); } catch { return 0n; }

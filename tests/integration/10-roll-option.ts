@@ -157,11 +157,11 @@ async function main() {
     await runTest('Setup: Write CALL option for roll test', async () => {
         const expiryBlock = currentBlock + 500n;
         const calldata = createWriteOptionCalldata(
-            0,        // CALL
-            50n,      // strikePrice
+            0,                      // CALL
+            50n * 10n ** 18n,       // strikePrice (18-decimal)
             expiryBlock,
-            1000n,    // underlyingAmount
-            100n,     // premium
+            1n * 10n ** 18n,        // underlyingAmount (18-decimal)
+            5n * 10n ** 18n,        // premium (18-decimal)
         );
         await writerHelper.callContract(poolAddress, calldata, 50_000n);
         const count = await readOptionCount(provider, poolCallAddr);
@@ -173,11 +173,11 @@ async function main() {
     await runTest('Setup: Write PUT option for roll test', async () => {
         const expiryBlock = currentBlock + 500n;
         const calldata = createWriteOptionCalldata(
-            1,        // PUT
-            50n,      // strikePrice
+            1,                      // PUT
+            50n * 10n ** 18n,       // strikePrice (18-decimal)
             expiryBlock,
-            1000n,    // underlyingAmount
-            100n,     // premium
+            1n * 10n ** 18n,        // underlyingAmount (18-decimal)
+            5n * 10n ** 18n,        // premium (18-decimal)
         );
         await writerHelper.callContract(poolAddress, calldata, 50_000n);
         const count = await readOptionCount(provider, poolCallAddr);
@@ -193,9 +193,9 @@ async function main() {
     await runTest('Roll CALL option: verify old CANCELLED, new OPEN', async () => {
         if (callOptionId < 0n) throw new Error('CALL option not created');
 
-        const newStrike = 75n;
+        const newStrike = 75n * 10n ** 18n;   // 75 PILL (18-decimal)
         const newExpiry = currentBlock + 1000n;
-        const newPremium = 150n;
+        const newPremium = 8n * 10n ** 18n;    // 8 PILL (18-decimal)
 
         const calldata = createRollOptionCalldata(callOptionId, newStrike, newExpiry, newPremium);
         const { txId } = await writerHelper.callContract(poolAddress, calldata, 50_000n);
@@ -220,8 +220,8 @@ async function main() {
         if (newOption.premium !== newPremium) {
             log.warn(`  New premium: ${newOption.premium}, expected ${newPremium}`);
         }
-        if (newOption.underlyingAmount !== 1000n) {
-            log.warn(`  New amount: ${newOption.underlyingAmount}, expected 1000`);
+        if (newOption.underlyingAmount !== 1n * 10n ** 18n) {
+            log.warn(`  New amount: ${newOption.underlyingAmount}, expected ${1n * 10n ** 18n}`);
         }
 
         return {
@@ -241,9 +241,9 @@ async function main() {
     await runTest('Roll PUT option: higher strike requires top-up', async () => {
         if (putOptionId < 0n) throw new Error('PUT option not created');
 
-        const newStrike = 80n; // higher than original 50 => more collateral
+        const newStrike = 80n * 10n ** 18n; // higher than original 50 => more collateral (18-decimal)
         const newExpiry = currentBlock + 1000n;
-        const newPremium = 120n;
+        const newPremium = 6n * 10n ** 18n; // 6 PILL (18-decimal)
 
         const calldata = createRollOptionCalldata(putOptionId, newStrike, newExpiry, newPremium);
         const { txId } = await writerHelper.callContract(poolAddress, calldata, 50_000n);
@@ -279,14 +279,14 @@ async function main() {
 
     await runTest('Setup: Write and buy option for revert test', async () => {
         const expiryBlock = currentBlock + 500n;
-        const writeCalldata = createWriteOptionCalldata(0, 50n, expiryBlock, 1000n, 100n);
+        const writeCalldata = createWriteOptionCalldata(0, 50n * 10n ** 18n, expiryBlock, 1n * 10n ** 18n, 5n * 10n ** 18n);
         await writerHelper.callContract(poolAddress, writeCalldata, 50_000n);
         const count = await readOptionCount(provider, poolCallAddr);
         purchasedOptionId = count - 1n;
 
         // Buyer approves and buys
         const poolAddr = Address.fromString(poolCallAddr);
-        const approveCalldata = createIncreaseAllowanceCalldata(poolAddr, 100000n);
+        const approveCalldata = createIncreaseAllowanceCalldata(poolAddr, 100n * 10n ** 18n);
         await buyerHelper.callContract(deployed.tokens.frogP, approveCalldata, 10_000n);
 
         const buyCalldata = createBuyOptionCalldata(purchasedOptionId);
@@ -299,7 +299,7 @@ async function main() {
         if (purchasedOptionId < 0n) throw new Error('Purchased option not created');
 
         try {
-            const calldata = createRollOptionCalldata(purchasedOptionId, 100n, currentBlock + 1000n, 50n);
+            const calldata = createRollOptionCalldata(purchasedOptionId, 60n * 10n ** 18n, currentBlock + 1000n, 5n * 10n ** 18n);
             await writerHelper.callContract(poolAddress, calldata, 50_000n);
             return { result: 'TX broadcast - verify on-chain revert for Not open' };
         } catch (error) {
@@ -316,14 +316,14 @@ async function main() {
     await runTest('Revert: roll by non-writer', async () => {
         // Write a new OPEN option as writer
         const expiryBlock = currentBlock + 500n;
-        const writeCalldata = createWriteOptionCalldata(0, 50n, expiryBlock, 1000n, 100n);
+        const writeCalldata = createWriteOptionCalldata(0, 50n * 10n ** 18n, expiryBlock, 1n * 10n ** 18n, 5n * 10n ** 18n);
         await writerHelper.callContract(poolAddress, writeCalldata, 50_000n);
         const count = await readOptionCount(provider, poolCallAddr);
         const targetId = count - 1n;
 
         try {
             // Buyer (non-writer) attempts to roll
-            const calldata = createRollOptionCalldata(targetId, 100n, currentBlock + 1000n, 50n);
+            const calldata = createRollOptionCalldata(targetId, 60n * 10n ** 18n, currentBlock + 1000n, 5n * 10n ** 18n);
             await buyerHelper.callContract(poolAddress, calldata, 50_000n);
             return { result: 'TX broadcast - verify on-chain revert for Not writer' };
         } catch (error) {

@@ -161,11 +161,11 @@ async function main() {
 
         for (let i = 0; i < 3; i++) {
             const calldata = createWriteOptionCalldata(
-                0,             // CALL
-                50n,           // strikePrice
-                expiryBlock,   // expiryBlock
-                1000n,         // underlyingAmount
-                100n,          // premium
+                0,                      // CALL
+                50n * 10n ** 18n,       // strikePrice (18-decimal)
+                expiryBlock,            // expiryBlock
+                1n * 10n ** 18n,        // underlyingAmount (18-decimal)
+                5n * 10n ** 18n,        // premium (18-decimal)
             );
             await writerHelper.callContract(poolAddress, calldata, 50_000n);
             const count = await readOptionCount(provider, poolCallAddr);
@@ -185,7 +185,7 @@ async function main() {
 
         // Buyer approves pool for premium tokens
         const poolAddr = Address.fromString(poolCallAddr);
-        const approveCalldata = createIncreaseAllowanceCalldata(poolAddr, 100000n);
+        const approveCalldata = createIncreaseAllowanceCalldata(poolAddr, 100n * 10n ** 18n);
         await buyerHelper.callContract(deployed.tokens.frogP, approveCalldata, 10_000n);
 
         // Buy option B (index 1) and C (index 2)

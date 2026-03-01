@@ -101,6 +101,9 @@ const EXERCISE_FEE_BPS: u64 = 10;
 /** Maximum number of options in a batch operation */
 const MAX_BATCH_SIZE: u8 = 5;
 
+/** Fixed-point precision for strike × amount calculations (18 decimals) */
+const PRECISION: u256 = u256.fromU64(1_000_000_000_000_000_000);
+
 // =============================================================================
 // STORAGE POINTER DEFINITIONS - Using Blockchain.nextPointer
 // =============================================================================
@@ -594,12 +597,13 @@ export class OptionsPool extends ReentrancyGuard {
         const optionType = calldata.readU8();
         const strikePrice = calldata.readU256();
         const underlyingAmount = calldata.readU256();
-        
+
         let collateralAmount: u256;
         if (optionType == CALL) {
             collateralAmount = underlyingAmount;
         } else {
-            collateralAmount = SafeMath.mul(strikePrice, underlyingAmount);
+            // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
+            collateralAmount = SafeMath.div(SafeMath.mul(strikePrice, underlyingAmount), PRECISION);
         }
         
         const writer = new BytesWriter(32);
@@ -677,7 +681,8 @@ export class OptionsPool extends ReentrancyGuard {
             collateralAmount = underlyingAmount;
         } else {
             collateralToken = this._premiumToken.value;
-            collateralAmount = SafeMath.mul(strikePrice, underlyingAmount);
+            // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
+            collateralAmount = SafeMath.div(SafeMath.mul(strikePrice, underlyingAmount), PRECISION);
         }
 
         const optionId = this._nextId.value;
@@ -742,7 +747,8 @@ export class OptionsPool extends ReentrancyGuard {
             collateralAmount = option.underlyingAmount;
         } else {
             collateralToken = this._premiumToken.value;
-            collateralAmount = SafeMath.mul(option.strikePrice, option.underlyingAmount);
+            // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
+            collateralAmount = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
         }
 
         // Story 8.3: expired unsold options get full collateral back (no penalty)
@@ -869,7 +875,8 @@ export class OptionsPool extends ReentrancyGuard {
             throw new Revert('Grace period ended');
         }
 
-        const strikeValue = SafeMath.mul(option.strikePrice, option.underlyingAmount);
+        // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
+        const strikeValue = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
 
         this.options.setStatus(optionId, EXERCISED);
 
@@ -948,7 +955,8 @@ export class OptionsPool extends ReentrancyGuard {
             collateralAmount = option.underlyingAmount;
         } else {
             collateralToken = this._premiumToken.value;
-            collateralAmount = SafeMath.mul(option.strikePrice, option.underlyingAmount);
+            // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
+            collateralAmount = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
         }
 
         this.options.setStatus(optionId, EXPIRED);
@@ -1073,8 +1081,9 @@ export class OptionsPool extends ReentrancyGuard {
             newCollateral = option.underlyingAmount; // immutable for CALL
         } else {
             collateralToken = this._premiumToken.value;
-            oldCollateral = SafeMath.mul(option.strikePrice, option.underlyingAmount);
-            newCollateral = SafeMath.mul(newStrikePrice, option.underlyingAmount);
+            // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
+            oldCollateral = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
+            newCollateral = SafeMath.div(SafeMath.mul(newStrikePrice, option.underlyingAmount), PRECISION);
         }
 
         // Compute cancel fee on old collateral (0 if expired)
@@ -1227,7 +1236,8 @@ export class OptionsPool extends ReentrancyGuard {
                 collateralAmount = option.underlyingAmount;
             } else {
                 collateralToken = this._premiumToken.value;
-                collateralAmount = SafeMath.mul(option.strikePrice, option.underlyingAmount);
+                // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
+                collateralAmount = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
             }
 
             let fee: u256;
@@ -1329,7 +1339,8 @@ export class OptionsPool extends ReentrancyGuard {
                 collateralAmount = option.underlyingAmount;
             } else {
                 collateralToken = this._premiumToken.value;
-                collateralAmount = SafeMath.mul(option.strikePrice, option.underlyingAmount);
+                // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
+                collateralAmount = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
             }
 
             this.options.setStatus(optionId, EXPIRED);

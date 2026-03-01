@@ -58,9 +58,10 @@ export function CancelModal({
     }, [provider]);
 
     const isCall = option.optionType === OptionType.CALL;
+    // Fixed-point: (strike * amount) / 1e18 — both are 18-decimal
     const collateral = isCall
         ? option.underlyingAmount
-        : option.strikePrice * option.underlyingAmount;
+        : (option.strikePrice * option.underlyingAmount) / (10n ** 18n);
     const collateralToken = isCall ? 'MOTO' : 'PILL';
 
     const isExpired = currentBlock !== null && currentBlock >= option.expiryBlock;

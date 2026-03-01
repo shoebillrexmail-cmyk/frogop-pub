@@ -157,11 +157,11 @@ async function main() {
     await runTest('Write option for transfer test', async () => {
         const expiryBlock = currentBlock + 500n; // ~3.5 days
         const calldata = createWriteOptionCalldata(
-            0,                  // CALL
-            50n,                // strikePrice
-            expiryBlock,        // expiryBlock
-            1000n,              // underlyingAmount
-            100n,               // premium
+            0,                          // CALL
+            50n * 10n ** 18n,           // strikePrice (18-decimal)
+            expiryBlock,                // expiryBlock
+            1n * 10n ** 18n,            // underlyingAmount (18-decimal)
+            5n * 10n ** 18n,            // premium (18-decimal)
         );
 
         const { txId } = await writerHelper.callContract(poolAddress, calldata, 50_000n);
@@ -186,7 +186,7 @@ async function main() {
 
         // Buyer approves pool to spend premium tokens
         const poolAddr = Address.fromString(poolCallAddr);
-        const approveCalldata = createIncreaseAllowanceCalldata(poolAddr, 10000n);
+        const approveCalldata = createIncreaseAllowanceCalldata(poolAddr, 100n * 10n ** 18n);
         await buyerHelper.callContract(deployed.tokens.frogP, approveCalldata, 10_000n);
 
         // Buyer calls buyOption
@@ -253,7 +253,7 @@ async function main() {
     await runTest('Transfer of OPEN option reverts', async () => {
         // Write a new option (leave it OPEN, don't buy)
         const expiryBlock = currentBlock + 500n;
-        const writeCalldata = createWriteOptionCalldata(0, 50n, expiryBlock, 1000n, 100n);
+        const writeCalldata = createWriteOptionCalldata(0, 50n * 10n ** 18n, expiryBlock, 1n * 10n ** 18n, 5n * 10n ** 18n);
         await writerHelper.callContract(poolAddress, writeCalldata, 50_000n);
 
         const countResult = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);

@@ -36,7 +36,7 @@ const makeOption = (id: bigint): OptionData => ({
     writer: '0xdead000000000000000000000000000000000000000000000000000000000001',
     buyer: '0xbeef000000000000000000000000000000000000000000000000000000000002',
     optionType: OptionType.CALL,
-    strikePrice: 50n,
+    strikePrice: 50n * 10n ** 18n,   // 50 PILL per MOTO (18-decimal)
     underlyingAmount: 10n ** 18n,
     premium: 5n * 10n ** 18n,
     expiryBlock: 800000n,

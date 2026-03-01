@@ -113,7 +113,7 @@ export function WriteOptionPanel({
     const strike = parseBigIntTokens(strikeStr);
 
     // CALL collateral = underlyingAmount (MOTO)
-    // PUT collateral  = strikePrice * underlyingAmount (PILL) — raw multiplication, no 1e18 scaling
+    // PUT collateral  = (strikePrice * underlyingAmount) / 1e18 (PILL) — fixed-point, both 18-decimal
     const collateral = amount && (optionType === OptionType.CALL
         ? amount
         : strike ? strike * amount / (10n ** 18n) : null);

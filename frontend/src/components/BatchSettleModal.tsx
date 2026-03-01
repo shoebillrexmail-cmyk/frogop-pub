@@ -35,8 +35,9 @@ function fmt(v: bigint) {
 
 function calcCollateral(option: OptionData): { amount: bigint; token: string } {
     const isCall = option.optionType === OptionType.CALL;
+    // Fixed-point: (strike * amount) / 1e18 — both are 18-decimal
     return {
-        amount: isCall ? option.underlyingAmount : option.strikePrice * option.underlyingAmount,
+        amount: isCall ? option.underlyingAmount : (option.strikePrice * option.underlyingAmount) / (10n ** 18n),
         token: isCall ? 'MOTO' : 'PILL',
     };
 }

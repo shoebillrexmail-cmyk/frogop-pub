@@ -46,7 +46,7 @@ const OPEN_OPTION: OptionData = {
     writer: '0xdead000000000000000000000000000000000000000000000000000000000001',
     buyer: '0x' + '0'.repeat(64),
     optionType: OptionType.CALL,
-    strikePrice: 50n,
+    strikePrice: 50n * 10n ** 18n,   // 50 PILL per MOTO (18-decimal)
     underlyingAmount: 10n ** 18n,   // 1 MOTO
     premium: 5n * 10n ** 18n,
     expiryBlock: 900000n,

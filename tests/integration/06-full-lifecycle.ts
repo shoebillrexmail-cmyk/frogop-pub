@@ -777,14 +777,15 @@ async function main() {
     // PHASE 6: Write + Buy Option (buyOption test)
     // =====================================================================
     //
-    // Contract math: strikeValue = strikePrice * underlyingAmount (no decimal scaling).
-    // With strikePrice = 50 and underlyingAmount = 1e18, strikeValue = 50e18 = 50 PILL.
+    // Contract math: strikeValue = (strikePrice * underlyingAmount) / PRECISION
+    // With strikePrice = 50e18 and underlyingAmount = 1e18:
+    //   strikeValue = (50e18 * 1e18) / 1e18 = 50e18 = 50 PILL
     // =====================================================================
 
-    const BUY_STRIKE_PRICE = 50n;              // raw multiplier (not 50e18!)
+    const BUY_STRIKE_PRICE = 50n * 10n ** 18n; // 50 PILL per MOTO (18-decimal)
     const BUY_PREMIUM = 5n * 10n ** 18n;       // 5 PILL
     const BUY_AMOUNT = 1n * 10n ** 18n;        // 1 MOTO
-    const BUY_STRIKE_VALUE = BUY_STRIKE_PRICE * BUY_AMOUNT; // 50e18 = 50 PILL
+    const BUY_STRIKE_VALUE = BUY_STRIKE_PRICE * BUY_AMOUNT / (10n ** 18n); // 50e18 = 50 PILL
 
     let buyTestOptionId: bigint | null = null;
     let buyTestExpiryBlock: bigint | null = null;
@@ -1550,6 +1551,234 @@ async function main() {
         });
     } else {
         log.info('\n=== Phase 9: Expired cancel setup skipped (no pool or insufficient MOTO) ===');
+    }
+
+    // =====================================================================
+    // PHASE 11: PUT Option Write & Cancel (validates PUT collateral math)
+    // =====================================================================
+    //
+    // Contract math: PUT collateral = (strikePrice * underlyingAmount) / PRECISION
+    // With strikePrice = 50e18 and underlyingAmount = 1e18:
+    //   collateral = (50e18 * 1e18) / 1e18 = 50e18 = 50 PILL
+    //
+    // This phase verifies:
+    //   1. PILL collateral is locked (not MOTO)
+    //   2. Correct collateral amount (50 PILL, not 50e36)
+    //   3. Cancel returns 99% of PILL collateral (1% cancel fee)
+    //   4. Fee goes to feeRecipient in PILL
+    // =====================================================================
+
+    const PUT_STRIKE = 50n * 10n ** 18n;     // 50 PILL per MOTO (18-decimal)
+    const PUT_AMOUNT = 1n * 10n ** 18n;      // 1 MOTO (underlying amount for PUT)
+    const PUT_PREMIUM = 3n * 10n ** 18n;     // 3 PILL premium
+    // Collateral = (50e18 * 1e18) / 1e18 = 50e18 = 50 PILL
+    const PUT_COLLATERAL = PUT_STRIKE * PUT_AMOUNT / (10n ** 18n);
+
+    // Check if writer has enough PILL for PUT collateral
+    let writerPillBalance = 0n;
+    {
+        const cd = buildBalanceOfCalldata(walletHex);
+        const r = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + cd);
+        if (!isCallError(r) && !r.revert) writerPillBalance = r.result.readU256();
+    }
+    const hasPillForPut = writerPillBalance >= PUT_COLLATERAL;
+
+    if (!hasPillForPut || !poolAddress) {
+        const reason = !poolAddress ? 'No pool deployed' : `Insufficient PILL (have ${formatBigInt(writerPillBalance)}, need ${formatBigInt(PUT_COLLATERAL)})`;
+        skipTest('PUT: Approve PILL collateral for pool', reason);
+        skipTest('PUT: Write PUT option', reason);
+        skipTest('PUT: Verify PUT option exists', reason);
+        skipTest('PUT: Read PUT option state', reason);
+        skipTest('PUT: Verify PILL locked in pool', reason);
+        skipTest('PUT: Cancel PUT option', reason);
+        skipTest('PUT: Verify feeRecipient received PUT cancel fee in PILL', reason);
+    } else {
+        log.info('\n=== Phase 11: PUT Write & Cancel ===');
+        log.info(`  Writer PILL balance: ${formatBigInt(writerPillBalance)}`);
+        log.info(`  PUT collateral needed: ${formatBigInt(PUT_COLLATERAL)} PILL`);
+
+        let putOptionId: bigint | null = null;
+
+        // Record PILL balances before PUT write
+        let prePutWriterPill = 0n;
+        let prePutPoolPill = 0n;
+        let prePutFeePill = 0n;
+        {
+            const writerCd = buildBalanceOfCalldata(walletHex);
+            const poolCd = buildBalanceOfCalldata(poolCallAddr);
+            const feeCd = poolFeeRecipientHex ? buildBalanceOfCalldata(poolFeeRecipientHex) : null;
+
+            const wr = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + writerCd);
+            if (!isCallError(wr) && !wr.revert) prePutWriterPill = wr.result.readU256();
+
+            const pr = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + poolCd);
+            if (!isCallError(pr) && !pr.revert) prePutPoolPill = pr.result.readU256();
+
+            if (feeCd) {
+                const fr = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + feeCd);
+                if (!isCallError(fr) && !fr.revert) prePutFeePill = fr.result.readU256();
+            }
+        }
+
+        // Approve PILL for pool
+        await runTest('PUT: Approve PILL collateral for pool', async () => {
+            const poolAddr = Address.fromString(poolCallAddr);
+            const calldata = createIncreaseAllowanceCalldata(poolAddr, PUT_COLLATERAL);
+
+            currentBlock = await provider.getBlockNumber();
+            const result = await deployer.callContract(deployed.tokens.frogP, calldata, 50_000n);
+            log.info(`  Approve PILL TX: ${result.txId}`);
+            try {
+                currentBlock = await waitForBlock(provider, currentBlock, 3);
+            } catch {
+                log.warn('  Block timeout - TX broadcast OK');
+            }
+            return { approved: true, txId: result.txId, amount: formatBigInt(PUT_COLLATERAL) };
+        });
+
+        // Read option count before write
+        let prePutOptionCount = 0n;
+        {
+            const r = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
+            if (!isCallError(r) && !r.revert) prePutOptionCount = r.result.readU256();
+        }
+
+        // Write PUT option
+        await runTest('PUT: Write PUT option', async () => {
+            currentBlock = await provider.getBlockNumber();
+            const expiryBlock = currentBlock + 1000n; // far future
+            const calldata = createWriteOptionCalldata(1, PUT_STRIKE, expiryBlock, PUT_AMOUNT, PUT_PREMIUM);
+            const result = await deployer.callContract(poolAddress!, calldata, 200_000n);
+            log.info(`  Write PUT TX: ${result.txId}`);
+            return { txId: result.txId };
+        });
+
+        // Wait for the PUT option to appear
+        await runTest('PUT: Verify PUT option exists', async () => {
+            const expectedCount = prePutOptionCount + 1n;
+            for (let attempt = 0; attempt < 24; attempt++) {
+                const r = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
+                if (!isCallError(r) && !r.revert) {
+                    const count = r.result.readU256();
+                    if (count >= expectedCount) {
+                        putOptionId = prePutOptionCount; // 0-based ID
+                        log.info(`  Option count: ${count}, PUT option ID: ${putOptionId}`);
+                        return { optionCount: count.toString(), optionId: putOptionId.toString() };
+                    }
+                }
+                if (attempt < 23) {
+                    log.info(`  Waiting for PUT option... (${attempt + 1}/24)`);
+                    await new Promise((r) => setTimeout(r, 30_000));
+                }
+            }
+            throw new Error('PUT option not confirmed after 24 attempts');
+        });
+
+        // Read PUT option state
+        await runTest('PUT: Read PUT option state', async () => {
+            if (putOptionId === null) throw new Error('No PUT option ID');
+            const opt = await readOptionStatus(putOptionId);
+            if (!opt) throw new Error('Failed to read PUT option');
+
+            log.info(`  optType: ${opt.optType} (1=PUT)`);
+            log.info(`  strikePrice: ${opt.strikePrice}`);
+            log.info(`  underlyingAmount: ${opt.underlyingAmount}`);
+            log.info(`  premium: ${opt.premium}`);
+            log.info(`  status: ${opt.status} (0=OPEN)`);
+
+            if (opt.optType !== 1) throw new Error(`Expected PUT (1), got ${opt.optType}`);
+            if (opt.status !== 0) throw new Error(`Expected OPEN (0), got ${opt.status}`);
+            if (opt.strikePrice !== PUT_STRIKE) throw new Error(`Strike mismatch: ${opt.strikePrice} vs ${PUT_STRIKE}`);
+
+            return {
+                optionType: 'PUT',
+                strikePrice: opt.strikePrice.toString(),
+                underlyingAmount: opt.underlyingAmount.toString(),
+                premium: opt.premium.toString(),
+                status: opt.status,
+            };
+        });
+
+        // Verify PILL locked in pool (pool balance should have increased by collateral)
+        await runTest('PUT: Verify PILL locked in pool', async () => {
+            const poolCd = buildBalanceOfCalldata(poolCallAddr);
+            const pr = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + poolCd);
+            if (isCallError(pr) || pr.revert) throw new Error('Failed to read pool PILL balance');
+
+            const postPoolPill = pr.result.readU256();
+            const pillIncrease = postPoolPill - prePutPoolPill;
+            log.info(`  Pool PILL before: ${formatBigInt(prePutPoolPill)}`);
+            log.info(`  Pool PILL after:  ${formatBigInt(postPoolPill)}`);
+            log.info(`  PILL increase:    ${formatBigInt(pillIncrease)}`);
+            log.info(`  Expected:         ${formatBigInt(PUT_COLLATERAL)}`);
+
+            // Allow some tolerance for concurrent operations
+            if (pillIncrease < PUT_COLLATERAL) {
+                throw new Error(`Pool PILL increase ${pillIncrease} less than expected ${PUT_COLLATERAL}`);
+            }
+
+            return {
+                poolPillBefore: formatBigInt(prePutPoolPill),
+                poolPillAfter: formatBigInt(postPoolPill),
+                collateralLocked: formatBigInt(pillIncrease),
+            };
+        });
+
+        // Cancel PUT and verify fee in PILL
+        await runTest('PUT: Cancel PUT option', async () => {
+            if (putOptionId === null) throw new Error('No PUT option ID');
+            const calldata = createCancelOptionCalldata(putOptionId);
+            currentBlock = await provider.getBlockNumber();
+            const result = await deployer.callContract(poolAddress!, calldata, 200_000n);
+            log.info(`  Cancel PUT TX: ${result.txId}`);
+
+            try {
+                currentBlock = await waitForBlock(provider, currentBlock, 3);
+            } catch {
+                log.warn('  Block timeout');
+            }
+
+            // Poll for status = CANCELLED (4)
+            for (let attempt = 0; attempt < 12; attempt++) {
+                const opt = await readOptionStatus(putOptionId!);
+                if (opt && opt.status === 4) {
+                    log.info(`  PUT option cancelled (status=4)`);
+                    return { txId: result.txId, status: 'CANCELLED' };
+                }
+                if (attempt < 11) {
+                    log.info(`  Waiting for cancel confirmation... (${attempt + 1}/12)`);
+                    await new Promise((r) => setTimeout(r, 30_000));
+                }
+            }
+            throw new Error('PUT cancel not confirmed');
+        });
+
+        // Verify fee recipient received cancel fee in PILL
+        await runTest('PUT: Verify feeRecipient received PUT cancel fee in PILL', async () => {
+            if (!poolFeeRecipientHex) throw new Error('No fee recipient');
+            const feeCd = buildBalanceOfCalldata(poolFeeRecipientHex);
+            const fr = await provider.call(deployed.tokens.frogP, TOKEN_SELECTORS.balanceOf + feeCd);
+            if (isCallError(fr) || fr.revert) throw new Error('Failed to read fee recipient PILL balance');
+
+            const postFeePill = fr.result.readU256();
+            const feeReceived = postFeePill - prePutFeePill;
+
+            // Expected: ceiling(50e18 * 100 / 10000) = ceiling(50e16) = 5e17 = 0.5 PILL
+            const expectedFee = (PUT_COLLATERAL * 100n + 9999n) / 10000n;
+            log.info(`  Fee recipient PILL before: ${formatBigInt(prePutFeePill)}`);
+            log.info(`  Fee recipient PILL after:  ${formatBigInt(postFeePill)}`);
+            log.info(`  Fee received: ${formatBigInt(feeReceived)}`);
+            log.info(`  Expected fee: ${formatBigInt(expectedFee)}`);
+
+            if (feeReceived < expectedFee) {
+                throw new Error(`Fee ${feeReceived} less than expected ${expectedFee}`);
+            }
+
+            return {
+                feeReceivedPill: formatBigInt(feeReceived),
+                expectedFee: formatBigInt(expectedFee),
+            };
+        });
     }
 
     printSummary();
