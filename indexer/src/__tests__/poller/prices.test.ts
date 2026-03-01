@@ -93,6 +93,20 @@ describe('encodeGetQuoteCalldata', () => {
         // 100_000 = 0x186A0, padded to 16 chars = 00000000000186a0
         expect(result).toMatch(/00000000000186a0$/);
     });
+
+    it('uses the correct NativeSwap selector from ABICoder (regression)', async () => {
+        // OPNet selector = first 4 bytes of SHA-256(methodSignature) as hex.
+        // Compute independently to verify the hardcoded selector.
+        // This would have caught the original bug: using 'getQuote' instead
+        // of the full signature 'getQuote(address,uint64)'.
+        const { createHash } = await import('node:crypto');
+        const hash = createHash('sha256').update('getQuote(address,uint64)').digest();
+        const expected = hash.subarray(0, 4).toString('hex');
+
+        const result = encodeGetQuoteCalldata('0x01', 1n);
+        const actualSelector = result.slice(2, 10);
+        expect(actualSelector).toBe(expected);
+    });
 });
 
 // ---------------------------------------------------------------------------
