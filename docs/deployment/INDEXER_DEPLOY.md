@@ -15,7 +15,7 @@ Deploy workflow: push to `master` → GitHub Actions runs type-check → `wrangl
 |------|---------|
 | Node.js ≥ 22 | [nodejs.org](https://nodejs.org) |
 | wrangler CLI | bundled as dev dep — `npx wrangler` |
-| Cloudflare account | Same account used for frogop.net Pages |
+| Cloudflare account | Same account used for frogop.net Workers |
 
 Log in to Cloudflare (one-time, persists in `~/.wrangler`):
 ```bash
@@ -89,32 +89,15 @@ GitHub Actions picks this up and deploys automatically.
 
 ### 5. Add GitHub secrets (one-time, in GitHub UI)
 
+The indexer shares the same API token and secrets as the frontend.
+See **[`CLOUDFLARE_PAGES.md`](./CLOUDFLARE_PAGES.md#cloudflare-api-token-shared-by-all-workflows)** for the full token creation guide with all required permissions.
+
 Go to **GitHub repo → Settings → Secrets and variables → Actions** and add:
 
 | Secret | Where to get it |
 |--------|-----------------|
-| `CLOUDFLARE_API_TOKEN` | See token creation steps below |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Dashboard → right sidebar on any Workers or Pages page |
-
-#### Creating the API token
-
-1. Cloudflare Dashboard → **My Profile → API Tokens → Create Token**
-2. Click **Use template** next to **"Edit Cloudflare Workers"**
-3. Under **Zone Resources** → set to `Include > Specific zone > frogop.net`
-4. Click **+ Add more** and add: `Zone > DNS > Edit` (same zone — required for wrangler to create the `api.frogop.net` DNS record on first deploy)
-5. Create and copy the token
-
-**Minimum permissions granted by this token:**
-
-| Permission | Level | Purpose |
-|---|---|---|
-| Workers Scripts: Edit | Account | deploy the Worker |
-| Workers Routes: Edit | Zone | configure routing |
-| Workers Tail: Read | Account | `wrangler tail` logs |
-| D1: Edit | Account | bind the D1 database |
-| DNS: Edit | Zone (`frogop.net`) | create `api.frogop.net` subdomain on first deploy |
-
-> The DNS permission is what most guides omit — without it, the `custom_domain = true` route in `wrangler.toml` will fail on first deploy.
+| `CLOUDFLARE_API_TOKEN` | See [`CLOUDFLARE_PAGES.md`](./CLOUDFLARE_PAGES.md#creating-the-token) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Dashboard → right sidebar on any Workers page |
 
 The custom domain `api.frogop.net` is declared in `wrangler.toml` — because `frogop.net` is already managed by Cloudflare, wrangler will automatically create the `api` DNS record and provision an SSL certificate on first deploy. No manual DNS config or dashboard click needed.
 
@@ -281,5 +264,5 @@ On API request:
 | `.github/workflows/indexer.yml` | CI/CD: type-check on PR, deploy on master |
 
 **Related docs**:
-- Frontend deployment: `docs/deployment/CLOUDFLARE_PAGES.md`
+- Frontend deployment + API token guide: `docs/deployment/CLOUDFLARE_PAGES.md`
 - Mainnet migration: `docs/deployment/MAINNET_MIGRATION.md`

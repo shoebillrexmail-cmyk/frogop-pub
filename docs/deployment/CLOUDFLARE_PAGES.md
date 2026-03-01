@@ -1,131 +1,121 @@
 # FroGop — Cloudflare Workers Deployment (Static Site)
 
-> Cloudflare deprecated Pages in 2025. The current setup uses **Cloudflare Workers
-> with Static Assets** — same result (global CDN, free tier, auto-deploy on push)
-> but with a wrangler-based deploy pipeline.
+> Migrated from Cloudflare Pages to **Workers Static Assets** on 2026-03-01.
+> Same result (global CDN, free tier, auto-deploy on push) but uses the unified
+> `wrangler deploy` pipeline — same as the indexer.
 
 FroGop is a pure SPA. No backend, no server-side logic — everything runs in the browser
-via OPWallet and direct OPNet RPC calls. This is the right fit.
+via OPWallet and direct OPNet RPC calls.
 
 ---
 
-## Why Cloudflare Workers (not VPS)
+## Cloudflare API Token (shared by all workflows)
 
-| | Cloudflare Workers | VPS + Docker |
-|---|---|---|
-| Cost | Free (generous limits) | ~€5–15/month |
-| Maintenance | Zero | OS updates, Docker, nginx |
-| Deploy | Push to GitHub → done | SSH + docker compose up |
-| Custom domain | Dashboard click | DNS + Origin Cert + nginx |
-| HTTPS | Automatic | Manual cert management |
-| SPA routing | `not_found_handling` in wrangler.toml | nginx `try_files` |
-| Compatible with OPNet integration? | ✅ Yes — all calls are browser → OPNet RPC | ✅ Yes |
+Both the **frontend** and **indexer** GitHub Actions workflows use the same API token.
+Create one token that covers everything.
+
+### Creating the token
+
+1. Go to [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)
+2. Click **Create Token** → **Custom Token**
+3. Add these permissions:
+
+| Scope | Resource | Permission | Used by |
+|-------|----------|------------|---------|
+| Account | Workers Scripts | Edit | Frontend + Indexer deploy |
+| Account | D1 | Edit | Indexer D1 schema migrations |
+| Account | Account Settings | Read | Account listing / wrangler whoami |
+| Zone | Workers Routes | Edit | Indexer custom domain (`api.frogop.net`) |
+
+4. **Account Resources:** Include → your account
+5. **Zone Resources:** Include → All zones (or specific zone `frogop.net`)
+6. Click **Continue to summary** → **Create Token**
+
+### GitHub Secrets
+
+Go to **GitHub repo → Settings → Secrets and variables → Actions** and set:
+
+| Secret | Value |
+|--------|-------|
+| `CLOUDFLARE_API_TOKEN` | The token created above |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Dashboard → right sidebar on any Workers page |
+
+Both workflows (`.github/workflows/frontend.yml` and `.github/workflows/indexer.yml`)
+reference these same two secrets.
 
 ---
 
 ## How It Works
 
 ```
-GitHub push to master
-  → Cloudflare builds: cd frontend && npm install && npm run build
-  → wrangler deploys: frontend/dist/ → Cloudflare edge (global CDN)
-  → SPA routing: all unknown paths → index.html (configured in wrangler.toml)
+GitHub push to master (frontend/** changed)
+  → GitHub Actions: npm ci → lint → typecheck → test → vite build
+  → wrangler deploy → frontend/dist/ → Cloudflare edge (global CDN)
+  → SPA routing: all unknown paths → index.html (wrangler.toml)
 ```
 
-The `wrangler.toml` at the repo root tells wrangler where the built files are
-and enables SPA routing:
+The `frontend/wrangler.toml` configures the Worker:
 
 ```toml
-name = "frogop"
-compatibility_date = "2025-01-01"
+name = "frogop-frontend"
+compatibility_date = "2026-01-01"
 
 [assets]
-directory = "./frontend/dist"
+directory = "./dist"
 not_found_handling = "single-page-application"
 ```
 
 ---
 
-## One-Time Setup
+## Build-Time Environment Variables
 
-### 1. Connect GitHub
+These are set in `.github/workflows/frontend.yml` (deploy job) and baked into the
+JS bundle at build time. They are **not** set in the Cloudflare dashboard.
 
-1. Log into [Cloudflare Dashboard](https://dash.cloudflare.com)
-2. Go to **Workers & Pages → Create**
-3. Connect to Git → select the `frogop` repository
-4. Choose branch: `master`
+| Variable | Value (testnet) | Required | Notes |
+|----------|----------------|----------|-------|
+| `VITE_OPNET_NETWORK` | `testnet` | Yes | Determines RPC/WS defaults |
+| `VITE_OPNET_RPC_URL` | `https://testnet.opnet.org` | No | Falls back to network default |
+| `VITE_OPNET_WS_URL` | *(not set)* | No | Falls back to network default |
+| `VITE_POOL_ADDRESS` | `opt1sqzd8x7u53eyw4k8y9pnsaup4j0tntxt7pyncp3t9` | Yes* | Direct pool address |
+| `VITE_FACTORY_ADDRESS` | *(empty)* | No* | Factory for pool discovery |
+| `VITE_INDEXER_URL` | `https://api.frogop.net` | No | Falls back to on-chain RPC |
+| `VITE_POOL_TEMPLATE_ADDRESS` | *(empty)* | No | Unused currently |
+| `VITE_NATIVESWAP_ADDRESS` | *(empty)* | No | Price ratio display |
 
-### 2. Build Settings (setup wizard)
-
-The wizard shows two fields. Fill them in:
-
-| Field | Value |
-|-------|-------|
-| Build command | `cd frontend && npm install --legacy-peer-deps && npm run build` |
-| Deploy command | `npx wrangler deploy` *(keep the default)* |
-
-The **path** field (showing `/`) is the root directory — leave it as `/`.
-
-Click **Save and Deploy**. The first build will succeed and deploy automatically.
-`wrangler.toml` tells wrangler to serve `frontend/dist` with SPA routing enabled.
-
-### 3. Environment Variables
-
-In **Settings → Environment Variables → Add variables**, add:
-
-| Variable | Value |
-|----------|-------|
-| `VITE_OPNET_NETWORK` | `testnet` |
-| `VITE_OPNET_RPC_URL` | `https://testnet.opnet.org` |
-| `VITE_FACTORY_ADDRESS` | *(leave blank until contracts deployed)* |
-| `VITE_POOL_TEMPLATE_ADDRESS` | *(leave blank until contracts deployed)* |
-
-After saving, trigger a redeploy — **Deployments → Retry deployment**.
+*At least one of `VITE_POOL_ADDRESS` or `VITE_FACTORY_ADDRESS` must be set.
 
 > **VITE_ vars are baked into the JS bundle at build time.** Any change requires
-> a redeploy to take effect.
-
-**Node.js version** is controlled by the `.nvmrc` file in the repo root (value: `24`).
-Cloudflare reads this automatically. The default build environment ships Node 22 which
-is too old for `@btc-vision/*` packages — `.nvmrc` overrides it.
-
-### 4. Custom Domain
-
-1. Go to **Workers & Pages → frogop → Settings → Domains & Routes**
-2. Click **Add** → enter your domain (e.g. `frogop.com`)
-3. Cloudflare auto-configures DNS since your domain is already on Cloudflare
-4. HTTPS is automatic — no origin cert needed
+> a redeploy (push to master) to take effect.
 
 ---
 
 ## Deploying
 
-Every push to `master` triggers an automatic build and deploy.
+Every push to `master` that touches `frontend/**` triggers an automatic build and deploy.
 
-To deploy manually (e.g. after updating env vars):
-1. Go to **Workers & Pages → frogop → Deployments**
-2. Click **Retry deployment** on the latest entry
+The deployed URL is `https://frogop-frontend.<subdomain>.workers.dev`.
 
----
+To add a custom domain, add a `routes` section to `frontend/wrangler.toml`:
 
-## Updating Contract Addresses After Deployment
+```toml
+routes = [
+  { pattern = "app.frogop.net", custom_domain = true }
+]
+```
 
-When contracts are deployed to testnet:
-
-1. Go to **Settings → Environment Variables**
-2. Update `VITE_FACTORY_ADDRESS` and `VITE_POOL_TEMPLATE_ADDRESS`
-3. Trigger a redeploy
+This requires the Zone > Workers Routes permission (already included in the token above)
+and that `frogop.net` nameservers are managed by Cloudflare.
 
 ---
 
 ## Switching to Mainnet
 
-1. Update environment variables:
+1. Update environment variables in `.github/workflows/frontend.yml`:
    - `VITE_OPNET_NETWORK` → `mainnet`
    - `VITE_OPNET_RPC_URL` → `https://mainnet.opnet.org`
-   - `VITE_FACTORY_ADDRESS` → mainnet factory address
-   - `VITE_POOL_TEMPLATE_ADDRESS` → mainnet pool template address
-2. Trigger a redeploy
+   - Contract addresses → mainnet values
+2. Push to `master` → auto-redeploys with new config
 3. The network badge in the UI will automatically hide on mainnet
 
 See `docs/deployment/MAINNET_MIGRATION.md` for the full pre-flight checklist.
@@ -136,9 +126,8 @@ See `docs/deployment/MAINNET_MIGRATION.md` for the full pre-flight checklist.
 
 | Problem | Fix |
 |---------|-----|
-| Build fails — wrong Node version | `.nvmrc` file (value `24`) must be in repo root |
-| Build fails — npm error | Build command uses `npm install --legacy-peer-deps` not `npm ci` |
+| Deploy fails — auth error | Check API token has all 4 permissions listed above |
 | SPA routes return 404 | `wrangler.toml` must have `not_found_handling = "single-page-application"` |
-| Old contract addresses in bundle | Env var change needs a redeploy — retry deployment |
-| Custom domain not working | Check **Settings → Domains & Routes** in dashboard |
+| Old contract addresses in bundle | Env vars are build-time — push a new commit to redeploy |
+| Custom domain not working | Add `routes` to `wrangler.toml` + Zone Workers Routes permission |
 | VITE_ var not taking effect | These are baked at build time — redeploy after changing |
