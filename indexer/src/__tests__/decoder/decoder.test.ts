@@ -18,6 +18,12 @@ vi.mock('../../db/queries.js', () => ({
     ),
     stmtInsertFeeEvent:    vi.fn((_db: unknown, ev: unknown) => ({ _t: 'INSERT_FEE', ev })),
     stmtInsertSwapEvent:   vi.fn((_db: unknown, row: unknown) => ({ _t: 'INSERT_SWAP', row })),
+    stmtUpdateOptionBuyer: vi.fn(
+        (_db: unknown, pool: unknown, id: unknown, buyer: unknown,
+         block: unknown, tx: unknown) =>
+            ({ _t: 'UPDATE_BUYER', pool, id, buyer, block, tx }),
+    ),
+    stmtInsertOptionTransfer: vi.fn((_db: unknown, row: unknown) => ({ _t: 'INSERT_TRANSFER', row })),
 }));
 
 import { decodeBlock }            from '../../decoder/index.js';
@@ -30,6 +36,8 @@ const mockInsertOption      = vi.mocked(queries.stmtInsertOption);
 const mockUpdateStatus      = vi.mocked(queries.stmtUpdateOptionStatus);
 const mockInsertFee         = vi.mocked(queries.stmtInsertFeeEvent);
 const mockInsertSwap        = vi.mocked(queries.stmtInsertSwapEvent);
+const mockUpdateBuyer       = vi.mocked(queries.stmtUpdateOptionBuyer);
+const mockInsertTransfer    = vi.mocked(queries.stmtInsertOptionTransfer);
 
 const mockDb   = {} as D1Database;
 const POOL_HEX = '0xdeadbeef000000000000000000000000deadbeef000000000000000000000001';
@@ -354,5 +362,54 @@ describe('SwapExecuted (NativeSwap)', () => {
         const tx = [{ id: TX_ID, events: [{ contractAddress: POOL_HEX, type: 'OptionExpired', data }] }];
         decodeBlock(mockDb, BLOCK, tx, new Set([POOL_HEX]), swapLabelMap);
         expect(mockInsertSwap).not.toHaveBeenCalled();
+    });
+});
+
+// =========================================================================
+// OptionTransferred
+// =========================================================================
+
+describe('OptionTransferred', () => {
+    const FROM_HEX = BUYER_HEX;
+    const TO_HEX   = '0x' + 'ee'.repeat(32);
+
+    function buildTransferData(optionId = 1n, from = FROM_HEX, to = TO_HEX) {
+        return buildEventData([
+            { type: 'u256',    value: optionId },
+            { type: 'address', value: from },
+            { type: 'address', value: to },
+        ]);
+    }
+
+    it('produces two statements: updateBuyer + insertTransfer', () => {
+        const txs = singleEventTx('OptionTransferred', buildTransferData());
+        const stmts = decodeBlock(mockDb, BLOCK, txs, new Set([POOL_HEX]));
+        expect(stmts).toHaveLength(2);
+        expect(mockUpdateBuyer).toHaveBeenCalledOnce();
+        expect(mockInsertTransfer).toHaveBeenCalledOnce();
+    });
+
+    it('passes correct fields to stmtUpdateOptionBuyer', () => {
+        const txs = singleEventTx('OptionTransferred', buildTransferData(5n));
+        decodeBlock(mockDb, BLOCK, txs, new Set([POOL_HEX]));
+        const [, pool, id, buyer, block, tx] = mockUpdateBuyer.mock.calls[0]!;
+        expect(pool).toBe(POOL_HEX);
+        expect(id).toBe(5);
+        expect(buyer).toBe(TO_HEX);
+        expect(block).toBe(BLOCK);
+        expect(tx).toBe(TX_ID);
+    });
+
+    it('passes correct fields to stmtInsertOptionTransfer', () => {
+        const txs = singleEventTx('OptionTransferred', buildTransferData(3n));
+        decodeBlock(mockDb, BLOCK, txs, new Set([POOL_HEX]));
+        const [, row] = mockInsertTransfer.mock.calls[0]!;
+        const r = row as Record<string, unknown>;
+        expect(r['pool_address']).toBe(POOL_HEX);
+        expect(r['option_id']).toBe(3);
+        expect(r['from_address']).toBe(FROM_HEX);
+        expect(r['to_address']).toBe(TO_HEX);
+        expect(r['block_number']).toBe(BLOCK);
+        expect(r['tx_id']).toBe(TX_ID);
     });
 });

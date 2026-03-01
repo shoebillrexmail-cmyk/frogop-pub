@@ -11,19 +11,18 @@ declare class OptionsPoolTestRuntime extends ContractRuntime {
     private readonly settleSelector;
     private readonly getOptionSelector;
     private readonly optionCountSelector;
-    private readonly accumulatedFeesSelector;
     private readonly gracePeriodBlocksSelector;
     private readonly maxExpiryBlocksSelector;
     private readonly cancelFeeBpsSelector;
     private readonly calculateCollateralSelector;
+    private readonly transferOptionSelector;
     private readonly _underlying;
     private readonly _premiumToken;
-    constructor(deployer: Address, underlying: Address, premiumToken: Address);
+    constructor(deployer: Address, underlying: Address, premiumToken: Address, feeRecipient?: Address);
     defineRequiredBytecodes(): void;
     getUnderlying(): Promise<Address>;
     getPremiumToken(): Promise<Address>;
     optionCount(): Promise<bigint>;
-    accumulatedFees(): Promise<bigint>;
     gracePeriodBlocks(): Promise<bigint>;
     maxExpiryBlocks(): Promise<bigint>;
     cancelFeeBps(): Promise<bigint>;
@@ -33,6 +32,8 @@ declare class OptionsPoolTestRuntime extends ContractRuntime {
     buyOption(optionId: bigint): Promise<boolean>;
     exercise(optionId: bigint): Promise<boolean>;
     settle(optionId: bigint): Promise<boolean>;
+    transferOption(optionId: bigint, to: Address): Promise<boolean>;
+    transferOptionExpectRevert(optionId: bigint, to: Address): Promise<Error>;
     getOption(optionId: bigint): Promise<{
         id: bigint;
         writer: Address;

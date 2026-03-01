@@ -22,6 +22,7 @@ class OptionsPoolTestRuntime extends ContractRuntime {
     private readonly maxExpiryBlocksSelector: number;
     private readonly cancelFeeBpsSelector: number;
     private readonly calculateCollateralSelector: number;
+    private readonly transferOptionSelector: number;
     private readonly _underlying: Address;
     private readonly _premiumToken: Address;
 
@@ -58,6 +59,7 @@ class OptionsPoolTestRuntime extends ContractRuntime {
         this.maxExpiryBlocksSelector = Number(`0x${this.abiCoder.encodeSelector('maxExpiryBlocks()')}`);
         this.cancelFeeBpsSelector = Number(`0x${this.abiCoder.encodeSelector('cancelFeeBps()')}`);
         this.calculateCollateralSelector = Number(`0x${this.abiCoder.encodeSelector('calculateCollateral(uint8,uint256,uint256)')}`);
+        this.transferOptionSelector = Number(`0x${this.abiCoder.encodeSelector('transferOption(uint256,address)')}`);
     }
 
     defineRequiredBytecodes(): void {
@@ -241,6 +243,40 @@ class OptionsPoolTestRuntime extends ContractRuntime {
 
         const reader = new BinaryReader(result.response);
         return reader.readBoolean();
+    }
+
+    async transferOption(optionId: bigint, to: Address): Promise<boolean> {
+        const writer = new BinaryWriter();
+        writer.writeSelector(this.transferOptionSelector);
+        writer.writeU256(optionId);
+        writer.writeAddress(to);
+
+        const result = await this.executeThrowOnError({
+            calldata: writer.getBuffer(),
+            sender: Blockchain.msgSender,
+            txOrigin: Blockchain.txOrigin,
+        });
+
+        const reader = new BinaryReader(result.response);
+        return reader.readBoolean();
+    }
+
+    async transferOptionExpectRevert(optionId: bigint, to: Address): Promise<Error> {
+        const writer = new BinaryWriter();
+        writer.writeSelector(this.transferOptionSelector);
+        writer.writeU256(optionId);
+        writer.writeAddress(to);
+
+        try {
+            await this.executeThrowOnError({
+                calldata: writer.getBuffer(),
+                sender: Blockchain.msgSender,
+                txOrigin: Blockchain.txOrigin,
+            });
+            throw new Error('Expected revert but transaction succeeded');
+        } catch (e) {
+            return e as Error;
+        }
     }
 
     async getOption(optionId: bigint): Promise<{

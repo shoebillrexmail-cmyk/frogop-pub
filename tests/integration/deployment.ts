@@ -405,6 +405,14 @@ export function createTransferCalldata(
     return writer.getBuffer();
 }
 
+export function createTransferOptionCalldata(optionId: bigint, to: Address): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(POOL_SELECTORS.transferOption);
+    writer.writeU256(optionId);
+    writer.writeAddress(to);
+    return writer.getBuffer();
+}
+
 export function createUpdateFeeRecipientCalldata(newRecipient: Address): Uint8Array {
     const writer = new BinaryWriter();
     writer.writeU32(POOL_SELECTORS.updateFeeRecipient);

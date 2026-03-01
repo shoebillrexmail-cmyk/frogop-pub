@@ -31,6 +31,11 @@ export const OptionsPoolEvents = [
         values: [{ name: 'data', type: ABIDataTypes.STRING }],
         type: BitcoinAbiTypes.Event,
     },
+    {
+        name: 'OptionTransferred',
+        values: [{ name: 'data', type: ABIDataTypes.STRING }],
+        type: BitcoinAbiTypes.Event,
+    },
 ];
 
 export const OptionsPoolAbi = [
@@ -164,6 +169,15 @@ export const OptionsPoolAbi = [
     {
         name: 'settle',
         inputs: [{ name: 'optionId', type: ABIDataTypes.UINT256 }],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'transferOption',
+        inputs: [
+            { name: 'optionId', type: ABIDataTypes.UINT256 },
+            { name: 'to', type: ABIDataTypes.ADDRESS },
+        ],
         outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
         type: BitcoinAbiTypes.Function,
     },

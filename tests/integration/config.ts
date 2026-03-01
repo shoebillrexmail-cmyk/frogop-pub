@@ -215,6 +215,8 @@ export const POOL_SELECTORS = {
     exercise: computeSelectorU32('exercise(uint256)'),
     settle: computeSelectorU32('settle(uint256)'),
     updateFeeRecipient: computeSelectorU32('updateFeeRecipient(address)'),
+    transferOption: computeSelectorU32('transferOption(uint256,address)'),
+    transferOptionView: computeSelector('transferOption(uint256,address)'),
 };
 
 /** OptionsFactory method selectors */

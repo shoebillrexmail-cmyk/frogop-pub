@@ -15,6 +15,8 @@ import {
     stmtUpdateOptionStatus,
     stmtInsertFeeEvent,
     stmtInsertSwapEvent,
+    stmtUpdateOptionBuyer,
+    stmtInsertOptionTransfer,
 } from '../db/queries.js';
 
 const EV_WRITTEN   = 'OptionWritten';
@@ -23,6 +25,7 @@ const EV_PURCHASED = 'OptionPurchased';
 const EV_EXERCISED = 'OptionExercised';
 // settle() emits OptionExpiredEvent with type string 'OptionExpired', not 'OptionSettled'
 const EV_SETTLED   = 'OptionExpired';
+const EV_TRANSFERRED = 'OptionTransferred';
 // There is no FeeCollected event — fee data is embedded inline in each action event
 const EV_SWAP_EXECUTED = 'SwapExecuted';
 
@@ -87,8 +90,9 @@ function decodeEvent(
         case EV_CANCELLED: return handleCancelled(db, event, blockNumber, txId);
         case EV_PURCHASED: return handlePurchased(db, event, blockNumber, txId);
         case EV_EXERCISED: return handleExercised(db, event, blockNumber, txId);
-        case EV_SETTLED:   return handleSettled(db, event, blockNumber, txId);
-        default:           return null;
+        case EV_SETTLED:      return handleSettled(db, event, blockNumber, txId);
+        case EV_TRANSFERRED: return handleTransferred(db, event, blockNumber, txId);
+        default:             return null;
     }
 }
 
@@ -248,6 +252,33 @@ function handleSettled(
     ]);
     if (!f) return [];
     return [stmtUpdateOptionStatus(db, event.contractAddress, Number(f['optionId']), OptionStatus.SETTLED, null, blockNumber, txId)];
+}
+
+function handleTransferred(
+    db: D1Database,
+    event: TxEvent,
+    blockNumber: number,
+    txId: string,
+): D1PreparedStatement[] {
+    // OptionTransferred: [optionId U256, from Address, to Address]
+    const f = parseEventData(event.data, [
+        { name: 'optionId', type: 'u256'    },
+        { name: 'from',     type: 'address' },
+        { name: 'to',       type: 'address' },
+    ]);
+    if (!f) return [];
+    const optionId = Number(f['optionId']);
+    return [
+        stmtUpdateOptionBuyer(db, event.contractAddress, optionId, f['to'] ?? '', blockNumber, txId),
+        stmtInsertOptionTransfer(db, {
+            pool_address: event.contractAddress,
+            option_id:    optionId,
+            from_address: f['from'] ?? '',
+            to_address:   f['to'] ?? '',
+            block_number: blockNumber,
+            tx_id:        txId,
+        }),
+    ];
 }
 
 // ---------------------------------------------------------------------------

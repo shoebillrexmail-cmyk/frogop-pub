@@ -11,6 +11,7 @@ import {
     getOption, getOptionsByWriter, getOptionsByBuyer, getOptionsByUser,
     getLastIndexedBlock,
     getCandles, getLatestPrice, getPriceHistory,
+    getTransfersByOption, getTransfersByUser,
 } from '../db/queries.js';
 
 // ---------------------------------------------------------------------------
@@ -117,6 +118,14 @@ async function route(
         return handlePoolOptions(poolOptionsMatch[1] ?? '', params, env.DB);
     }
 
+    // GET /pools/:address/options/:id/transfers
+    const optionTransfersMatch = path.match(/^\/pools\/([^/]+)\/options\/(\d+)\/transfers$/);
+    if (optionTransfersMatch) {
+        const optionId = parseInt(optionTransfersMatch[2] ?? '', 10);
+        if (isNaN(optionId)) return badRequest('Invalid option ID');
+        return json(await getTransfersByOption(env.DB, optionTransfersMatch[1] ?? '', optionId));
+    }
+
     // GET /pools/:address/options/:id
     const singleOptionMatch = path.match(/^\/pools\/([^/]+)\/options\/(\d+)$/);
     if (singleOptionMatch) {
@@ -132,6 +141,14 @@ async function route(
         const addr = userMatch[1] ?? '';
         if (!addr) return badRequest('Missing address');
         return json(await getOptionsByUser(env.DB, addr));
+    }
+
+    // GET /user/:address/transfers
+    const userTransfersMatch = path.match(/^\/user\/([^/]+)\/transfers$/);
+    if (userTransfersMatch) {
+        const addr = userTransfersMatch[1] ?? '';
+        if (!addr) return badRequest('Missing address');
+        return json(await getTransfersByUser(env.DB, addr));
     }
 
     // GET /prices/:token/candles?interval=1h|4h|1d|1w&from=ISO&to=ISO&limit=500

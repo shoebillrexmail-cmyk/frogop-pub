@@ -46,6 +46,15 @@ export const POOL_WRITE_ABI: BitcoinInterfaceAbi = [
         inputs: [{ name: 'optionId', type: ABIDataTypes.UINT256 }],
         outputs: [],
     },
+    {
+        name: 'transferOption',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'optionId', type: ABIDataTypes.UINT256 },
+            { name: 'to', type: ABIDataTypes.ADDRESS },
+        ],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+    },
 ];
 
 /** ABI for OP20 token approve (increaseAllowance) */

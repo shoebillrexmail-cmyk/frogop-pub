@@ -97,13 +97,24 @@ await opnet('OptionsPool Tests', async (vm: OPNetUnit) => {
     });
     
     // ========================================
+    // TRANSFER OPTION TESTS (No token transfers)
+    // ========================================
+
+    await vm.it('transferOption should revert for non-existent option', async () => {
+        const recipient = Blockchain.generateRandomAddress();
+        const error = await pool.transferOptionExpectRevert(999n, recipient);
+        // WASM Revert passes as RuntimeError; message content not preserved
+        Assert.expect(error).toBeDefined();
+    });
+
+    // ========================================
     // WRITE METHOD TESTS (Require OP20 tokens)
     // These tests are documented for integration testing
     // ========================================
-    
+
     // NOTE: The following tests require actual OP20 token contracts.
     // They are documented here for reference and should be run on testnet.
-    // 
+    //
     // Tests that need tokens:
     // - writeOption (calls _transferFrom to lock collateral)
     // - buyOption (calls _transferFrom to pay premium)
@@ -111,10 +122,19 @@ await opnet('OptionsPool Tests', async (vm: OPNetUnit) => {
     // - exercise (calls _transferFrom and _transfer)
     // - settle (calls _transfer to return collateral)
     //
+    // transferOption tests requiring PURCHASED state (tested in integration/08):
+    // - Transfer succeeds for purchased option
+    // - Reverts for non-PURCHASED status (OPEN, EXERCISED, EXPIRED, CANCELLED)
+    // - Reverts when caller is not buyer
+    // - Reverts for zero address recipient
+    // - Reverts for self-transfer (to == current buyer)
+    // - Reverts when past grace period
+    // - New buyer can exercise after transfer, old buyer cannot
+    //
     // Integration test setup:
     // 1. Deploy two OP20 tokens (underlying, premium)
     // 2. Deploy OptionsPool with token addresses
     // 3. Mint tokens to test users
     // 4. Approve pool to spend tokens
-    // 5. Run write/buy/exercise/settle tests
+    // 5. Run write/buy/exercise/settle/transferOption tests
 });

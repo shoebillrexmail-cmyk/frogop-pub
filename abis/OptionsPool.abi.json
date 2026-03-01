@@ -296,6 +296,28 @@
                     "type": "BOOL"
                 }
             ]
+        },
+        {
+            "name": "transferOption",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "to",
+                    "type": "ADDRESS"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
         }
     ],
     "events": [
@@ -351,6 +373,16 @@
         },
         {
             "name": "OptionExpired",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionTransferred",
             "values": [
                 {
                     "name": "data",

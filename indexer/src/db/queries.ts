@@ -9,7 +9,7 @@
  *   - .run()      → D1Result (for writes)
  *   - db.batch([stmt1, stmt2]) → atomic transaction
  */
-import type { OptionRow, PoolRow, FeeEventRow, PriceSnapshotRow, SwapEventRow, PriceCandleRow } from '../types/index.js';
+import type { OptionRow, PoolRow, FeeEventRow, OptionTransferRow, PriceSnapshotRow, SwapEventRow, PriceCandleRow } from '../types/index.js';
 
 // ---------------------------------------------------------------------------
 // Indexer state (cursor)
@@ -115,6 +115,70 @@ export function stmtInsertFeeEvent(
             e.pool_address, e.option_id, e.event_type,
             e.fee_recipient, e.token, e.amount, e.block_number, e.tx_id,
         );
+}
+
+// ---------------------------------------------------------------------------
+// Option transfers — write statements
+// ---------------------------------------------------------------------------
+
+export function stmtInsertOptionTransfer(
+    db: D1Database,
+    row: Omit<OptionTransferRow, 'id'>,
+): D1PreparedStatement {
+    return db
+        .prepare(`
+            INSERT INTO option_transfers
+                (pool_address, option_id, from_address, to_address, block_number, tx_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `)
+        .bind(
+            row.pool_address, row.option_id, row.from_address,
+            row.to_address, row.block_number, row.tx_id,
+        );
+}
+
+export function stmtUpdateOptionBuyer(
+    db: D1Database,
+    poolAddress: string,
+    optionId: number,
+    newBuyer: string,
+    updatedBlock: number,
+    updatedTx: string,
+): D1PreparedStatement {
+    return db
+        .prepare(`
+            UPDATE options
+            SET buyer = ?, updated_block = ?, updated_tx = ?
+            WHERE pool_address = ? AND option_id = ?
+        `)
+        .bind(newBuyer, updatedBlock, updatedTx, poolAddress, optionId);
+}
+
+// ---------------------------------------------------------------------------
+// Option transfers — read queries
+// ---------------------------------------------------------------------------
+
+export async function getTransfersByOption(
+    db: D1Database,
+    poolAddress: string,
+    optionId: number,
+): Promise<OptionTransferRow[]> {
+    const { results } = await db
+        .prepare('SELECT * FROM option_transfers WHERE pool_address = ? AND option_id = ? ORDER BY block_number ASC')
+        .bind(poolAddress, optionId)
+        .all<OptionTransferRow>();
+    return results;
+}
+
+export async function getTransfersByUser(
+    db: D1Database,
+    address: string,
+): Promise<OptionTransferRow[]> {
+    const { results } = await db
+        .prepare('SELECT * FROM option_transfers WHERE from_address = ? OR to_address = ? ORDER BY block_number DESC')
+        .bind(address, address)
+        .all<OptionTransferRow>();
+    return results;
 }
 
 // ---------------------------------------------------------------------------

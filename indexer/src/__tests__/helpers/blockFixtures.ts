@@ -178,6 +178,40 @@ export function buildSwapExecutedBlock(
 }
 
 // ---------------------------------------------------------------------------
+// OptionTransferred
+// ---------------------------------------------------------------------------
+
+interface OptionTransferredParams {
+    optionId?: bigint;
+    from?: string;
+    to?: string;
+    txId?: string;
+}
+
+export function buildOptionTransferredBlock(
+    blockNum: number,
+    poolHex: string = DEFAULT_POOL,
+    params: OptionTransferredParams = {},
+): BlockFixture {
+    const data = buildEventData([
+        { type: 'u256',    value: params.optionId ?? 1n },
+        { type: 'address', value: params.from ?? DEFAULT_BUYER },
+        { type: 'address', value: params.to ?? '0x' + 'ee'.repeat(32) },
+    ]);
+
+    return {
+        transactions: [{
+            id: params.txId ?? `0xtx_transferred_${blockNum}`,
+            events: [{
+                contractAddress: poolHex,
+                type: 'OptionTransferred',
+                data,
+            }],
+        }],
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Empty block (no transactions or events)
 // ---------------------------------------------------------------------------
 

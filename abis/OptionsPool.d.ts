@@ -22,6 +22,9 @@ export type OptionExercisedEvent = {
 export type OptionExpiredEvent = {
     readonly data: string;
 };
+export type OptionTransferredEvent = {
+    readonly data: string;
+};
 
 // ------------------------------------------------------------------
 // Call Results
@@ -197,6 +200,16 @@ export type Settle = CallResult<
     OPNetEvent<OptionExpiredEvent>[]
 >;
 
+/**
+ * @description Represents the result of the transferOption function call.
+ */
+export type TransferOption = CallResult<
+    {
+        success: boolean;
+    },
+    OPNetEvent<OptionTransferredEvent>[]
+>;
+
 // ------------------------------------------------------------------
 // IOptionsPool
 // ------------------------------------------------------------------
@@ -229,4 +242,5 @@ export interface IOptionsPool extends IOP_NETContract {
     buyOption(optionId: bigint): Promise<BuyOption>;
     exercise(optionId: bigint): Promise<Exercise>;
     settle(optionId: bigint): Promise<Settle>;
+    transferOption(optionId: bigint, to: Address): Promise<TransferOption>;
 }

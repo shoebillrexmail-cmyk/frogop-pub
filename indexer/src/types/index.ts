@@ -92,6 +92,17 @@ export interface FeeEventRow {
     tx_id:         string;
 }
 
+/** One row in the `option_transfers` table. */
+export interface OptionTransferRow {
+    id?:          number;  // auto-increment, omitted on insert
+    pool_address: string;
+    option_id:    number;
+    from_address: string;
+    to_address:   string;
+    block_number: number;
+    tx_id:        string;
+}
+
 // ── Block / event shapes (from OPNet RPC) ──────────────────────────────────
 
 /** Minimal tx shape from OPNet getBlock(n, prefetchTxs=true).

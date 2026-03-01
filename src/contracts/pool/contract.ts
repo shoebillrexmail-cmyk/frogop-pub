@@ -150,6 +150,13 @@ class OptionExpiredEvent extends NetEvent {
     }
 }
 
+/** Emitted when an option is transferred to a new buyer */
+class OptionTransferredEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('OptionTransferred', data);
+    }
+}
+
 /** Emitted when the fee recipient address is updated */
 class FeeRecipientUpdatedEvent extends NetEvent {
     constructor(data: BytesWriter) {
@@ -949,6 +956,58 @@ export class OptionsPool extends ReentrancyGuard {
         return result;
     }
     
+    @method(
+        { name: 'optionId', type: ABIDataTypes.UINT256 },
+        { name: 'to', type: ABIDataTypes.ADDRESS },
+    )
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    @emit('OptionTransferred')
+    public transferOption(calldata: Calldata): BytesWriter {
+        const optionId = calldata.readU256();
+        const newBuyer = calldata.readAddress();
+
+        if (!this.options.exists(optionId)) {
+            throw new Revert('Option not found');
+        }
+
+        const option = this.options.get(optionId);
+        const caller = Blockchain.tx.sender;
+
+        if (option.status != PURCHASED) {
+            throw new Revert('Not purchased');
+        }
+
+        if (!caller.equals(option.buyer)) {
+            throw new Revert('Not buyer');
+        }
+
+        if (newBuyer.equals(Address.zero())) {
+            throw new Revert('Invalid recipient');
+        }
+
+        if (newBuyer.equals(option.buyer)) {
+            throw new Revert('Already owner');
+        }
+
+        const currentBlock = Blockchain.block.number;
+        const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
+        if (currentBlock >= graceEnd) {
+            throw new Revert('Grace period ended');
+        }
+
+        this.options.setBuyer(optionId, newBuyer);
+
+        const event = new BytesWriter(96); // 32 + 32 + 32
+        event.writeU256(optionId);
+        event.writeAddress(option.buyer);
+        event.writeAddress(newBuyer);
+        Blockchain.emit(new OptionTransferredEvent(event));
+
+        const result = new BytesWriter(1);
+        result.writeBoolean(true);
+        return result;
+    }
+
     // -------------------------------------------------------------------------
     // INTERNAL HELPERS
     // -------------------------------------------------------------------------
