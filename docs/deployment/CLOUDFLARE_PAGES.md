@@ -77,7 +77,7 @@ JS bundle at build time. They are **not** set in the Cloudflare dashboard.
 | `VITE_OPNET_NETWORK` | `testnet` | Yes | Determines RPC/WS defaults |
 | `VITE_OPNET_RPC_URL` | `https://testnet.opnet.org` | No | Falls back to network default |
 | `VITE_OPNET_WS_URL` | *(not set)* | No | Falls back to network default |
-| `VITE_POOL_ADDRESS` | `opt1sqzd8x7u53eyw4k8y9pnsaup4j0tntxt7pyncp3t9` | Yes* | Direct pool address |
+| `VITE_POOL_ADDRESS` | `opt1sqze2thmp29pkkj8ft8qll0383k3ek4sgvvfqd9r5` | Yes* | Direct pool address |
 | `VITE_FACTORY_ADDRESS` | *(empty)* | No* | Factory for pool discovery |
 | `VITE_INDEXER_URL` | `https://api.frogop.net` | No | Falls back to on-chain RPC |
 | `VITE_POOL_TEMPLATE_ADDRESS` | *(empty)* | No | Unused currently |

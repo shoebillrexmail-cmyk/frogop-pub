@@ -72,7 +72,7 @@ jobs:
         env:
           VITE_OPNET_NETWORK: testnet
           VITE_OPNET_RPC_URL: https://testnet.opnet.org
-          VITE_POOL_ADDRESS: opt1sqzd8x7u53eyw4k8y9pnsaup4j0tntxt7pyncp3t9
+          VITE_POOL_ADDRESS: opt1sqze2thmp29pkkj8ft8qll0383k3ek4sgvvfqd9r5
           VITE_INDEXER_URL: https://api.frogop.net
 
       - name: Deploy to Cloudflare Workers

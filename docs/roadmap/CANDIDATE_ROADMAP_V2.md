@@ -13,7 +13,7 @@ This document synthesizes findings from industry research (`docs/options_researc
 | **Frontend MVP** | Done | React 19, Vite, Tailwind. Pages: Landing, Pools (trading UI + write panel + price chart), Portfolio (written/purchased options), About (FAQ + fees). 2-step approval flows, WebSocket block tracking, TX polling. |
 | **Indexer** | Done | Cloudflare Workers + D1. Block polling, event decoding, REST API (7 endpoints), price candles (1h/4h/1d/1w). |
 | **Tests** | Done | Unit tests (22/22), integration tests (01-07 on testnet), frontend tests (40+). Fee verification via balance diffs. |
-| **Deployment** | Testnet | Pool: `opt1sqqled6uxmlx0zrlqnz6x2eq500vprj2ssuaefveq`, Signet fork, ~10 min blocks |
+| **Deployment** | Testnet | Pool: `opt1sqze2thmp29pkkj8ft8qll0383k3ek4sgvvfqd9r5`, Signet fork, ~10 min blocks |
 
 ---
 
