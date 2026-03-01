@@ -420,6 +420,26 @@ export function createUpdateFeeRecipientCalldata(newRecipient: Address): Uint8Ar
     return writer.getBuffer();
 }
 
+export function createBatchCancelCalldata(optionIds: bigint[]): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(POOL_SELECTORS.batchCancel);
+    writer.writeU256(BigInt(optionIds.length));
+    for (let i = 0; i < 5; i++) {
+        writer.writeU256(i < optionIds.length ? optionIds[i] : 0n);
+    }
+    return writer.getBuffer();
+}
+
+export function createBatchSettleCalldata(optionIds: bigint[]): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(POOL_SELECTORS.batchSettle);
+    writer.writeU256(BigInt(optionIds.length));
+    for (let i = 0; i < 5; i++) {
+        writer.writeU256(i < optionIds.length ? optionIds[i] : 0n);
+    }
+    return writer.getBuffer();
+}
+
 export function getWasmPath(contractName: string): string {
     return path.join(process.cwd(), 'build', `${contractName}.wasm`);
 }

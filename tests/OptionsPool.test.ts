@@ -108,6 +108,35 @@ await opnet('OptionsPool Tests', async (vm: OPNetUnit) => {
     });
 
     // ========================================
+    // BATCH OPERATION TESTS (No token transfers)
+    // ========================================
+
+    await vm.it('batchCancel should revert with empty array', async () => {
+        const error = await pool.batchCancelExpectRevert([]);
+        Assert.expect(error).toBeDefined();
+    });
+
+    await vm.it('batchCancel should revert when exceeding MAX_BATCH_SIZE', async () => {
+        const error = await pool.batchCancelExpectRevert([0n, 1n, 2n, 3n, 4n, 5n]);
+        Assert.expect(error).toBeDefined();
+    });
+
+    await vm.it('batchCancel should revert for non-existent option', async () => {
+        const error = await pool.batchCancelExpectRevert([999n]);
+        Assert.expect(error).toBeDefined();
+    });
+
+    await vm.it('batchSettle should revert with empty array', async () => {
+        const error = await pool.batchSettleExpectRevert([]);
+        Assert.expect(error).toBeDefined();
+    });
+
+    await vm.it('batchSettle should revert when exceeding MAX_BATCH_SIZE', async () => {
+        const error = await pool.batchSettleExpectRevert([0n, 1n, 2n, 3n, 4n, 5n]);
+        Assert.expect(error).toBeDefined();
+    });
+
+    // ========================================
     // WRITE METHOD TESTS (Require OP20 tokens)
     // These tests are documented for integration testing
     // ========================================

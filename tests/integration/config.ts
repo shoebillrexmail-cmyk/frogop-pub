@@ -217,6 +217,10 @@ export const POOL_SELECTORS = {
     updateFeeRecipient: computeSelectorU32('updateFeeRecipient(address)'),
     transferOption: computeSelectorU32('transferOption(uint256,address)'),
     transferOptionView: computeSelector('transferOption(uint256,address)'),
+    batchCancel: computeSelectorU32('batchCancel(uint256,uint256,uint256,uint256,uint256,uint256)'),
+    batchSettle: computeSelectorU32('batchSettle(uint256,uint256,uint256,uint256,uint256,uint256)'),
+    batchCancelView: computeSelector('batchCancel(uint256,uint256,uint256,uint256,uint256,uint256)'),
+    batchSettleView: computeSelector('batchSettle(uint256,uint256,uint256,uint256,uint256,uint256)'),
 };
 
 /** OptionsFactory method selectors */

@@ -210,6 +210,26 @@ export type TransferOption = CallResult<
     OPNetEvent<OptionTransferredEvent>[]
 >;
 
+/**
+ * @description Represents the result of the batchCancel function call.
+ */
+export type BatchCancel = CallResult<
+    {
+        success: boolean;
+    },
+    OPNetEvent<OptionCancelledEvent>[]
+>;
+
+/**
+ * @description Represents the result of the batchSettle function call.
+ */
+export type BatchSettle = CallResult<
+    {
+        settledCount: bigint;
+    },
+    OPNetEvent<OptionExpiredEvent>[]
+>;
+
 // ------------------------------------------------------------------
 // IOptionsPool
 // ------------------------------------------------------------------
@@ -243,4 +263,6 @@ export interface IOptionsPool extends IOP_NETContract {
     exercise(optionId: bigint): Promise<Exercise>;
     settle(optionId: bigint): Promise<Settle>;
     transferOption(optionId: bigint, to: Address): Promise<TransferOption>;
+    batchCancel(count: bigint, id0: bigint, id1: bigint, id2: bigint, id3: bigint, id4: bigint): Promise<BatchCancel>;
+    batchSettle(count: bigint, id0: bigint, id1: bigint, id2: bigint, id3: bigint, id4: bigint): Promise<BatchSettle>;
 }

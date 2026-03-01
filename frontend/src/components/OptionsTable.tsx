@@ -26,6 +26,8 @@ interface OptionsTableProps {
     onCancel?: (option: OptionData) => void;
     onExercise?: (option: OptionData) => void;
     onSettle?: (option: OptionData) => void;
+    onBatchCancel?: (options: OptionData[]) => void;
+    onBatchSettle?: (options: OptionData[]) => void;
 }
 
 const STATUS_LABELS: Record<number, string> = {
@@ -172,8 +174,11 @@ export function OptionsTable({
     onCancel,
     onExercise,
     onSettle,
+    onBatchCancel,
+    onBatchSettle,
 }: OptionsTableProps) {
     const [filter, setFilter] = useState<FilterStatus>('ALL');
+    const [selected, setSelected] = useState<Set<bigint>>(new Set());
 
     const filtered = showFilter
         ? options.filter((o) => {
@@ -181,6 +186,38 @@ export function OptionsTable({
               return STATUS_LABELS[o.status] === filter;
           })
         : options;
+
+    function toggleSelect(id: bigint) {
+        setSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
+    }
+
+    function toggleSelectAll() {
+        if (selected.size === filtered.length) {
+            setSelected(new Set());
+        } else {
+            setSelected(new Set(filtered.map((o) => o.id)));
+        }
+    }
+
+    const selectedOptions = filtered.filter((o) => selected.has(o.id));
+    const selectedOpen = selectedOptions.filter(
+        (o) => o.status === OptionStatus.OPEN && walletHex !== null && o.writer.toLowerCase() === walletHex.toLowerCase(),
+    );
+
+    const graceBlocks = gracePeriodBlocks ?? 144n;
+    const selectedSettleable = selectedOptions.filter((o) => {
+        if (o.status !== OptionStatus.PURCHASED) return false;
+        if (currentBlock === undefined) return false;
+        return currentBlock >= o.expiryBlock + graceBlocks;
+    });
 
     return (
         <div className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-5">
@@ -206,6 +243,30 @@ export function OptionsTable({
                 )}
             </div>
 
+            {/* Batch action buttons */}
+            {(selectedOpen.length > 0 || selectedSettleable.length > 0) && (
+                <div className="flex gap-2 mb-3">
+                    {selectedOpen.length > 0 && onBatchCancel && (
+                        <button
+                            onClick={() => onBatchCancel(selectedOpen)}
+                            className="btn-secondary px-3 py-1 text-xs rounded"
+                            data-testid="btn-batch-cancel-selected"
+                        >
+                            Cancel Selected ({selectedOpen.length})
+                        </button>
+                    )}
+                    {selectedSettleable.length > 0 && onBatchSettle && (
+                        <button
+                            onClick={() => onBatchSettle(selectedSettleable)}
+                            className="btn-secondary px-3 py-1 text-xs rounded"
+                            data-testid="btn-batch-settle-selected"
+                        >
+                            Settle Expired ({selectedSettleable.length})
+                        </button>
+                    )}
+                </div>
+            )}
+
             <hr className="border-terminal-border-subtle mb-3" />
 
             {filtered.length === 0 ? (
@@ -217,6 +278,15 @@ export function OptionsTable({
                     <table className="w-full text-sm font-mono">
                         <thead>
                             <tr className="text-terminal-text-muted text-xs border-b border-terminal-border-subtle">
+                                <th className="py-2 pr-2 w-8">
+                                    <input
+                                        type="checkbox"
+                                        checked={filtered.length > 0 && selected.size === filtered.length}
+                                        onChange={toggleSelectAll}
+                                        className="accent-accent"
+                                        data-testid="select-all"
+                                    />
+                                </th>
                                 <th className="text-left py-2 pr-4">#</th>
                                 <th className="text-left py-2 pr-4">Type</th>
                                 <th className="text-left py-2 pr-4">Strike</th>
@@ -237,6 +307,15 @@ export function OptionsTable({
                                     className="border-b border-terminal-border-subtle last:border-0 hover:bg-terminal-bg-primary transition-colors"
                                     data-testid={`option-row-${option.id}`}
                                 >
+                                    <td className="py-2 pr-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={selected.has(option.id)}
+                                            onChange={() => toggleSelect(option.id)}
+                                            className="accent-accent"
+                                            data-testid={`select-${option.id}`}
+                                        />
+                                    </td>
                                     <td className="py-2 pr-4 text-terminal-text-muted">
                                         {option.id.toString()}
                                     </td>
