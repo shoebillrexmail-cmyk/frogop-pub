@@ -38,8 +38,14 @@ const MockJSONRpcProvider = vi.mocked(JSONRpcProvider);
 
 let db: MockD1Database;
 let counter: SubrequestCounter;
-let mockProvider: Record<string, ReturnType<typeof vi.fn>>;
-let wrappedProvider: Record<string, unknown>;
+interface MockProvider {
+    getBlockNumber: ReturnType<typeof vi.fn>;
+    getBlock: ReturnType<typeof vi.fn>;
+    getPublicKeyInfo: ReturnType<typeof vi.fn>;
+    call: ReturnType<typeof vi.fn>;
+}
+let mockProvider: MockProvider;
+let wrappedProvider: MockProvider;
 const FREE_TIER_LIMIT = 50;
 
 function makeEnv(overrides: Partial<Env> = {}): Env {
@@ -79,7 +85,7 @@ beforeEach(async () => {
     });
 
     // Proxy wraps the provider — mock methods stay accessible on mockProvider
-    wrappedProvider = counter.wrapProvider(mockProvider);
+    wrappedProvider = counter.wrapProvider(mockProvider as unknown as Record<string, unknown>) as unknown as MockProvider;
     MockJSONRpcProvider.mockImplementation(() => wrappedProvider as never);
 });
 

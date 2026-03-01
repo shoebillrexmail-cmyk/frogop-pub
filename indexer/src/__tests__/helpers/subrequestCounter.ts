@@ -71,14 +71,14 @@ export class SubrequestCounter {
      * D1 batch() = 1 subrequest regardless of how many statements it contains.
      * Each .first() or .all() call = 1 subrequest.
      */
-    wrapDb<T extends { batch: (...args: unknown[]) => unknown; prepare: (sql: string) => unknown }>(base: T): T {
+    wrapDb<T extends { batch: (stmts: unknown[]) => unknown; prepare: (sql: string) => unknown }>(base: T): T {
         const counter = this;
 
         // Wrap batch
         const origBatch = base.batch.bind(base);
-        base.batch = ((...args: unknown[]) => {
+        base.batch = ((stmts: unknown[]) => {
             counter.record('d1.batch');
-            return origBatch(...args);
+            return origBatch(stmts);
         }) as T['batch'];
 
         // Wrap prepare to intercept first() and all()
