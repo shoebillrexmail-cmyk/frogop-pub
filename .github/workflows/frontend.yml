@@ -43,9 +43,9 @@ jobs:
           # Real values are set in Cloudflare Pages dashboard (Settings → Environment Variables).
           VITE_OPNET_NETWORK: testnet
 
-  # ── Deploy: Cloudflare Pages (push to master only) ────────────────────────
+  # ── Deploy: Cloudflare Workers Static Assets (push to master only) ────────
   deploy:
-    name: Deploy to Cloudflare Pages
+    name: Deploy to Cloudflare Workers
     needs: ci
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -75,16 +75,10 @@ jobs:
           VITE_POOL_ADDRESS: opt1sqzd8x7u53eyw4k8y9pnsaup4j0tntxt7pyncp3t9
           VITE_INDEXER_URL: https://api.frogop.net
 
-      - name: Ensure Cloudflare Pages project exists
-        run: npx wrangler pages project create frogop-frontend --production-branch=master || true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=frogop-frontend --commit-dirty=true
+          command: deploy
           workingDirectory: frontend
