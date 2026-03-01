@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { type OptionData, OptionStatus, OptionType } from '../services/types.ts';
 import { formatTokenAmount, blocksToCountdown } from '../config/index.ts';
+import { calcBreakeven, calcYield } from '../utils/optionMath.js';
 
 type FilterStatus = 'ALL' | 'OPEN' | 'PURCHASED' | 'EXPIRED' | 'CANCELLED';
 
@@ -17,12 +18,17 @@ interface OptionsTableProps {
     gracePeriodBlocks?: bigint;
     /** MOTO/PILL price ratio for strike equivalent display */
     motoPillRatio?: number | null;
+    /** Per-option unrealized P&L in PILL (from usePnL hook) */
+    pnlMap?: Map<bigint, number>;
     /** Show the status filter bar (default: true) */
     showFilter?: boolean;
     onBuy?: (option: OptionData) => void;
     onCancel?: (option: OptionData) => void;
     onExercise?: (option: OptionData) => void;
     onSettle?: (option: OptionData) => void;
+    onRoll?: (option: OptionData) => void;
+    onBatchCancel?: (options: OptionData[]) => void;
+    onBatchSettle?: (options: OptionData[]) => void;
 }
 
 const STATUS_LABELS: Record<number, string> = {
@@ -73,6 +79,7 @@ function RowAction({
     onCancel,
     onExercise,
     onSettle,
+    onRoll,
 }: {
     option: OptionData;
     walletHex: string | null;
@@ -82,6 +89,7 @@ function RowAction({
     onCancel?: (o: OptionData) => void;
     onExercise?: (o: OptionData) => void;
     onSettle?: (o: OptionData) => void;
+    onRoll?: (o: OptionData) => void;
 }) {
     const isWriter = walletHex !== null && option.writer.toLowerCase() === walletHex.toLowerCase();
     const isBuyer =
@@ -96,13 +104,22 @@ function RowAction({
     if (option.status === OptionStatus.OPEN) {
         if (isWriter) {
             return (
-                <button
-                    className="btn-secondary px-3 py-1 text-xs rounded"
-                    onClick={() => onCancel?.(option)}
-                    data-testid={`cancel-${option.id}`}
-                >
-                    Cancel
-                </button>
+                <div className="flex gap-1">
+                    <button
+                        className="btn-secondary px-3 py-1 text-xs rounded"
+                        onClick={() => onCancel?.(option)}
+                        data-testid={`cancel-${option.id}`}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        className="btn-secondary px-3 py-1 text-xs rounded"
+                        onClick={() => onRoll?.(option)}
+                        data-testid={`roll-${option.id}`}
+                    >
+                        Roll
+                    </button>
+                </div>
             );
         }
         return (
@@ -157,38 +174,24 @@ function RowAction({
     return null;
 }
 
-function calcBreakeven(option: OptionData): bigint | null {
-    if (option.status !== OptionStatus.OPEN && option.status !== OptionStatus.PURCHASED) return null;
-    if (option.optionType === OptionType.CALL) return option.strikePrice + option.premium;
-    // PUT: strikePrice - premium (clamped to 0)
-    return option.strikePrice > option.premium ? option.strikePrice - option.premium : 0n;
-}
-
-function calcYield(option: OptionData): number | null {
-    if (option.premium <= 0n || option.underlyingAmount <= 0n) return null;
-    if (option.optionType === OptionType.CALL) {
-        // premium PILL earned per MOTO locked
-        return Number(option.premium) / Number(option.underlyingAmount) * 100;
-    }
-    // PUT: premium PILL earned per PILL locked (strikePrice * underlyingAmount)
-    const collateral = option.strikePrice * option.underlyingAmount;
-    if (collateral <= 0n) return null;
-    return Number(option.premium) / Number(collateral) * 100;
-}
-
 export function OptionsTable({
     options,
     walletHex,
     currentBlock,
     gracePeriodBlocks,
     motoPillRatio,
+    pnlMap,
     showFilter = true,
     onBuy,
     onCancel,
     onExercise,
     onSettle,
+    onRoll,
+    onBatchCancel,
+    onBatchSettle,
 }: OptionsTableProps) {
     const [filter, setFilter] = useState<FilterStatus>('ALL');
+    const [selected, setSelected] = useState<Set<bigint>>(new Set());
 
     const filtered = showFilter
         ? options.filter((o) => {
@@ -196,6 +199,38 @@ export function OptionsTable({
               return STATUS_LABELS[o.status] === filter;
           })
         : options;
+
+    function toggleSelect(id: bigint) {
+        setSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
+    }
+
+    function toggleSelectAll() {
+        if (selected.size === filtered.length) {
+            setSelected(new Set());
+        } else {
+            setSelected(new Set(filtered.map((o) => o.id)));
+        }
+    }
+
+    const selectedOptions = filtered.filter((o) => selected.has(o.id));
+    const selectedOpen = selectedOptions.filter(
+        (o) => o.status === OptionStatus.OPEN && walletHex !== null && o.writer.toLowerCase() === walletHex.toLowerCase(),
+    );
+
+    const graceBlocks = gracePeriodBlocks ?? 144n;
+    const selectedSettleable = selectedOptions.filter((o) => {
+        if (o.status !== OptionStatus.PURCHASED) return false;
+        if (currentBlock === undefined) return false;
+        return currentBlock >= o.expiryBlock + graceBlocks;
+    });
 
     return (
         <div className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-5">
@@ -221,6 +256,30 @@ export function OptionsTable({
                 )}
             </div>
 
+            {/* Batch action buttons */}
+            {(selectedOpen.length > 0 || selectedSettleable.length > 0) && (
+                <div className="flex gap-2 mb-3">
+                    {selectedOpen.length > 0 && onBatchCancel && (
+                        <button
+                            onClick={() => onBatchCancel(selectedOpen)}
+                            className="btn-secondary px-3 py-1 text-xs rounded"
+                            data-testid="btn-batch-cancel-selected"
+                        >
+                            Cancel Selected ({selectedOpen.length})
+                        </button>
+                    )}
+                    {selectedSettleable.length > 0 && onBatchSettle && (
+                        <button
+                            onClick={() => onBatchSettle(selectedSettleable)}
+                            className="btn-secondary px-3 py-1 text-xs rounded"
+                            data-testid="btn-batch-settle-selected"
+                        >
+                            Settle Expired ({selectedSettleable.length})
+                        </button>
+                    )}
+                </div>
+            )}
+
             <hr className="border-terminal-border-subtle mb-3" />
 
             {filtered.length === 0 ? (
@@ -232,6 +291,15 @@ export function OptionsTable({
                     <table className="w-full text-sm font-mono">
                         <thead>
                             <tr className="text-terminal-text-muted text-xs border-b border-terminal-border-subtle">
+                                <th className="py-2 pr-2 w-8">
+                                    <input
+                                        type="checkbox"
+                                        checked={filtered.length > 0 && selected.size === filtered.length}
+                                        onChange={toggleSelectAll}
+                                        className="accent-accent"
+                                        data-testid="select-all"
+                                    />
+                                </th>
                                 <th className="text-left py-2 pr-4">#</th>
                                 <th className="text-left py-2 pr-4">Type</th>
                                 <th className="text-left py-2 pr-4">Strike</th>
@@ -240,6 +308,7 @@ export function OptionsTable({
                                 <th className="text-left py-2 pr-4">Amount</th>
                                 <th className="text-left py-2 pr-4">Breakeven</th>
                                 <th className="text-left py-2 pr-4">Yield</th>
+                                {pnlMap && <th className="text-left py-2 pr-4">P&L</th>}
                                 <th className="text-left py-2 pr-4">Status</th>
                                 <th className="text-left py-2">Action</th>
                             </tr>
@@ -251,6 +320,15 @@ export function OptionsTable({
                                     className="border-b border-terminal-border-subtle last:border-0 hover:bg-terminal-bg-primary transition-colors"
                                     data-testid={`option-row-${option.id}`}
                                 >
+                                    <td className="py-2 pr-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={selected.has(option.id)}
+                                            onChange={() => toggleSelect(option.id)}
+                                            className="accent-accent"
+                                            data-testid={`select-${option.id}`}
+                                        />
+                                    </td>
                                     <td className="py-2 pr-4 text-terminal-text-muted">
                                         {option.id.toString()}
                                     </td>
@@ -294,6 +372,19 @@ export function OptionsTable({
                                             return y !== null ? <>{y.toFixed(2)}%</> : <span className="text-terminal-text-muted">—</span>;
                                         })()}
                                     </td>
+                                    {pnlMap && (
+                                        <td className="py-2 pr-4 text-xs font-mono">
+                                            {(() => {
+                                                const pnl = pnlMap.get(option.id);
+                                                if (pnl === undefined) return <span className="text-terminal-text-muted">—</span>;
+                                                return (
+                                                    <span className={pnl >= 0 ? 'text-green-400' : 'text-rose-400'}>
+                                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} PILL
+                                                    </span>
+                                                );
+                                            })()}
+                                        </td>
+                                    )}
                                     <td className="py-2 pr-4">
                                         <StatusBadge status={option.status} />
                                     </td>
@@ -307,6 +398,7 @@ export function OptionsTable({
                                             onCancel={onCancel}
                                             onExercise={onExercise}
                                             onSettle={onSettle}
+                                            onRoll={onRoll}
                                         />
                                     </td>
                                 </tr>

@@ -98,6 +98,9 @@ const BUY_FEE_BPS: u64 = 100;
 /** Exercise fee in basis points (10 = 0.1%) — deducted from buyer's proceeds */
 const EXERCISE_FEE_BPS: u64 = 10;
 
+/** Maximum number of options in a batch operation */
+const MAX_BATCH_SIZE: u8 = 5;
+
 // =============================================================================
 // STORAGE POINTER DEFINITIONS - Using Blockchain.nextPointer
 // =============================================================================
@@ -147,6 +150,20 @@ class OptionExercisedEvent extends NetEvent {
 class OptionExpiredEvent extends NetEvent {
     constructor(data: BytesWriter) {
         super('OptionExpired', data);
+    }
+}
+
+/** Emitted when an option is transferred to a new buyer */
+class OptionTransferredEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('OptionTransferred', data);
+    }
+}
+
+/** Emitted when an option is rolled (cancelled + new option created atomically) */
+class OptionRolledEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('OptionRolled', data);
     }
 }
 
@@ -949,6 +966,390 @@ export class OptionsPool extends ReentrancyGuard {
         return result;
     }
     
+    @method(
+        { name: 'optionId', type: ABIDataTypes.UINT256 },
+        { name: 'to', type: ABIDataTypes.ADDRESS },
+    )
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    @emit('OptionTransferred')
+    public transferOption(calldata: Calldata): BytesWriter {
+        const optionId = calldata.readU256();
+        const newBuyer = calldata.readAddress();
+
+        if (!this.options.exists(optionId)) {
+            throw new Revert('Option not found');
+        }
+
+        const option = this.options.get(optionId);
+        const caller = Blockchain.tx.sender;
+
+        if (option.status != PURCHASED) {
+            throw new Revert('Not purchased');
+        }
+
+        if (!caller.equals(option.buyer)) {
+            throw new Revert('Not buyer');
+        }
+
+        if (newBuyer.equals(Address.zero())) {
+            throw new Revert('Invalid recipient');
+        }
+
+        if (newBuyer.equals(option.buyer)) {
+            throw new Revert('Already owner');
+        }
+
+        const currentBlock = Blockchain.block.number;
+        const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
+        if (currentBlock >= graceEnd) {
+            throw new Revert('Grace period ended');
+        }
+
+        this.options.setBuyer(optionId, newBuyer);
+
+        const event = new BytesWriter(96); // 32 + 32 + 32
+        event.writeU256(optionId);
+        event.writeAddress(option.buyer);
+        event.writeAddress(newBuyer);
+        Blockchain.emit(new OptionTransferredEvent(event));
+
+        const result = new BytesWriter(1);
+        result.writeBoolean(true);
+        return result;
+    }
+
+    // -------------------------------------------------------------------------
+    // ROLL OPTION
+    // -------------------------------------------------------------------------
+
+    @method(
+        { name: 'optionId', type: ABIDataTypes.UINT256 },
+        { name: 'newStrikePrice', type: ABIDataTypes.UINT256 },
+        { name: 'newExpiryBlock', type: ABIDataTypes.UINT64 },
+        { name: 'newPremium', type: ABIDataTypes.UINT256 },
+    )
+    @returns({ name: 'newOptionId', type: ABIDataTypes.UINT256 })
+    @emit('OptionRolled')
+    public rollOption(calldata: Calldata): BytesWriter {
+        const optionId = calldata.readU256();
+        const newStrikePrice = calldata.readU256();
+        const newExpiryBlock = calldata.readU64();
+        const newPremium = calldata.readU256();
+
+        if (!this.options.exists(optionId)) {
+            throw new Revert('Option not found');
+        }
+
+        const option = this.options.get(optionId);
+        const caller = Blockchain.tx.sender;
+
+        if (!caller.equals(option.writer)) {
+            throw new Revert('Not writer');
+        }
+        if (option.status != OPEN) {
+            throw new Revert('Not open');
+        }
+
+        if (newStrikePrice == u256.Zero || newPremium == u256.Zero) {
+            throw new Revert('Values must be > 0');
+        }
+
+        const currentBlock = Blockchain.block.number;
+        if (newExpiryBlock <= currentBlock) {
+            throw new Revert('Expiry in past');
+        }
+        if (newExpiryBlock > currentBlock + MAX_EXPIRY_BLOCKS) {
+            throw new Revert('Expiry too far');
+        }
+
+        // Determine collateral token and compute old / new collateral
+        let collateralToken: Address;
+        let oldCollateral: u256;
+        let newCollateral: u256;
+
+        if (option.optionType == CALL) {
+            collateralToken = this._underlying.value;
+            oldCollateral = option.underlyingAmount;
+            newCollateral = option.underlyingAmount; // immutable for CALL
+        } else {
+            collateralToken = this._premiumToken.value;
+            oldCollateral = SafeMath.mul(option.strikePrice, option.underlyingAmount);
+            newCollateral = SafeMath.mul(newStrikePrice, option.underlyingAmount);
+        }
+
+        // Compute cancel fee on old collateral (0 if expired)
+        let fee: u256;
+        if (currentBlock >= option.expiryBlock) {
+            fee = u256.Zero;
+        } else {
+            fee = SafeMath.div(
+                SafeMath.add(
+                    SafeMath.mul(oldCollateral, u256.fromU64(CANCEL_FEE_BPS)),
+                    u256.fromU64(9999)
+                ),
+                u256.fromU64(10000)
+            );
+        }
+
+        // Mark old option as CANCELLED
+        this.options.setStatus(optionId, CANCELLED);
+
+        // Send cancel fee to feeRecipient
+        if (fee > u256.Zero) {
+            this._transfer(collateralToken, this.feeRecipientStore.value, fee);
+        }
+
+        // Handle net collateral transfer
+        const refundAfterFee = SafeMath.sub(oldCollateral, fee);
+        if (u256.gt(newCollateral, refundAfterFee)) {
+            // Writer needs to top up the difference
+            const topUp = SafeMath.sub(newCollateral, refundAfterFee);
+            this._transferFrom(collateralToken, caller, Blockchain.contractAddress, topUp);
+        } else if (u256.lt(newCollateral, refundAfterFee)) {
+            // Surplus returned to writer
+            const surplus = SafeMath.sub(refundAfterFee, newCollateral);
+            this._transfer(collateralToken, caller, surplus);
+        }
+        // If equal: no transfer needed
+
+        // Create new option with incremented nextId
+        const newOptionId = this._nextId.value;
+        this._nextId.value = SafeMath.add(newOptionId, u256.One);
+
+        const newOption = new Option();
+        newOption.id = newOptionId;
+        newOption.writer = caller;
+        newOption.buyer = Address.zero();
+        newOption.strikePrice = newStrikePrice;
+        newOption.underlyingAmount = option.underlyingAmount;
+        newOption.premium = newPremium;
+        newOption.expiryBlock = newExpiryBlock;
+        newOption.createdBlock = currentBlock;
+        newOption.optionType = option.optionType;
+        newOption.status = OPEN;
+
+        this.options.set(newOptionId, newOption);
+
+        // Emit backward-compatible events for indexer
+        const cancelEvent = new BytesWriter(128);
+        cancelEvent.writeU256(optionId);
+        cancelEvent.writeAddress(caller);
+        cancelEvent.writeU256(SafeMath.sub(oldCollateral, fee));
+        cancelEvent.writeU256(fee);
+        Blockchain.emit(new OptionCancelledEvent(cancelEvent));
+
+        const writeEvent = new BytesWriter(200);
+        writeEvent.writeU256(newOptionId);
+        writeEvent.writeAddress(caller);
+        writeEvent.writeU8(option.optionType);
+        writeEvent.writeU256(newStrikePrice);
+        writeEvent.writeU256(option.underlyingAmount);
+        writeEvent.writeU256(newPremium);
+        writeEvent.writeU64(newExpiryBlock);
+        Blockchain.emit(new OptionWrittenEvent(writeEvent));
+
+        // Emit OptionRolled event
+        const rollEvent = new BytesWriter(228); // 32+32+32+32+8+32 = 168 + padding
+        rollEvent.writeU256(optionId);
+        rollEvent.writeU256(newOptionId);
+        rollEvent.writeAddress(caller);
+        rollEvent.writeU256(newStrikePrice);
+        rollEvent.writeU64(newExpiryBlock);
+        rollEvent.writeU256(newPremium);
+        Blockchain.emit(new OptionRolledEvent(rollEvent));
+
+        const result = new BytesWriter(32);
+        result.writeU256(newOptionId);
+        return result;
+    }
+
+    // -------------------------------------------------------------------------
+    // BATCH OPERATIONS
+    // -------------------------------------------------------------------------
+
+    /**
+     * Cancel multiple OPEN options atomically.
+     * Calldata: count(u256) + id0(u256) + id1(u256) + ... (padded to 5 with 0)
+     * Reverts if ANY option fails validation (atomic).
+     */
+    @method(
+        { name: 'count', type: ABIDataTypes.UINT256 },
+        { name: 'id0', type: ABIDataTypes.UINT256 },
+        { name: 'id1', type: ABIDataTypes.UINT256 },
+        { name: 'id2', type: ABIDataTypes.UINT256 },
+        { name: 'id3', type: ABIDataTypes.UINT256 },
+        { name: 'id4', type: ABIDataTypes.UINT256 },
+    )
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    @emit('OptionCancelled')
+    public batchCancel(calldata: Calldata): BytesWriter {
+        const count = calldata.readU256();
+
+        if (count == u256.Zero) {
+            throw new Revert('Empty batch');
+        }
+        if (u256.gt(count, u256.fromU32(u32(MAX_BATCH_SIZE)))) {
+            throw new Revert('Batch too large');
+        }
+
+        const n: i32 = i32(u32(count.lo1));
+
+        // Read all IDs (always read 5, ignore extras beyond count)
+        const ids: u256[] = new Array<u256>(5);
+        for (let i: i32 = 0; i < 5; i++) {
+            ids[i] = calldata.readU256();
+        }
+
+        const caller = Blockchain.tx.sender;
+        const currentBlock = Blockchain.block.number;
+
+        for (let i: i32 = 0; i < n; i++) {
+            const optionId = ids[i];
+
+            if (!this.options.exists(optionId)) {
+                throw new Revert('Option not found');
+            }
+
+            const option = this.options.get(optionId);
+
+            if (!caller.equals(option.writer)) {
+                throw new Revert('Not writer');
+            }
+            if (option.status != OPEN) {
+                throw new Revert('Not open');
+            }
+
+            let collateralToken: Address;
+            let collateralAmount: u256;
+
+            if (option.optionType == CALL) {
+                collateralToken = this._underlying.value;
+                collateralAmount = option.underlyingAmount;
+            } else {
+                collateralToken = this._premiumToken.value;
+                collateralAmount = SafeMath.mul(option.strikePrice, option.underlyingAmount);
+            }
+
+            let fee: u256;
+            if (currentBlock >= option.expiryBlock) {
+                fee = u256.Zero;
+            } else {
+                fee = SafeMath.div(
+                    SafeMath.add(
+                        SafeMath.mul(collateralAmount, u256.fromU64(CANCEL_FEE_BPS)),
+                        u256.fromU64(9999)
+                    ),
+                    u256.fromU64(10000)
+                );
+            }
+            const returnAmount = SafeMath.sub(collateralAmount, fee);
+
+            this.options.setStatus(optionId, CANCELLED);
+
+            this._transfer(collateralToken, option.writer, returnAmount);
+            if (fee > u256.Zero) {
+                this._transfer(collateralToken, this.feeRecipientStore.value, fee);
+            }
+
+            const event = new BytesWriter(128);
+            event.writeU256(optionId);
+            event.writeAddress(option.writer);
+            event.writeU256(returnAmount);
+            event.writeU256(fee);
+            Blockchain.emit(new OptionCancelledEvent(event));
+        }
+
+        const result = new BytesWriter(1);
+        result.writeBoolean(true);
+        return result;
+    }
+
+    /**
+     * Settle multiple expired options (non-atomic: skips unsettleable).
+     * Calldata: count(u256) + id0(u256) + id1(u256) + ... (padded to 5 with 0)
+     * Returns settledCount (u256).
+     */
+    @method(
+        { name: 'count', type: ABIDataTypes.UINT256 },
+        { name: 'id0', type: ABIDataTypes.UINT256 },
+        { name: 'id1', type: ABIDataTypes.UINT256 },
+        { name: 'id2', type: ABIDataTypes.UINT256 },
+        { name: 'id3', type: ABIDataTypes.UINT256 },
+        { name: 'id4', type: ABIDataTypes.UINT256 },
+    )
+    @returns({ name: 'settledCount', type: ABIDataTypes.UINT256 })
+    @emit('OptionExpired')
+    public batchSettle(calldata: Calldata): BytesWriter {
+        const count = calldata.readU256();
+
+        if (count == u256.Zero) {
+            throw new Revert('Empty batch');
+        }
+        if (u256.gt(count, u256.fromU32(u32(MAX_BATCH_SIZE)))) {
+            throw new Revert('Batch too large');
+        }
+
+        const n: i32 = i32(u32(count.lo1));
+
+        // Read all IDs (always read 5, ignore extras beyond count)
+        const ids: u256[] = new Array<u256>(5);
+        for (let i: i32 = 0; i < 5; i++) {
+            ids[i] = calldata.readU256();
+        }
+
+        const currentBlock = Blockchain.block.number;
+        let settledCount: u256 = u256.Zero;
+
+        for (let i: i32 = 0; i < n; i++) {
+            const optionId = ids[i];
+
+            // Skip if option doesn't exist
+            if (!this.options.exists(optionId)) {
+                continue;
+            }
+
+            const option = this.options.get(optionId);
+
+            // Skip if not PURCHASED
+            if (option.status != PURCHASED) {
+                continue;
+            }
+
+            // Skip if grace period hasn't ended
+            const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
+            if (currentBlock < graceEnd) {
+                continue;
+            }
+
+            let collateralToken: Address;
+            let collateralAmount: u256;
+
+            if (option.optionType == CALL) {
+                collateralToken = this._underlying.value;
+                collateralAmount = option.underlyingAmount;
+            } else {
+                collateralToken = this._premiumToken.value;
+                collateralAmount = SafeMath.mul(option.strikePrice, option.underlyingAmount);
+            }
+
+            this.options.setStatus(optionId, EXPIRED);
+
+            this._transfer(collateralToken, option.writer, collateralAmount);
+
+            const event = new BytesWriter(100);
+            event.writeU256(optionId);
+            event.writeAddress(option.writer);
+            event.writeU256(collateralAmount);
+            Blockchain.emit(new OptionExpiredEvent(event));
+
+            settledCount = SafeMath.add(settledCount, u256.One);
+        }
+
+        const result = new BytesWriter(32);
+        result.writeU256(settledCount);
+        return result;
+    }
+
     // -------------------------------------------------------------------------
     // INTERNAL HELPERS
     // -------------------------------------------------------------------------

@@ -15,10 +15,13 @@ import { PoolInfoCard } from '../components/PoolInfoCard.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
 import { PriceChart } from '../components/PriceChart.tsx';
 import { WriteOptionPanel } from '../components/WriteOptionPanel.tsx';
+import type { WriteOptionInitialValues } from '../components/WriteOptionPanel.tsx';
 import { BuyOptionModal } from '../components/BuyOptionModal.tsx';
 import { CancelModal } from '../components/CancelModal.tsx';
 import { ExerciseModal } from '../components/ExerciseModal.tsx';
 import { SettleModal } from '../components/SettleModal.tsx';
+import { QuickStrategies } from '../components/QuickStrategies.tsx';
+import { CollarModal } from '../components/CollarModal.tsx';
 import { CONTRACT_ADDRESSES, currentNetwork, formatAddress } from '../config/index.ts';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
 import type { OptionData } from '../services/types.ts';
@@ -80,6 +83,8 @@ export function PoolsPage() {
     }, [transactions, selectedPoolAddr, refetchPool]);
 
     const [writeOpen, setWriteOpen] = useState(false);
+    const [writeInitialValues, setWriteInitialValues] = useState<WriteOptionInitialValues | undefined>(undefined);
+    const [collarOpen, setCollarOpen] = useState(false);
     const [buyTarget, setBuyTarget] = useState<OptionData | null>(null);
     const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
     const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
@@ -114,6 +119,27 @@ export function PoolsPage() {
 
     function handleSettle(option: OptionData) {
         if (provider) setSettleTarget(option);
+    }
+
+    // Strategy template handlers
+    function handleCoveredCall(values: WriteOptionInitialValues) {
+        setWriteInitialValues(values);
+        setWriteOpen(true);
+    }
+
+    function handleProtectivePut(option: OptionData) {
+        setBuyTarget(option);
+    }
+
+    function handleCollarWriteCall(values: WriteOptionInitialValues) {
+        setCollarOpen(false);
+        setWriteInitialValues(values);
+        setWriteOpen(true);
+    }
+
+    function handleCollarBuyPut(option: OptionData) {
+        setCollarOpen(false);
+        setBuyTarget(option);
     }
 
     // No pool source configured at all
@@ -174,6 +200,15 @@ export function PoolsPage() {
                         motoPillRatio={motoPillRatio}
                         onWriteOption={() => setWriteOpen(true)}
                     />
+                    <QuickStrategies
+                        poolInfo={poolInfo}
+                        options={options}
+                        motoPillRatio={motoPillRatio}
+                        motoBal={null}
+                        onCoveredCall={handleCoveredCall}
+                        onProtectivePut={handleProtectivePut}
+                        onCollar={() => setCollarOpen(true)}
+                    />
                     {candles.length > 0 && (
                         <PriceChart
                             candles={candles}
@@ -220,6 +255,8 @@ export function PoolsPage() {
                     address={address}
                     provider={provider}
                     network={network}
+                    motoPillRatio={motoPillRatio}
+                    currentBlock={currentBlock ?? undefined}
                     onClose={() => setBuyTarget(null)}
                     onSuccess={() => {
                         setBuyTarget(null);
@@ -292,11 +329,30 @@ export function PoolsPage() {
                     address={address}
                     provider={provider}
                     network={network}
-                    onClose={() => setWriteOpen(false)}
+                    motoPillRatio={motoPillRatio}
+                    initialValues={writeInitialValues}
+                    onClose={() => {
+                        setWriteOpen(false);
+                        setWriteInitialValues(undefined);
+                    }}
                     onSuccess={() => {
                         setWriteOpen(false);
+                        setWriteInitialValues(undefined);
                         refetchPool();
                     }}
+                />
+            )}
+
+            {/* Collar Strategy modal */}
+            {collarOpen && poolInfo && (
+                <CollarModal
+                    poolInfo={poolInfo}
+                    options={options}
+                    motoPillRatio={motoPillRatio}
+                    motoBal={null}
+                    onWriteCall={handleCollarWriteCall}
+                    onBuyPut={handleCollarBuyPut}
+                    onClose={() => setCollarOpen(false)}
                 />
             )}
 

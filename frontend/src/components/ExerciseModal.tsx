@@ -16,6 +16,7 @@ import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { formatTokenAmount } from '../config/index.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
+import { calcExercisePnl } from '../utils/optionMath.js';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface ExerciseModalProps {
@@ -68,7 +69,8 @@ export function ExerciseModal({
     }, [poolAddress, provider]);
 
     const isCall = option.optionType === OptionType.CALL;
-    const strikeValue = option.strikePrice * option.underlyingAmount;
+    // Normalize: both are 18-decimal, product is 36-decimal → divide by 10^18
+    const strikeValue = (option.strikePrice * option.underlyingAmount) / (10n ** 18n);
 
     // CALL: buyer pays strikeValue PILL, receives underlyingAmount MOTO (fee on MOTO)
     // PUT:  buyer pays underlyingAmount MOTO, receives strikeValue PILL (fee on PILL)
@@ -262,27 +264,18 @@ export function ExerciseModal({
                                 )}
                             </span>
                         </div>
-                        {motoPillRatio && (
-                            <div className="flex justify-between">
-                                <span className="text-terminal-text-muted">Est. PnL</span>
-                                {(() => {
-                                    // CALL: receive MOTO → convert to PILL, subtract premium + exercise cost (PILL)
-                                    // PUT: receive PILL, subtract premium (PILL) + exercise cost (MOTO → convert to PILL)
-                                    const receiveInPill = isCall
-                                        ? Number(receiveAmount) / 1e18 * motoPillRatio
-                                        : Number(receiveAmount) / 1e18;
-                                    const costInPill = isCall
-                                        ? Number(option.premium) / 1e18 + Number(payAmount) / 1e18
-                                        : Number(option.premium) / 1e18 + Number(payAmount) / 1e18 * motoPillRatio;
-                                    const pnl = receiveInPill - costInPill;
-                                    return (
-                                        <span className={pnl >= 0 ? 'text-green-400 font-semibold' : 'text-rose-400 font-semibold'}>
-                                            {pnl >= 0 ? '+' : ''}{pnl.toFixed(4)} PILL
-                                        </span>
-                                    );
-                                })()}
-                            </div>
-                        )}
+                        {(() => {
+                            const pnl = calcExercisePnl(option, poolInfo, motoPillRatio ?? null);
+                            if (pnl === null) return null;
+                            return (
+                                <div className="flex justify-between">
+                                    <span className="text-terminal-text-muted">Est. PnL</span>
+                                    <span className={pnl >= 0 ? 'text-green-400 font-semibold' : 'text-rose-400 font-semibold'}>
+                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(4)} PILL
+                                    </span>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {/* Insufficient balance */}

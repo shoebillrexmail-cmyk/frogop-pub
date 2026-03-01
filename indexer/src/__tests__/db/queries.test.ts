@@ -16,11 +16,15 @@ import {
     stmtInsertOption,
     stmtUpdateOptionStatus,
     stmtInsertFeeEvent,
+    stmtInsertOptionTransfer,
+    stmtUpdateOptionBuyer,
     getOption,
     getOptionsByPool,
     getOptionsByWriter,
     getOptionsByBuyer,
     getOptionsByUser,
+    getTransfersByOption,
+    getTransfersByUser,
     stmtInsertPriceSnapshot,
     stmtInsertSwapEvent,
     stmtUpsertCandle,
@@ -447,5 +451,61 @@ describe('Pruning', () => {
         const rows = db.queryAll('SELECT * FROM swap_events');
         expect(rows).toHaveLength(1);
         expect((rows[0] as unknown as SwapEventRow).block_number).toBe(200);
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('Option transfers', () => {
+    it('stmtInsertOptionTransfer inserts a transfer record', async () => {
+        await upsertPool(d1(), makePool(POOL_ADDR));
+        await db.batch([stmtInsertOption(d1(), makeOption(1))]);
+        await db.batch([stmtInsertOptionTransfer(d1(), {
+            pool_address: POOL_ADDR, option_id: 1,
+            from_address: '0xfrom', to_address: '0xto',
+            block_number: 200, tx_id: '0xtx_transfer',
+        })]);
+        const rows = db.queryAll('SELECT * FROM option_transfers');
+        expect(rows).toHaveLength(1);
+        const row = rows[0] as Record<string, unknown>;
+        expect(row['from_address']).toBe('0xfrom');
+        expect(row['to_address']).toBe('0xto');
+    });
+
+    it('stmtUpdateOptionBuyer updates buyer and updated fields', async () => {
+        await upsertPool(d1(), makePool(POOL_ADDR));
+        await db.batch([stmtInsertOption(d1(), makeOption(1, { buyer: '0xoldbuyer' }))]);
+        await db.batch([stmtUpdateOptionBuyer(d1(), POOL_ADDR, 1, '0xnewbuyer', 300, '0xtx_update')]);
+        const opt = await getOption(d1(), POOL_ADDR, 1);
+        expect(opt?.buyer).toBe('0xnewbuyer');
+        expect(opt?.updated_block).toBe(300);
+        expect(opt?.updated_tx).toBe('0xtx_update');
+    });
+
+    it('getTransfersByOption returns transfers for specific option', async () => {
+        await upsertPool(d1(), makePool(POOL_ADDR));
+        await db.batch([stmtInsertOption(d1(), makeOption(1))]);
+        await db.batch([
+            stmtInsertOptionTransfer(d1(), { pool_address: POOL_ADDR, option_id: 1, from_address: '0xa', to_address: '0xb', block_number: 100, tx_id: '0xtx1' }),
+            stmtInsertOptionTransfer(d1(), { pool_address: POOL_ADDR, option_id: 1, from_address: '0xb', to_address: '0xc', block_number: 200, tx_id: '0xtx2' }),
+            stmtInsertOptionTransfer(d1(), { pool_address: POOL_ADDR, option_id: 2, from_address: '0xd', to_address: '0xe', block_number: 300, tx_id: '0xtx3' }),
+        ]);
+        const transfers = await getTransfersByOption(d1(), POOL_ADDR, 1);
+        expect(transfers).toHaveLength(2);
+        expect(transfers[0]!.block_number).toBe(100);
+        expect(transfers[1]!.block_number).toBe(200);
+    });
+
+    it('getTransfersByUser returns transfers involving address (from or to)', async () => {
+        await upsertPool(d1(), makePool(POOL_ADDR));
+        await db.batch([stmtInsertOption(d1(), makeOption(1))]);
+        await db.batch([
+            stmtInsertOptionTransfer(d1(), { pool_address: POOL_ADDR, option_id: 1, from_address: '0xalice', to_address: '0xbob', block_number: 100, tx_id: '0xtx1' }),
+            stmtInsertOptionTransfer(d1(), { pool_address: POOL_ADDR, option_id: 1, from_address: '0xbob', to_address: '0xcharlie', block_number: 200, tx_id: '0xtx2' }),
+            stmtInsertOptionTransfer(d1(), { pool_address: POOL_ADDR, option_id: 2, from_address: '0xdave', to_address: '0xeve', block_number: 300, tx_id: '0xtx3' }),
+        ]);
+        const bobTransfers = await getTransfersByUser(d1(), '0xbob');
+        expect(bobTransfers).toHaveLength(2);
+        const daveTransfers = await getTransfersByUser(d1(), '0xdave');
+        expect(daveTransfers).toHaveLength(1);
     });
 });

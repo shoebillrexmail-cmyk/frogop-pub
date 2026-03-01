@@ -31,6 +31,16 @@ export const OptionsPoolEvents = [
         values: [{ name: 'data', type: ABIDataTypes.STRING }],
         type: BitcoinAbiTypes.Event,
     },
+    {
+        name: 'OptionTransferred',
+        values: [{ name: 'data', type: ABIDataTypes.STRING }],
+        type: BitcoinAbiTypes.Event,
+    },
+    {
+        name: 'OptionRolled',
+        values: [{ name: 'data', type: ABIDataTypes.STRING }],
+        type: BitcoinAbiTypes.Event,
+    },
 ];
 
 export const OptionsPoolAbi = [
@@ -165,6 +175,52 @@ export const OptionsPoolAbi = [
         name: 'settle',
         inputs: [{ name: 'optionId', type: ABIDataTypes.UINT256 }],
         outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'transferOption',
+        inputs: [
+            { name: 'optionId', type: ABIDataTypes.UINT256 },
+            { name: 'to', type: ABIDataTypes.ADDRESS },
+        ],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'rollOption',
+        inputs: [
+            { name: 'optionId', type: ABIDataTypes.UINT256 },
+            { name: 'newStrikePrice', type: ABIDataTypes.UINT256 },
+            { name: 'newExpiryBlock', type: ABIDataTypes.UINT64 },
+            { name: 'newPremium', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'newOptionId', type: ABIDataTypes.UINT256 }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'batchCancel',
+        inputs: [
+            { name: 'count', type: ABIDataTypes.UINT256 },
+            { name: 'id0', type: ABIDataTypes.UINT256 },
+            { name: 'id1', type: ABIDataTypes.UINT256 },
+            { name: 'id2', type: ABIDataTypes.UINT256 },
+            { name: 'id3', type: ABIDataTypes.UINT256 },
+            { name: 'id4', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'batchSettle',
+        inputs: [
+            { name: 'count', type: ABIDataTypes.UINT256 },
+            { name: 'id0', type: ABIDataTypes.UINT256 },
+            { name: 'id1', type: ABIDataTypes.UINT256 },
+            { name: 'id2', type: ABIDataTypes.UINT256 },
+            { name: 'id3', type: ABIDataTypes.UINT256 },
+            { name: 'id4', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'settledCount', type: ABIDataTypes.UINT256 }],
         type: BitcoinAbiTypes.Function,
     },
     ...OptionsPoolEvents,

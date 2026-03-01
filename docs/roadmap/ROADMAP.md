@@ -103,6 +103,9 @@ FrogOp is a **decentralized peer-to-peer options protocol on Bitcoin L1** built 
 | Options database | D1 SQLite | ✅ |
 | REST API (7 endpoints) | /health, /pools, /options, /user, /prices | ✅ |
 | Price candles (1h, 4h, 1d, 1w) | NativeSwap SwapExecuted events | ✅ |
+| Spot price polling (getQuote) | NativeSwap DEX via raw `provider.call` | ✅ |
+| Batched D1 writes | Single `db.batch()` per cron (free-tier safe) | ✅ |
+| Subrequest budget tests | Validates stay under 50 subrequest limit | ✅ |
 
 #### Tests
 
@@ -111,7 +114,19 @@ FrogOp is a **decentralized peer-to-peer options protocol on Bitcoin L1** built 
 | Unit tests (Factory + Pool) | 22 | ✅ 22/22 |
 | Integration tests (01–07) | 70+ | ✅ All passing |
 | Frontend tests (components, hooks, services) | 40+ | ✅ All passing |
+| Indexer tests (API, decoder, poller, budget, candles, prices, pipeline, integration) | 156 | ✅ All passing |
 | Gas baseline measurements | 20 | ✅ Documented |
+
+### Post-Phase 1 Fixes (2026-03-01)
+
+Issues discovered after initial deployment, now resolved:
+
+| Issue | Root Cause | Fix | Regression Test |
+|-------|------------|-----|-----------------|
+| Indexer price polling returned "Invalid contract" | Wrong NativeSwap contract address in `wrangler.toml` (`0xb056ba05...`) | Updated to actual MotoSwap DEX (`0x4397befe...`) | Integration test verifies SwapExecuted events from this address |
+| `getQuote` returned "Method not found" on correct contract | Selector computed from `'getQuote'` instead of full signature `'getQuote(address,uint64)'` (`0x0c8b6164` vs `0x51852102`) | Fixed hardcoded selector to match OPNet ABI | `prices.test.ts` regression test computes SHA-256 of full signature independently |
+| Price result silently dropped (no error, no data stored) | `instanceof CallResult` fails in bundled Workers (esbuild module dedup) | Replaced with duck-type check (`'result' in obj && typeof obj.result.readU256 === 'function'`) | Budget + pipeline tests verify prices flow through |
+| Cron stopped running for ~11 hours | Repeated failures on old contract caused Cloudflare to throttle the trigger | New deployment re-registered the cron trigger; fixed root causes above | CI type-check + test gate prevents broken deploys |
 
 ### Known Technical Debt from Phase 1
 

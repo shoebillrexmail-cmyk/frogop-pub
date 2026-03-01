@@ -87,11 +87,25 @@ CREATE TABLE IF NOT EXISTS price_candles (
     PRIMARY KEY (token, interval, open_time)
 );
 
+-- Option transfer history (secondary market)
+CREATE TABLE IF NOT EXISTS option_transfers (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    pool_address  TEXT    NOT NULL,
+    option_id     INTEGER NOT NULL,
+    from_address  TEXT    NOT NULL,
+    to_address    TEXT    NOT NULL,
+    block_number  INTEGER NOT NULL,
+    tx_id         TEXT    NOT NULL
+);
+
 -- Indexes for per-user queries (the whole point of the indexer)
 CREATE INDEX IF NOT EXISTS idx_options_writer ON options(writer);
 CREATE INDEX IF NOT EXISTS idx_options_buyer  ON options(buyer);
 CREATE INDEX IF NOT EXISTS idx_options_status ON options(status);
 CREATE INDEX IF NOT EXISTS idx_fee_pool_id    ON fee_events(pool_address, option_id);
+CREATE INDEX IF NOT EXISTS idx_transfers_option ON option_transfers(pool_address, option_id);
+CREATE INDEX IF NOT EXISTS idx_transfers_from   ON option_transfers(from_address);
+CREATE INDEX IF NOT EXISTS idx_transfers_to     ON option_transfers(to_address);
 
 -- Indexes for price queries
 CREATE INDEX IF NOT EXISTS idx_snapshots_token_block ON price_snapshots(token, block_number);

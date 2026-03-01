@@ -11,6 +11,7 @@ import {
     buildOptionWrittenBlock,
     buildOptionPurchasedBlock,
     buildOptionCancelledBlock,
+    buildOptionTransferredBlock,
     buildSwapExecutedBlock,
     buildMixedBlock,
     buildEmptyBlock,
@@ -349,5 +350,45 @@ describe('Pipeline — end-to-end: write option + query via db/queries', () => {
         expect(option).toBeTruthy();
         expect(option!.strike_price).toBe('100000');
         expect(option!.status).toBe(OptionStatus.OPEN);
+    });
+});
+
+describe('Pipeline — OptionTransferred → DB', () => {
+    const NEW_BUYER = '0x' + 'ee'.repeat(32);
+
+    it('transfer updates buyer and inserts transfer record', async () => {
+        // First write + purchase an option
+        const writeBlock = buildOptionWrittenBlock(BLOCK, POOL_HEX, { optionId: 1n });
+        const writeTxs = writeBlock.transactions.map(tx => ({ id: tx.id, events: tx.events }));
+        const writeStmts = decodeBlock(db as unknown as D1Database, BLOCK, writeTxs, trackedPools);
+        await (db as unknown as D1Database).batch(writeStmts);
+
+        const purchaseBlock = buildOptionPurchasedBlock(BLOCK + 1, POOL_HEX, { optionId: 1n });
+        const purchaseTxs = purchaseBlock.transactions.map(tx => ({ id: tx.id, events: tx.events }));
+        const purchaseStmts = decodeBlock(db as unknown as D1Database, BLOCK + 1, purchaseTxs, trackedPools);
+        await (db as unknown as D1Database).batch(purchaseStmts);
+
+        // Transfer
+        const transferBlock = buildOptionTransferredBlock(BLOCK + 2, POOL_HEX, {
+            optionId: 1n,
+            from: DEFAULT_BUYER,
+            to: NEW_BUYER,
+        });
+        const transferTxs = transferBlock.transactions.map(tx => ({ id: tx.id, events: tx.events }));
+        const transferStmts = decodeBlock(db as unknown as D1Database, BLOCK + 2, transferTxs, trackedPools);
+        expect(transferStmts).toHaveLength(2);
+        await (db as unknown as D1Database).batch(transferStmts);
+
+        // Verify buyer updated
+        const option = await queries.getOption(db as unknown as D1Database, POOL_HEX, 1);
+        expect(option).toBeTruthy();
+        expect(option!.buyer).toBe(NEW_BUYER);
+        expect(option!.updated_block).toBe(BLOCK + 2);
+
+        // Verify transfer record
+        const transfers = await queries.getTransfersByOption(db as unknown as D1Database, POOL_HEX, 1);
+        expect(transfers).toHaveLength(1);
+        expect(transfers[0]!.from_address).toBe(DEFAULT_BUYER);
+        expect(transfers[0]!.to_address).toBe(NEW_BUYER);
     });
 });

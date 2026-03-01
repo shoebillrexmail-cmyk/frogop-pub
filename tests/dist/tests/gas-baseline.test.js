@@ -219,20 +219,6 @@ await opnet('Gas Baseline Measurement', async (vm) => {
         });
         console.log(`  settle(): ${formatGas(pool.gasUsed)} gas`);
     });
-    await vm.it('should measure gas: accumulatedFees()', async () => {
-        Blockchain.msgSender = writer;
-        Blockchain.txOrigin = writer;
-        await pool.writeOption(0, 1000n, 1000n, 10n, 50n);
-        await pool.cancelOption(0n);
-        const fees = await pool.accumulatedFees();
-        Assert.expect(fees).toBeGreaterThan(0n);
-        gasMeasurements.push({
-            operation: 'accumulatedFees()',
-            gasUsed: pool.gasUsed,
-            contract: 'OptionsPool'
-        });
-        console.log(`  accumulatedFees(): ${formatGas(pool.gasUsed)} gas`);
-    });
     await vm.it('should measure gas: Factory - poolCount()', async () => {
         const count = await factory.poolCount();
         Assert.equal(count, 0n);

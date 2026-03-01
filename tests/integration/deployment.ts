@@ -405,10 +405,53 @@ export function createTransferCalldata(
     return writer.getBuffer();
 }
 
+export function createTransferOptionCalldata(optionId: bigint, to: Address): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(POOL_SELECTORS.transferOption);
+    writer.writeU256(optionId);
+    writer.writeAddress(to);
+    return writer.getBuffer();
+}
+
 export function createUpdateFeeRecipientCalldata(newRecipient: Address): Uint8Array {
     const writer = new BinaryWriter();
     writer.writeU32(POOL_SELECTORS.updateFeeRecipient);
     writer.writeAddress(newRecipient);
+    return writer.getBuffer();
+}
+
+export function createBatchCancelCalldata(optionIds: bigint[]): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(POOL_SELECTORS.batchCancel);
+    writer.writeU256(BigInt(optionIds.length));
+    for (let i = 0; i < 5; i++) {
+        writer.writeU256(i < optionIds.length ? optionIds[i] : 0n);
+    }
+    return writer.getBuffer();
+}
+
+export function createBatchSettleCalldata(optionIds: bigint[]): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(POOL_SELECTORS.batchSettle);
+    writer.writeU256(BigInt(optionIds.length));
+    for (let i = 0; i < 5; i++) {
+        writer.writeU256(i < optionIds.length ? optionIds[i] : 0n);
+    }
+    return writer.getBuffer();
+}
+
+export function createRollOptionCalldata(
+    optionId: bigint,
+    newStrikePrice: bigint,
+    newExpiryBlock: bigint,
+    newPremium: bigint
+): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(POOL_SELECTORS.rollOption);
+    writer.writeU256(optionId);
+    writer.writeU256(newStrikePrice);
+    writer.writeU64(newExpiryBlock);
+    writer.writeU256(newPremium);
     return writer.getBuffer();
 }
 

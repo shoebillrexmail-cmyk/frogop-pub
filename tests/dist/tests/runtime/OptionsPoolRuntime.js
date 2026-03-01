@@ -15,17 +15,18 @@ class OptionsPoolTestRuntime extends ContractRuntime {
     settleSelector;
     getOptionSelector;
     optionCountSelector;
-    accumulatedFeesSelector;
     gracePeriodBlocksSelector;
     maxExpiryBlocksSelector;
     cancelFeeBpsSelector;
     calculateCollateralSelector;
+    transferOptionSelector;
     _underlying;
     _premiumToken;
-    constructor(deployer, underlying, premiumToken) {
+    constructor(deployer, underlying, premiumToken, feeRecipient) {
         const deploymentCalldata = new BinaryWriter();
         deploymentCalldata.writeAddress(underlying);
         deploymentCalldata.writeAddress(premiumToken);
+        deploymentCalldata.writeAddress(feeRecipient ?? deployer);
         super({
             deployer: deployer,
             address: Blockchain.generateRandomAddress(),
@@ -43,11 +44,11 @@ class OptionsPoolTestRuntime extends ContractRuntime {
         this.settleSelector = Number(`0x${this.abiCoder.encodeSelector('settle(uint256)')}`);
         this.getOptionSelector = Number(`0x${this.abiCoder.encodeSelector('getOption(uint256)')}`);
         this.optionCountSelector = Number(`0x${this.abiCoder.encodeSelector('optionCount()')}`);
-        this.accumulatedFeesSelector = Number(`0x${this.abiCoder.encodeSelector('accumulatedFees()')}`);
         this.gracePeriodBlocksSelector = Number(`0x${this.abiCoder.encodeSelector('gracePeriodBlocks()')}`);
         this.maxExpiryBlocksSelector = Number(`0x${this.abiCoder.encodeSelector('maxExpiryBlocks()')}`);
         this.cancelFeeBpsSelector = Number(`0x${this.abiCoder.encodeSelector('cancelFeeBps()')}`);
         this.calculateCollateralSelector = Number(`0x${this.abiCoder.encodeSelector('calculateCollateral(uint8,uint256,uint256)')}`);
+        this.transferOptionSelector = Number(`0x${this.abiCoder.encodeSelector('transferOption(uint256,address)')}`);
     }
     defineRequiredBytecodes() {
         BytecodeManager.loadBytecode(POOL_WASM_PATH, this.address);
@@ -75,16 +76,6 @@ class OptionsPoolTestRuntime extends ContractRuntime {
     async optionCount() {
         const writer = new BinaryWriter();
         writer.writeSelector(this.optionCountSelector);
-        const result = await this.executeThrowOnError({
-            calldata: writer.getBuffer(),
-            saveStates: false,
-        });
-        const reader = new BinaryReader(result.response);
-        return reader.readU256();
-    }
-    async accumulatedFees() {
-        const writer = new BinaryWriter();
-        writer.writeSelector(this.accumulatedFeesSelector);
         const result = await this.executeThrowOnError({
             calldata: writer.getBuffer(),
             saveStates: false,
@@ -198,6 +189,36 @@ class OptionsPoolTestRuntime extends ContractRuntime {
         });
         const reader = new BinaryReader(result.response);
         return reader.readBoolean();
+    }
+    async transferOption(optionId, to) {
+        const writer = new BinaryWriter();
+        writer.writeSelector(this.transferOptionSelector);
+        writer.writeU256(optionId);
+        writer.writeAddress(to);
+        const result = await this.executeThrowOnError({
+            calldata: writer.getBuffer(),
+            sender: Blockchain.msgSender,
+            txOrigin: Blockchain.txOrigin,
+        });
+        const reader = new BinaryReader(result.response);
+        return reader.readBoolean();
+    }
+    async transferOptionExpectRevert(optionId, to) {
+        const writer = new BinaryWriter();
+        writer.writeSelector(this.transferOptionSelector);
+        writer.writeU256(optionId);
+        writer.writeAddress(to);
+        try {
+            await this.executeThrowOnError({
+                calldata: writer.getBuffer(),
+                sender: Blockchain.msgSender,
+                txOrigin: Blockchain.txOrigin,
+            });
+            throw new Error('Expected revert but transaction succeeded');
+        }
+        catch (e) {
+            return e;
+        }
     }
     async getOption(optionId) {
         const writer = new BinaryWriter();

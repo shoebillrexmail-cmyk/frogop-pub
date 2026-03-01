@@ -46,6 +46,52 @@ export const POOL_WRITE_ABI: BitcoinInterfaceAbi = [
         inputs: [{ name: 'optionId', type: ABIDataTypes.UINT256 }],
         outputs: [],
     },
+    {
+        name: 'transferOption',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'optionId', type: ABIDataTypes.UINT256 },
+            { name: 'to', type: ABIDataTypes.ADDRESS },
+        ],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+    },
+    {
+        name: 'batchCancel',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'count', type: ABIDataTypes.UINT256 },
+            { name: 'id0', type: ABIDataTypes.UINT256 },
+            { name: 'id1', type: ABIDataTypes.UINT256 },
+            { name: 'id2', type: ABIDataTypes.UINT256 },
+            { name: 'id3', type: ABIDataTypes.UINT256 },
+            { name: 'id4', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+    },
+    {
+        name: 'batchSettle',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'count', type: ABIDataTypes.UINT256 },
+            { name: 'id0', type: ABIDataTypes.UINT256 },
+            { name: 'id1', type: ABIDataTypes.UINT256 },
+            { name: 'id2', type: ABIDataTypes.UINT256 },
+            { name: 'id3', type: ABIDataTypes.UINT256 },
+            { name: 'id4', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'settledCount', type: ABIDataTypes.UINT256 }],
+    },
+    {
+        name: 'rollOption',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'optionId', type: ABIDataTypes.UINT256 },
+            { name: 'newStrikePrice', type: ABIDataTypes.UINT256 },
+            { name: 'newExpiryBlock', type: ABIDataTypes.UINT64 },
+            { name: 'newPremium', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'newOptionId', type: ABIDataTypes.UINT256 }],
+    },
 ];
 
 /** ABI for OP20 token approve (increaseAllowance) */

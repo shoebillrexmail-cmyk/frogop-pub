@@ -19,6 +19,8 @@ vi.mock('../../db/queries.js', () => ({
     getCandles:         vi.fn(),
     getLatestPrice:     vi.fn(),
     getPriceHistory:    vi.fn(),
+    getTransfersByOption: vi.fn(),
+    getTransfersByUser:   vi.fn(),
 }));
 
 import { handleFetch } from '../../api/router.js';
@@ -37,6 +39,8 @@ const mockGetLastIndexedBlock = vi.mocked(queries.getLastIndexedBlock);
 const mockGetCandles          = vi.mocked(queries.getCandles);
 const mockGetLatestPrice      = vi.mocked(queries.getLatestPrice);
 const mockGetPriceHistory     = vi.mocked(queries.getPriceHistory);
+const mockGetTransfersByOption = vi.mocked(queries.getTransfersByOption);
+const mockGetTransfersByUser   = vi.mocked(queries.getTransfersByUser);
 
 // ---- Test fixtures --------------------------------------------------------
 const mockDb  = {} as D1Database;
@@ -366,5 +370,37 @@ describe('GET /prices/:token/history', () => {
     it('returns 400 for invalid token', async () => {
         const res = await handleFetch(req('/prices/INVALID/history'), mockEnv);
         expect(res.status).toBe(400);
+    });
+});
+
+// -------------------------------------------------------------------------
+describe('GET /pools/:addr/options/:id/transfers', () => {
+    it('returns transfer history for an option', async () => {
+        mockGetTransfersByOption.mockResolvedValue([
+            { id: 1, pool_address: 'opt1pool', option_id: 1, from_address: '0xa', to_address: '0xb', block_number: 100, tx_id: '0xtx1' },
+        ]);
+        const res = await handleFetch(req('/pools/opt1pool/options/1/transfers'), mockEnv);
+        expect(res.status).toBe(200);
+        const body = await res.json() as unknown[];
+        expect(body).toHaveLength(1);
+        expect(mockGetTransfersByOption).toHaveBeenCalledWith(mockDb, 'opt1pool', 1);
+    });
+
+    it('returns 400 for non-numeric option ID', async () => {
+        const res = await handleFetch(req('/pools/opt1pool/options/abc/transfers'), mockEnv);
+        expect(res.status).toBe(404); // regex won't match non-digit
+    });
+});
+
+describe('GET /user/:addr/transfers', () => {
+    it('returns transfers involving the user', async () => {
+        mockGetTransfersByUser.mockResolvedValue([
+            { id: 1, pool_address: 'opt1pool', option_id: 1, from_address: '0xuser', to_address: '0xb', block_number: 100, tx_id: '0xtx1' },
+        ]);
+        const res = await handleFetch(req('/user/0xuser/transfers'), mockEnv);
+        expect(res.status).toBe(200);
+        const body = await res.json() as unknown[];
+        expect(body).toHaveLength(1);
+        expect(mockGetTransfersByUser).toHaveBeenCalledWith(mockDb, '0xuser');
     });
 });
