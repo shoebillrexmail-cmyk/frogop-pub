@@ -135,7 +135,7 @@ export function Layout() {
                 About
               </Link>
               <a
-                href="https://github.com/shoebillrexmail-cmyk/"
+                href="https://github.com/shoebillrexmail-cmyk/frogop-pub"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-terminal-text-primary transition-colors"
