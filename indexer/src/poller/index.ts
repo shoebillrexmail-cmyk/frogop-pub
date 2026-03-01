@@ -85,7 +85,7 @@ export async function pollNewBlocks(env: Env): Promise<void> {
 }
 
 /** Fetch a block and return D1 statements for its events (no DB writes). */
-async function collectBlockStatements(
+export async function collectBlockStatements(
     provider: JSONRpcProvider,
     blockNumber: number,
     db: D1Database,
@@ -171,7 +171,7 @@ async function resolvePoolAddresses(env: Env, provider: JSONRpcProvider): Promis
 // ---------------------------------------------------------------------------
 
 /** Resolved NativeSwap config: one router contract + per-token addresses. */
-interface SwapConfig {
+export interface SwapConfig {
     /** 0x-hex of the NativeSwap router contract (where we call getQuote) */
     routerHex: string;
     /** tokenHex → label (e.g. "0xfd44..." → "MOTO") */
@@ -206,7 +206,7 @@ function resolveSwapConfig(env: Env): SwapConfig | null {
 /** ABICoder.encodeSelector('getQuote') — precomputed 4-byte selector */
 const GET_QUOTE_SELECTOR = '0c8b6164';
 
-function encodeGetQuoteCalldata(tokenHex: string, satoshis: bigint): string {
+export function encodeGetQuoteCalldata(tokenHex: string, satoshis: bigint): string {
     // selector (4 bytes) + token address (32 bytes, zero-padded left) + satoshis (8 bytes, big-endian)
     const addr = tokenHex.startsWith('0x') ? tokenHex.slice(2) : tokenHex;
     const addrPadded = addr.padStart(64, '0');
@@ -214,7 +214,7 @@ function encodeGetQuoteCalldata(tokenHex: string, satoshis: bigint): string {
     return '0x' + GET_QUOTE_SELECTOR + addrPadded + satsHex;
 }
 
-async function pollPrices(
+export async function pollPrices(
     env: Env,
     provider: JSONRpcProvider,
     swapConfig: SwapConfig | null,
@@ -288,7 +288,7 @@ function floorToInterval(date: Date, intervalMs: number): Date {
     return new Date(Math.floor(date.getTime() / intervalMs) * intervalMs);
 }
 
-async function rollUpAllCandles(db: D1Database): Promise<void> {
+export async function rollUpAllCandles(db: D1Database): Promise<void> {
     const now = new Date();
     const stmts: D1PreparedStatement[] = [];
 
