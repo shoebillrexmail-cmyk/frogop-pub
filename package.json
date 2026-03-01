@@ -32,7 +32,8 @@
     "clean": "rimraf build tests/dist",
     "dev": "concurrently -k -n indexer,frontend -c blue,green \"npm run dev:indexer\" \"npm run dev:frontend\"",
     "dev:frontend": "cross-env VITE_INDEXER_URL=http://localhost:8787 npm --prefix frontend run dev",
-    "dev:indexer": "npm --prefix indexer run dev"
+    "dev:indexer": "npm --prefix indexer run dev",
+    "prepare": "husky"
   },
   "keywords": [
     "opnet",
@@ -63,6 +64,7 @@
     "cross-env": "^10.1.0",
     "dotenv": "^16.4.5",
     "eslint": "9.39.2",
+    "husky": "^9.1.7",
     "opnet": "rc",
     "rimraf": "6.0.1",
     "ts-node": "^10.9.2",

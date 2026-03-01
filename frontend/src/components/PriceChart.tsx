@@ -138,6 +138,7 @@ export function PriceChart({
             candleSeriesRef.current = null;
             volumeSeriesRef.current = null;
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- token handled by separate effect below
     }, [height]);
 
     // Update price formatter when token changes

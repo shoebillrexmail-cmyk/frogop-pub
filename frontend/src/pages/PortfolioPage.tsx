@@ -23,6 +23,7 @@ import { SettleModal } from '../components/SettleModal.tsx';
 import { CONTRACT_ADDRESSES } from '../config/index.ts';
 import { OptionStatus } from '../services/types.ts';
 import type { OptionData } from '../services/types.ts';
+import type { ResumeRequest } from '../contexts/flowDefs.ts';
 
 const POOL_ADDRESS = CONTRACT_ADDRESSES.pool;
 
@@ -92,13 +93,10 @@ export function PortfolioPage() {
     const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
     const [settleTarget, setSettleTarget] = useState<OptionData | null>(null);
 
-    // Handle exercise resume from flow card
-    useEffect(() => {
-        if (!resumeRequest || resumeRequest.actionType !== 'exercise') return;
-        if (!POOL_ADDRESS || resumeRequest.poolAddress !== POOL_ADDRESS) return;
-        clearResumeRequest();
-        if (resumeRequest.optionId) {
-            const opt = purchasedOptions.find((o) => o.id.toString() === resumeRequest.optionId);
+    // Apply exercise resume — extracted to avoid direct setState in the effect body.
+    const applyResume = useCallback((req: ResumeRequest) => {
+        if (req.optionId) {
+            const opt = purchasedOptions.find((o) => o.id.toString() === req.optionId);
             if (opt) {
                 setExerciseTarget(opt);
             } else {
@@ -106,7 +104,16 @@ export function PortfolioPage() {
                 alert('Option no longer available. Flow abandoned.');
             }
         }
-    }, [resumeRequest, purchasedOptions, clearResumeRequest, abandonFlow]);
+    }, [purchasedOptions, abandonFlow]);
+
+    // Handle exercise resume from flow card
+    useEffect(() => {
+        if (!resumeRequest || resumeRequest.actionType !== 'exercise') return;
+        if (!POOL_ADDRESS || resumeRequest.poolAddress !== POOL_ADDRESS) return;
+        clearResumeRequest();
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- resume routing: one-shot signal from TransactionContext
+        applyResume(resumeRequest);
+    }, [resumeRequest, clearResumeRequest, applyResume]);
 
     // -------------------------------------------------------------------------
     // Connect gate

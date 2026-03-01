@@ -112,14 +112,13 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     const [activeFlow, setActiveFlow] = useState<ActiveFlow | null>(null);
     const [resumeRequest, setResumeRequest] = useState<ResumeRequest | null>(null);
 
-    // Load flow from localStorage when wallet changes
-    useEffect(() => {
-        if (!flowKey) {
-            setActiveFlow(null);
-            return;
-        }
-        setActiveFlow(loadFlow(flowKey));
-    }, [flowKey]);
+    // Adjust flow state when wallet (flowKey) changes — React-recommended pattern.
+    // See: https://react.dev/reference/react/useState#storing-information-from-previous-renders
+    const [prevFlowKey, setPrevFlowKey] = useState(flowKey);
+    if (flowKey !== prevFlowKey) {
+        setPrevFlowKey(flowKey);
+        setActiveFlow(flowKey ? loadFlow(flowKey) : null);
+    }
 
     // Persist flow to localStorage on every change
     useEffect(() => {
@@ -139,43 +138,47 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         return () => window.removeEventListener('storage', handler);
     }, [flowKey]);
 
-    // Auto-sync flow status when tracked TXs change
+    // Auto-sync flow status when tracked TXs change.
+    // Uses function-updater form inside useCallback to avoid direct setState in the effect.
+    const syncFlowStatus = useCallback(() => {
+        setActiveFlow((current) => {
+            if (!current) return current;
+
+            if (current.status === 'approval_pending' && current.approvalTxId) {
+                const approvalTx = state.transactions.find((tx) => tx.txId === current.approvalTxId);
+                if (approvalTx?.status === 'confirmed') {
+                    return { ...current, status: 'approval_confirmed' as const };
+                }
+                if (approvalTx?.status === 'failed') {
+                    return { ...current, status: 'approval_failed' as const };
+                }
+            }
+
+            if (current.status === 'action_pending' && current.actionTxId) {
+                const actionTx = state.transactions.find((tx) => tx.txId === current.actionTxId);
+                if (actionTx?.status === 'confirmed') {
+                    return { ...current, status: 'action_confirmed' as const };
+                }
+                if (actionTx?.status === 'failed') {
+                    return { ...current, status: 'action_failed' as const };
+                }
+            }
+
+            return current;
+        });
+    }, [state.transactions]);
+
     useEffect(() => {
-        if (!activeFlow) return;
-
-        // Advance approval_pending → approval_confirmed when approval TX confirms
-        if (activeFlow.status === 'approval_pending' && activeFlow.approvalTxId) {
-            const approvalTx = state.transactions.find((tx) => tx.txId === activeFlow.approvalTxId);
-            if (approvalTx?.status === 'confirmed') {
-                setActiveFlow({ ...activeFlow, status: 'approval_confirmed' });
-                return;
-            }
-            if (approvalTx?.status === 'failed') {
-                setActiveFlow({ ...activeFlow, status: 'approval_failed' });
-                return;
-            }
-        }
-
-        // Advance action_pending → action_confirmed when action TX confirms
-        if (activeFlow.status === 'action_pending' && activeFlow.actionTxId) {
-            const actionTx = state.transactions.find((tx) => tx.txId === activeFlow.actionTxId);
-            if (actionTx?.status === 'confirmed') {
-                setActiveFlow({ ...activeFlow, status: 'action_confirmed' });
-                return;
-            }
-            if (actionTx?.status === 'failed') {
-                setActiveFlow({ ...activeFlow, status: 'action_failed' });
-                return;
-            }
-        }
-    }, [state.transactions, activeFlow]);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing flow status from external TX confirmations
+        syncFlowStatus();
+    }, [syncFlowStatus]);
 
     // Auto-release flow 3s after action_confirmed
     useEffect(() => {
         if (activeFlow?.status !== 'action_confirmed') return;
         const timer = setTimeout(() => setActiveFlow(null), 3000);
         return () => clearTimeout(timer);
-    }, [activeFlow?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [activeFlow?.status]);
 
     // --- Flow callbacks ---
 

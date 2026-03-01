@@ -1,0 +1,2 @@
+# Lint frontend before commit — blocks commit on ESLint errors
+cd frontend && npm run lint

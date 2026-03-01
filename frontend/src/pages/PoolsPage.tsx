@@ -2,7 +2,7 @@
  * PoolsPage — on-chain pool view with factory discovery, options table,
  * write panel, and action modals.
  */
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import { useFallbackProvider } from '../hooks/useFallbackProvider.ts';
@@ -26,6 +26,7 @@ import { CollarModal } from '../components/CollarModal.tsx';
 import { CONTRACT_ADDRESSES, currentNetwork, formatAddress } from '../config/index.ts';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
 import type { OptionData } from '../services/types.ts';
+import type { ResumeRequest } from '../contexts/flowDefs.ts';
 
 const NATIVESWAP_ADDRESS = import.meta.env.VITE_NATIVESWAP_ADDRESS || '';
 
@@ -93,14 +94,11 @@ export function PoolsPage() {
     const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
     const [settleTarget, setSettleTarget] = useState<OptionData | null>(null);
 
-    // Handle resume requests from the flow card
-    useEffect(() => {
-        if (!resumeRequest || !selectedPoolAddr) return;
-        if (resumeRequest.poolAddress !== selectedPoolAddr) return;
-        clearResumeRequest();
-
-        if (resumeRequest.actionType === 'writeOption') {
-            const formState = resumeRequest.formState;
+    // Apply a resume request — opens the appropriate modal.
+    // Extracted to useCallback so setState is not called directly in the effect body.
+    const applyResume = useCallback((req: ResumeRequest) => {
+        if (req.actionType === 'writeOption') {
+            const formState = req.formState;
             if (formState) {
                 setWriteInitialValues({
                     optionType: formState['optionType'] !== undefined ? Number(formState['optionType']) : undefined,
@@ -114,8 +112,8 @@ export function PoolsPage() {
             return;
         }
 
-        if (resumeRequest.actionType === 'buyOption' && resumeRequest.optionId) {
-            const opt = options.find((o) => o.id.toString() === resumeRequest.optionId);
+        if (req.actionType === 'buyOption' && req.optionId) {
+            const opt = options.find((o) => o.id.toString() === req.optionId);
             if (opt) {
                 setBuyTarget(opt);
             } else {
@@ -125,8 +123,8 @@ export function PoolsPage() {
             return;
         }
 
-        if (resumeRequest.actionType === 'exercise' && resumeRequest.optionId) {
-            const opt = options.find((o) => o.id.toString() === resumeRequest.optionId);
+        if (req.actionType === 'exercise' && req.optionId) {
+            const opt = options.find((o) => o.id.toString() === req.optionId);
             if (opt) {
                 setExerciseTarget(opt);
             } else {
@@ -134,7 +132,16 @@ export function PoolsPage() {
                 alert('Option no longer available. Flow abandoned.');
             }
         }
-    }, [resumeRequest, selectedPoolAddr, options, clearResumeRequest, abandonFlow]);
+    }, [options, abandonFlow]);
+
+    // Handle resume requests from the flow card
+    useEffect(() => {
+        if (!resumeRequest || !selectedPoolAddr) return;
+        if (resumeRequest.poolAddress !== selectedPoolAddr) return;
+        clearResumeRequest();
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- resume routing: one-shot signal from TransactionContext
+        applyResume(resumeRequest);
+    }, [resumeRequest, selectedPoolAddr, clearResumeRequest, applyResume]);
 
     // address.toString() = 0x-prefixed MLDSA hash; used for action visibility
     const walletHex = address ? address.toString() : null;
