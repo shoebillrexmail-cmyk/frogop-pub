@@ -25,6 +25,24 @@ const TOKENS = [
     { value: 'MOTO_PILL', label: 'MOTO/PILL' },
 ] as const;
 
+/** Y-axis denomination info per token. */
+const TOKEN_META: Record<string, { unit: string; title: string }> = {
+    MOTO: { unit: 'sats', title: 'MOTO (sats/MOTO)' },
+    PILL: { unit: 'sats', title: 'PILL (sats/PILL)' },
+    MOTO_PILL: { unit: 'PILL', title: 'MOTO/PILL ratio' },
+};
+
+function formatPrice(value: number, token: string): string {
+    if (token === 'MOTO_PILL') {
+        // Ratio — show up to 4 decimals, strip trailing zeros
+        return value.toFixed(4).replace(/\.?0+$/, '');
+    }
+    // sats/token — integer for large values, up to 2 decimals for small
+    if (value >= 100) return Math.round(value).toLocaleString('en-US');
+    if (value >= 1) return value.toFixed(1);
+    return value.toFixed(4).replace(/0+$/, '');
+}
+
 interface PriceChartProps {
     candles: CandleData[];
     token: string;
@@ -85,6 +103,10 @@ export function PriceChart({
             borderDownColor: '#fb7185',
             wickUpColor: '#4ade80',
             wickDownColor: '#fb7185',
+            priceFormat: {
+                type: 'custom',
+                formatter: (price: number) => formatPrice(price, token),
+            },
         });
 
         const volumeSeries = chart.addSeries(HistogramSeries, {
@@ -117,6 +139,17 @@ export function PriceChart({
             volumeSeriesRef.current = null;
         };
     }, [height]);
+
+    // Update price formatter when token changes
+    useEffect(() => {
+        if (!candleSeriesRef.current) return;
+        candleSeriesRef.current.applyOptions({
+            priceFormat: {
+                type: 'custom',
+                formatter: (price: number) => formatPrice(price, token),
+            },
+        });
+    }, [token]);
 
     // Update data when candles change
     useEffect(() => {
@@ -185,9 +218,14 @@ export function PriceChart({
                 </div>
             </div>
 
-            {/* Chart title */}
-            <div className="px-4 pt-2 text-xs text-terminal-text-muted font-mono">
-                {selectedToken?.label ?? token} Price
+            {/* Chart title + Y-axis unit */}
+            <div className="flex items-center justify-between px-4 pt-2">
+                <span className="text-xs text-terminal-text-muted font-mono">
+                    {TOKEN_META[token]?.title ?? `${selectedToken?.label ?? token} Price`}
+                </span>
+                <span className="text-[10px] text-terminal-text-muted/60 font-mono">
+                    vol: sats
+                </span>
             </div>
 
             {/* Chart container */}

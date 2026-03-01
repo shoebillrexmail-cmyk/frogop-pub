@@ -79,6 +79,31 @@ function toFloat(s: string): number {
     return Number(whole) + Number(frac) / 1e18;
 }
 
+/**
+ * Tokens whose raw indexer data (tokens-per-100k-sats) should be inverted to
+ * sats-per-token for intuitive charting (higher = more expensive).
+ */
+const SATS_PER_QUOTE = 100_000;
+const INVERTED_TOKENS = new Set(['MOTO', 'PILL']);
+
+function safeInvert(v: number): number {
+    return v > 0 ? SATS_PER_QUOTE / v : 0;
+}
+
+/**
+ * Invert a candle from tokens-per-100k-sats to sats-per-token.
+ * Note: high/low swap because inverting flips the ordering.
+ */
+function invertCandle(c: CandleData): CandleData {
+    return {
+        ...c,
+        open: safeInvert(c.open),
+        high: safeInvert(c.low),    // raw low (fewest tokens) = highest sats/token
+        low: safeInvert(c.high),    // raw high (most tokens) = lowest sats/token
+        close: safeInvert(c.close),
+    };
+}
+
 function mapCandleRow(row: CandleRow): CandleData {
     return {
         time: Math.floor(new Date(row.open_time).getTime() / 1000),
@@ -117,7 +142,9 @@ export async function getCandles(
     const qs = params.toString();
     const rows = await fetchJson<CandleRow[]>(`/prices/${token}/candles?${qs}`);
     if (!rows) return null;
-    return rows.map(mapCandleRow);
+    const candles = rows.map(mapCandleRow);
+    // Invert MOTO/PILL to sats-per-token (intuitive: up = more expensive)
+    return INVERTED_TOKENS.has(token) ? candles.map(invertCandle) : candles;
 }
 
 export async function getLatestPrice(token: string): Promise<PriceSnapshot | null> {
