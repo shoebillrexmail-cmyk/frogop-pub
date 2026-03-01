@@ -3,6 +3,7 @@
  * falling back to a single env-configured pool when no factory is available.
  */
 import { useState, useEffect, useCallback } from 'react';
+import type { AbstractRpcProvider } from 'opnet';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { FactoryService } from '../services/factory.ts';
 import { CONTRACT_ADDRESSES } from '../config/index.ts';
@@ -20,8 +21,9 @@ export interface UseDiscoverPoolsResult {
     refetch: () => void;
 }
 
-export function useDiscoverPools(): UseDiscoverPoolsResult {
-    const { provider } = useWalletConnect();
+export function useDiscoverPools(providerOverride?: AbstractRpcProvider | null): UseDiscoverPoolsResult {
+    const { provider: walletProvider } = useWalletConnect();
+    const provider = providerOverride ?? walletProvider;
 
     const [pools, setPools] = useState<PoolEntry[]>([]);
     const [loading, setLoading] = useState(false);

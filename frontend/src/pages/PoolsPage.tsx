@@ -5,6 +5,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
+import { useFallbackProvider } from '../hooks/useFallbackProvider.ts';
 import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
 import { usePool } from '../hooks/usePool.ts';
 import { useBlockTracker } from '../hooks/useBlockTracker.ts';
@@ -31,13 +32,15 @@ const NATIVESWAP_ADDRESS = import.meta.env.VITE_NATIVESWAP_ADDRESS || '';
 export function PoolsPage() {
     const wsBlock = useWsBlock();
     const { walletAddress, address, provider, network } = useWalletConnect();
+    const readProvider = useFallbackProvider();
+    const walletConnected = provider !== null && provider !== undefined;
     const {
         pools,
         loading: discoveryLoading,
         error: discoveryError,
         source,
         refetch: refetchPools,
-    } = useDiscoverPools();
+    } = useDiscoverPools(readProvider);
 
     const [userSelectedPool, setUserSelectedPool] = useState<string | null>(null);
 
@@ -51,15 +54,15 @@ export function PoolsPage() {
     }, [pools, userSelectedPool]);
 
     const { poolInfo, options, loading: poolLoading, error: poolError, refetch: refetchPool } =
-        usePool(selectedPoolAddr);
+        usePool(selectedPoolAddr, readProvider);
 
-    const { currentBlock } = useBlockTracker(provider ?? null, wsBlock);
+    const { currentBlock } = useBlockTracker(readProvider, wsBlock);
 
     const { motoPillRatio } = usePriceRatio(
         NATIVESWAP_ADDRESS || null,
         poolInfo?.underlying ?? null,
         poolInfo?.premiumToken ?? null,
-        provider ?? null,
+        readProvider,
         network ?? null,
     );
 
@@ -102,33 +105,38 @@ export function PoolsPage() {
     }
 
     function handleBuy(option: OptionData) {
-        if (!provider) {
-            setBuyTarget(null);
-        } else {
-            setBuyTarget(option);
-        }
+        if (!walletConnected) return;
+        setBuyTarget(option);
     }
 
     function handleCancel(option: OptionData) {
-        if (provider) setCancelTarget(option);
+        if (walletConnected) setCancelTarget(option);
     }
 
     function handleExercise(option: OptionData) {
-        if (provider) setExerciseTarget(option);
+        if (walletConnected) setExerciseTarget(option);
     }
 
     function handleSettle(option: OptionData) {
-        if (provider) setSettleTarget(option);
+        if (walletConnected) setSettleTarget(option);
     }
 
     // Strategy template handlers
     function handleCoveredCall(values: WriteOptionInitialValues) {
+        if (!walletConnected) return;
         setWriteInitialValues(values);
         setWriteOpen(true);
     }
 
     function handleProtectivePut(option: OptionData) {
+        if (!walletConnected) return;
         setBuyTarget(option);
+    }
+
+    function handleWritePut(values: WriteOptionInitialValues) {
+        if (!walletConnected) return;
+        setWriteInitialValues(values);
+        setWriteOpen(true);
     }
 
     function handleCollarWriteCall(values: WriteOptionInitialValues) {
@@ -198,15 +206,17 @@ export function PoolsPage() {
                         poolInfo={poolInfo}
                         poolAddress={selectedPoolAddr}
                         motoPillRatio={motoPillRatio}
-                        onWriteOption={() => setWriteOpen(true)}
+                        onWriteOption={walletConnected ? () => setWriteOpen(true) : undefined}
                     />
                     <QuickStrategies
                         poolInfo={poolInfo}
                         options={options}
                         motoPillRatio={motoPillRatio}
                         motoBal={null}
+                        walletConnected={walletConnected}
                         onCoveredCall={handleCoveredCall}
                         onProtectivePut={handleProtectivePut}
+                        onWritePut={handleWritePut}
                         onCollar={() => setCollarOpen(true)}
                     />
                     {candles.length > 0 && (
@@ -221,6 +231,7 @@ export function PoolsPage() {
                     <OptionsTable
                         options={options}
                         walletHex={walletHex}
+                        walletConnected={walletConnected}
                         currentBlock={currentBlock ?? undefined}
                         gracePeriodBlocks={poolInfo.gracePeriodBlocks}
                         motoPillRatio={motoPillRatio}
@@ -356,23 +367,12 @@ export function PoolsPage() {
                 />
             )}
 
-            {/* Connect prompt when write or buy needs wallet */}
-            {(writeOpen || buyTarget !== null) && !provider && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-                    <div className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-8 text-center max-w-sm">
-                        <p className="text-terminal-text-primary font-mono mb-4">
-                            Connect your wallet to continue.
-                        </p>
-                        <button
-                            onClick={() => {
-                                setWriteOpen(false);
-                                setBuyTarget(null);
-                            }}
-                            className="btn-secondary px-4 py-2 text-sm rounded"
-                        >
-                            Close
-                        </button>
-                    </div>
+            {/* Connect wallet banner when not connected */}
+            {!walletConnected && (
+                <div className="mt-4 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-4 text-center">
+                    <p className="text-terminal-text-muted font-mono text-sm">
+                        Connect your wallet to write, buy, exercise, or cancel options.
+                    </p>
                 </div>
             )}
         </div>

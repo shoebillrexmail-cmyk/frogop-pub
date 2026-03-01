@@ -311,9 +311,12 @@ export function BuyOptionModal({
 
                     {/* Approval broadcast hint */}
                     {txId && txStatus === 'idle' && (
-                        <p className="text-yellow-400 text-xs font-mono">
-                            Approval broadcast ({txId.slice(0, 12)}…). Waiting for block confirmation.
-                        </p>
+                        <div className="flex items-center gap-2 text-xs font-mono">
+                            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+                            <span className="text-yellow-400">
+                                Waiting for approval (~10 min)... {txId.slice(0, 12)}…
+                            </span>
+                        </div>
                     )}
 
                     {/* TX error */}
@@ -328,6 +331,9 @@ export function BuyOptionModal({
                         <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono">
                             <p className="text-green-300 mb-1">Purchase broadcast!</p>
                             <p className="text-terminal-text-muted break-all">{txId}</p>
+                            <p className="text-terminal-text-muted mt-1.5">
+                                Confirms in next block (~10 min). You can close this — check the transaction pill for updates.
+                            </p>
                             <button
                                 className="mt-2 btn-primary px-3 py-1 text-xs rounded"
                                 onClick={onSuccess}
@@ -347,7 +353,7 @@ export function BuyOptionModal({
                                     className="w-full btn-primary py-2.5 text-sm rounded disabled:opacity-50"
                                     data-testid="btn-approve"
                                 >
-                                    {txStatus === 'approving' ? 'Approving…' : 'Approve PILL'}
+                                    {txStatus === 'approving' ? 'Approving…' : txId && txStatus === 'idle' ? 'Waiting for approval' : 'Approve PILL'}
                                 </button>
                             ) : (
                                 <button

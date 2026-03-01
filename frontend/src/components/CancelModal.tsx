@@ -171,6 +171,9 @@ export function CancelModal({
                         <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono">
                             <p className="text-green-300 mb-1">Cancellation broadcast!</p>
                             <p className="text-terminal-text-muted break-all">{txId}</p>
+                            <p className="text-terminal-text-muted mt-1.5">
+                                Confirms in next block (~10 min). You can close this — check the transaction pill for updates.
+                            </p>
                             <button className="mt-2 btn-primary px-3 py-1 text-xs rounded" onClick={onSuccess}>
                                 Done
                             </button>

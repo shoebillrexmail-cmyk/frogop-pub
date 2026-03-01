@@ -10,6 +10,7 @@ import {
     calcCoveredCallParams,
     findBestProtectivePut,
     calcCollarParams,
+    calcWritePutParams,
     type WriteOptionInitialValues,
 } from '../utils/strategyMath.js';
 import { formatTokenAmount } from '../config/index.ts';
@@ -19,8 +20,10 @@ interface QuickStrategiesProps {
     options: OptionData[];
     motoPillRatio: number | null;
     motoBal: number | null;
+    walletConnected?: boolean;
     onCoveredCall: (values: WriteOptionInitialValues) => void;
     onProtectivePut: (option: OptionData) => void;
+    onWritePut?: (values: WriteOptionInitialValues) => void;
     onCollar: () => void;
 }
 
@@ -67,8 +70,10 @@ export function QuickStrategies({
     options,
     motoPillRatio,
     motoBal,
+    walletConnected = true,
     onCoveredCall,
     onProtectivePut,
+    onWritePut,
     onCollar,
 }: QuickStrategiesProps) {
     const noPrice = motoPillRatio === null || motoPillRatio <= 0;
@@ -97,6 +102,7 @@ export function QuickStrategies({
                 disabled={noPrice}
                 testId="strategy-covered-call"
             >
+                <p className="text-[10px] text-gray-500 font-mono">120% of spot (OTM)</p>
                 {noPrice ? (
                     <p className="text-xs text-terminal-text-muted font-mono">Price data unavailable</p>
                 ) : coveredCall ? (
@@ -113,15 +119,16 @@ export function QuickStrategies({
                             <span className="text-terminal-text-muted">Duration</span>
                             <span className="text-terminal-text-secondary">30 days</span>
                         </div>
+                        <p className="text-[10px] text-terminal-text-muted mt-1">Max profit: premium + appreciation to strike</p>
                     </div>
                 ) : null}
                 <button
                     onClick={() => coveredCall && onCoveredCall(coveredCall)}
-                    disabled={noPrice || !coveredCall}
+                    disabled={noPrice || !coveredCall || !walletConnected}
                     className="w-full btn-primary py-2 text-xs font-mono rounded disabled:opacity-50"
                     data-testid="strategy-covered-call-btn"
                 >
-                    Use Strategy
+                    {walletConnected ? 'Use Strategy' : 'Connect wallet to trade'}
                 </button>
             </StrategyCard>
 
@@ -132,6 +139,7 @@ export function QuickStrategies({
                 disabled={noPrice}
                 testId="strategy-protective-put"
             >
+                <p className="text-[10px] text-gray-500 font-mono">80–95% of spot (OTM)</p>
                 {noPrice ? (
                     <p className="text-xs text-terminal-text-muted font-mono">Price data unavailable</p>
                 ) : bestPut ? (
@@ -144,21 +152,60 @@ export function QuickStrategies({
                             <span className="text-terminal-text-muted">Premium</span>
                             <span className="text-rose-400">{formatTokenAmount(bestPut.premium)} PILL</span>
                         </div>
-                        <p className="text-[10px] text-terminal-text-muted">Best available put (80–95% range)</p>
+                        <p className="text-[10px] text-terminal-text-muted">
+                            Protects your MOTO if price drops below {formatTokenAmount(bestPut.strikePrice)} PILL
+                        </p>
+                        <p className="text-[10px] text-terminal-text-muted">Max loss: premium paid</p>
                     </div>
                 ) : (
-                    <p className="text-xs text-terminal-text-muted font-mono">
-                        No suitable puts available (80–95% range)
-                    </p>
+                    <div className="text-xs font-mono space-y-1">
+                        <p className="text-terminal-text-muted">
+                            No puts in the 80–95% range yet.
+                        </p>
+                        {walletConnected && onWritePut && (
+                            <p className="text-terminal-text-muted text-[10px]">
+                                Write one to earn premium while helping others hedge.
+                            </p>
+                        )}
+                    </div>
                 )}
-                <button
-                    onClick={() => bestPut && onProtectivePut(bestPut)}
-                    disabled={noPrice || !bestPut}
-                    className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
-                    data-testid="strategy-protective-put-btn"
-                >
-                    Buy Put
-                </button>
+                {!walletConnected ? (
+                    <button
+                        disabled
+                        className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
+                        data-testid="strategy-protective-put-btn"
+                    >
+                        Connect wallet to trade
+                    </button>
+                ) : bestPut ? (
+                    <button
+                        onClick={() => onProtectivePut(bestPut)}
+                        disabled={noPrice}
+                        className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
+                        data-testid="strategy-protective-put-btn"
+                    >
+                        Buy Put
+                    </button>
+                ) : onWritePut && !noPrice ? (
+                    <button
+                        onClick={() => {
+                            const params = calcWritePutParams(motoPillRatio!, motoBal);
+                            if (params) onWritePut(params);
+                        }}
+                        className="w-full btn-primary py-2 text-xs font-mono rounded"
+                        data-testid="strategy-write-put-btn"
+                    >
+                        Write a Put
+                    </button>
+                ) : (
+                    <button
+                        disabled
+                        className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
+                        data-testid="strategy-protective-put-btn"
+                    >
+                        Buy Put
+                    </button>
+                )}
             </StrategyCard>
 
             {/* Collar */}
@@ -168,6 +215,7 @@ export function QuickStrategies({
                 disabled={noPrice}
                 testId="strategy-collar"
             >
+                <p className="text-[10px] text-gray-500 font-mono">CALL 120% / PUT 80%</p>
                 {noPrice ? (
                     <p className="text-xs text-terminal-text-muted font-mono">Price data unavailable</p>
                 ) : collar ? (
@@ -182,17 +230,19 @@ export function QuickStrategies({
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Net premium</span>
-                            <span className="text-terminal-text-primary">{collar.netPremiumDisplay} PILL</span>
+                            <span className={collar.netPremiumDisplay.startsWith('+') ? 'text-green-400' : 'text-amber-400'}>
+                                {collar.netPremiumDisplay} PILL
+                            </span>
                         </div>
                     </div>
                 ) : null}
                 <button
                     onClick={onCollar}
-                    disabled={noPrice || !collar}
+                    disabled={noPrice || !collar || !walletConnected}
                     className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
                     data-testid="strategy-collar-btn"
                 >
-                    Setup Collar
+                    {walletConnected ? 'Setup Collar' : 'Connect wallet to trade'}
                 </button>
             </StrategyCard>
         </div>

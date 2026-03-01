@@ -86,6 +86,11 @@ export function WriteOptionPanel({
     const [strikeStr, setStrikeStr] = useState('');
     const [premiumStr, setPremiumStr] = useState('');
     const [selectedDays, setSelectedDays] = useState<number>(7);
+    const [volatility, setVolatility] = useState<number>(() => {
+        const stored = localStorage.getItem('frogop_vol_pref');
+        return stored ? Number(stored) : 80;
+    });
+    const [showVolSlider, setShowVolSlider] = useState(false);
     const expiryBlocks = selectedDays * BLOCK_CONSTANTS.BLOCKS_PER_DAY;
 
     // Seed form from strategy template on mount
@@ -109,7 +114,7 @@ export function WriteOptionPanel({
 
     // Black-Scholes suggested premium
     const { suggestedPremium, annualizedVol } = useSuggestedPremium(
-        optionType, strikeStr, amountStr, expiryBlocks, motoPillRatio ?? null,
+        optionType, strikeStr, amountStr, expiryBlocks, motoPillRatio ?? null, volatility / 100,
     );
 
     // Resolve pool hex for allowance spender
@@ -350,14 +355,62 @@ export function WriteOptionPanel({
                             <span className="text-terminal-text-muted text-xs font-mono">PILL</span>
                         </div>
                         {suggestedPremium !== null && suggestedPremium > 0n && (
-                            <button
-                                type="button"
-                                onClick={() => setPremiumStr(formatBigInt(suggestedPremium))}
-                                className="text-[10px] text-cyan-400 hover:text-cyan-300 font-mono mt-1 cursor-pointer"
-                                data-testid="bs-suggestion"
-                            >
-                                BS suggested: {formatBigInt(suggestedPremium)} PILL ({Math.round(annualizedVol * 100)}% vol)
-                            </button>
+                            <div className="mt-1.5 space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-terminal-text-muted font-mono">
+                                        Fair value: <span className="text-cyan-400">{formatBigInt(suggestedPremium)} PILL</span>
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPremiumStr(formatBigInt(suggestedPremium))}
+                                        className="text-[10px] text-cyan-400 hover:text-cyan-300 font-mono underline cursor-pointer"
+                                        data-testid="bs-suggestion"
+                                    >
+                                        [Use]
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowVolSlider(!showVolSlider)}
+                                        className="text-[10px] text-terminal-text-muted hover:text-terminal-text-primary font-mono cursor-pointer"
+                                        data-testid="vol-adjust-toggle"
+                                    >
+                                        [Adjust]
+                                    </button>
+                                    <span
+                                        className="text-[10px] text-terminal-text-muted cursor-help"
+                                        title="Estimated using Black-Scholes pricing. Depends on current MOTO/PILL price, time to expiry, and expected volatility. You can set any premium — this is just a reference."
+                                    >
+                                        ?
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-terminal-text-muted font-mono">
+                                    Based on {Math.round(annualizedVol * 100)}% annual volatility
+                                </p>
+                                {showVolSlider && (
+                                    <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-2.5 space-y-1.5" data-testid="vol-slider-panel">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] text-terminal-text-muted font-mono">Volatility: {volatility}%</label>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min={20}
+                                            max={200}
+                                            step={5}
+                                            value={volatility}
+                                            onChange={(e) => {
+                                                const val = Number(e.target.value);
+                                                setVolatility(val);
+                                                localStorage.setItem('frogop_vol_pref', String(val));
+                                            }}
+                                            className="w-full h-1 accent-accent cursor-pointer"
+                                            data-testid="vol-slider"
+                                        />
+                                        <p className="text-[9px] text-terminal-text-muted font-mono">
+                                            Higher volatility = higher fair value. 80% is typical for altcoins.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
 
@@ -431,6 +484,9 @@ export function WriteOptionPanel({
                         <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono">
                             <p className="text-green-300 mb-1">Transaction broadcast!</p>
                             <p className="text-terminal-text-muted break-all">{txId}</p>
+                            <p className="text-terminal-text-muted mt-1.5">
+                                Confirms in next block (~10 min). You can close this — check the transaction pill for updates.
+                            </p>
                             <button
                                 className="mt-2 btn-primary px-3 py-1 text-xs rounded"
                                 onClick={onSuccess}
@@ -442,9 +498,12 @@ export function WriteOptionPanel({
 
                     {/* Approval pending hint */}
                     {txId && txStatus === 'idle' && (
-                        <p className="text-yellow-400 text-xs font-mono">
-                            Approval broadcast ({txId.slice(0, 12)}…). Waiting for block confirmation.
-                        </p>
+                        <div className="flex items-center gap-2 text-xs font-mono">
+                            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+                            <span className="text-yellow-400">
+                                Waiting for approval (~10 min)... {txId.slice(0, 12)}…
+                            </span>
+                        </div>
                     )}
 
                     {/* Action buttons */}

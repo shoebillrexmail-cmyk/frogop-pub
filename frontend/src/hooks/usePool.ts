@@ -4,6 +4,7 @@
  * Requires the walletconnect provider (read-only; no wallet needed for view calls).
  */
 import { useState, useEffect, useCallback } from 'react';
+import type { AbstractRpcProvider } from 'opnet';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { PoolService } from '../services/pool.ts';
 import type { OptionData, PoolInfo } from '../services/types.ts';
@@ -23,8 +24,9 @@ export interface UsePoolResult {
  * @param poolAddress - bech32 (opt1...) or hex (0x...) pool contract address.
  *                      Pass null/empty to disable fetching.
  */
-export function usePool(poolAddress: string | null | undefined): UsePoolResult {
-    const { provider } = useWalletConnect();
+export function usePool(poolAddress: string | null | undefined, providerOverride?: AbstractRpcProvider | null): UsePoolResult {
+    const { provider: walletProvider } = useWalletConnect();
+    const provider = providerOverride ?? walletProvider;
 
     const [poolInfo, setPoolInfo] = useState<PoolInfo | null>(null);
     const [options, setOptions] = useState<OptionData[]>([]);

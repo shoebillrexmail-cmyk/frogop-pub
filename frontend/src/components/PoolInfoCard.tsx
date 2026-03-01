@@ -8,7 +8,7 @@ interface PoolInfoCardProps {
     poolInfo: PoolInfo;
     poolAddress: string;
     motoPillRatio?: number | null;
-    onWriteOption: () => void;
+    onWriteOption?: () => void;
 }
 
 function bpsToPct(bps: bigint): string {
@@ -29,9 +29,11 @@ export function PoolInfoCard({ poolInfo, poolAddress, motoPillRatio, onWriteOpti
                 </div>
                 <button
                     onClick={onWriteOption}
-                    className="btn-primary px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-1.5"
+                    disabled={!onWriteOption}
+                    className="btn-primary px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-1.5 disabled:opacity-50"
+                    title={onWriteOption ? undefined : 'Connect wallet to write options'}
                 >
-                    Write Option
+                    {onWriteOption ? 'Write Option' : 'Connect wallet'}
                     <span className="text-base leading-none">+</span>
                 </button>
             </div>

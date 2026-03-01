@@ -128,6 +128,31 @@ export function findBestProtectivePut(
 }
 
 // ---------------------------------------------------------------------------
+// Write Put (writer-side fallback for Protective Put)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute parameters for writing a protective put: PUT at 87.5% spot, 30-day expiry.
+ * Used when no existing puts are available in the 80–95% range.
+ */
+export function calcWritePutParams(
+    spot: number,
+    motoBal: number | null,
+): WriteOptionInitialValues | null {
+    if (spot <= 0) return null;
+
+    const strike = spot * PUT_MID; // 87.5% — midpoint of protective range
+
+    return {
+        optionType: OptionType.PUT,
+        amountStr: motoBal !== null ? formatDecimal(motoBal) : '1',
+        strikeStr: formatDecimal(strike),
+        premiumStr: bsPremiumStr(spot, strike, DEFAULT_DAYS, OptionType.PUT),
+        selectedDays: DEFAULT_DAYS,
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Collar
 // ---------------------------------------------------------------------------
 

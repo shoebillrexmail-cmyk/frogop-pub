@@ -12,6 +12,8 @@ interface OptionsTableProps {
     options: OptionData[];
     /** Connected wallet hex address (0x...) or null if disconnected */
     walletHex: string | null;
+    /** Whether a wallet is currently connected (enables action buttons) */
+    walletConnected?: boolean;
     /** Current block number (for grace period calc + expiry countdown) */
     currentBlock?: bigint;
     /** Grace period in blocks */
@@ -70,9 +72,29 @@ function TypeBadge({ optionType }: { optionType: number }) {
     );
 }
 
+function GraceWarning({ option, currentBlock, gracePeriodBlocks }: {
+    option: OptionData;
+    currentBlock?: bigint;
+    gracePeriodBlocks?: bigint;
+}) {
+    if (currentBlock === undefined || option.status !== OptionStatus.PURCHASED) return null;
+    const graceEnds = option.expiryBlock + (gracePeriodBlocks ?? 144n);
+    const blocksLeft = graceEnds - currentBlock;
+    if (blocksLeft <= 0n) return null;
+    if (blocksLeft < 144n) {
+        return <span className="text-rose-400 text-[10px] font-mono ml-1">Exercise soon!</span>;
+    }
+    if (blocksLeft < 1000n) {
+        const daysLeft = Math.ceil(Number(blocksLeft) / 144);
+        return <span className="text-amber-400 text-[10px] font-mono ml-1">Grace: ~{daysLeft}d left</span>;
+    }
+    return null;
+}
+
 function RowAction({
     option,
     walletHex,
+    walletConnected,
     currentBlock,
     gracePeriodBlocks,
     onBuy,
@@ -83,6 +105,7 @@ function RowAction({
 }: {
     option: OptionData;
     walletHex: string | null;
+    walletConnected: boolean;
     currentBlock?: bigint;
     gracePeriodBlocks?: bigint;
     onBuy?: (o: OptionData) => void;
@@ -106,15 +129,17 @@ function RowAction({
             return (
                 <div className="flex gap-1">
                     <button
-                        className="btn-secondary px-3 py-1 text-xs rounded"
+                        className="btn-secondary px-3 py-1 text-xs rounded disabled:opacity-50"
                         onClick={() => onCancel?.(option)}
+                        disabled={!walletConnected}
                         data-testid={`cancel-${option.id}`}
                     >
                         Cancel
                     </button>
                     <button
-                        className="btn-secondary px-3 py-1 text-xs rounded"
+                        className="btn-secondary px-3 py-1 text-xs rounded disabled:opacity-50"
                         onClick={() => onRoll?.(option)}
+                        disabled={!walletConnected}
                         data-testid={`roll-${option.id}`}
                     >
                         Roll
@@ -124,11 +149,13 @@ function RowAction({
         }
         return (
             <button
-                className="btn-primary px-3 py-1 text-xs rounded"
-                onClick={() => onBuy?.(option)}
+                className={`px-3 py-1 text-xs rounded ${walletConnected ? 'btn-primary' : 'btn-secondary opacity-60'}`}
+                onClick={() => walletConnected && onBuy?.(option)}
+                disabled={!walletConnected}
+                title={walletConnected ? undefined : 'Connect wallet'}
                 data-testid={`buy-${option.id}`}
             >
-                Buy
+                {walletConnected ? 'Buy' : 'Connect wallet'}
             </button>
         );
     }
@@ -136,34 +163,40 @@ function RowAction({
     if (option.status === OptionStatus.PURCHASED) {
         if (isBuyer && graceActive) {
             return (
-                <button
-                    className="btn-primary px-3 py-1 text-xs rounded"
-                    onClick={() => onExercise?.(option)}
-                    data-testid={`exercise-${option.id}`}
-                >
-                    Exercise
-                </button>
+                <div className="flex items-center">
+                    <button
+                        className="btn-primary px-3 py-1 text-xs rounded"
+                        onClick={() => onExercise?.(option)}
+                        data-testid={`exercise-${option.id}`}
+                    >
+                        Exercise
+                    </button>
+                    <GraceWarning option={option} currentBlock={currentBlock} gracePeriodBlocks={gracePeriodBlocks} />
+                </div>
             );
         }
         if (!graceActive) {
             return (
                 <button
-                    className="btn-secondary px-3 py-1 text-xs rounded"
+                    className="btn-secondary px-3 py-1 text-xs rounded disabled:opacity-50"
                     onClick={() => onSettle?.(option)}
+                    disabled={!walletConnected}
                     data-testid={`settle-${option.id}`}
                 >
                     Settle
                 </button>
             );
         }
-        return null;
+        // Grace active but user is not buyer — show grace warning if applicable
+        return <GraceWarning option={option} currentBlock={currentBlock} gracePeriodBlocks={gracePeriodBlocks} />;
     }
 
     if (option.status === OptionStatus.EXPIRED) {
         return (
             <button
-                className="btn-secondary px-3 py-1 text-xs rounded"
+                className="btn-secondary px-3 py-1 text-xs rounded disabled:opacity-50"
                 onClick={() => onSettle?.(option)}
+                disabled={!walletConnected}
                 data-testid={`settle-${option.id}`}
             >
                 Settle
@@ -177,6 +210,7 @@ function RowAction({
 export function OptionsTable({
     options,
     walletHex,
+    walletConnected = walletHex !== null,
     currentBlock,
     gracePeriodBlocks,
     motoPillRatio,
@@ -392,6 +426,7 @@ export function OptionsTable({
                                         <RowAction
                                             option={option}
                                             walletHex={walletHex}
+                                            walletConnected={walletConnected}
                                             currentBlock={currentBlock}
                                             gracePeriodBlocks={gracePeriodBlocks}
                                             onBuy={onBuy}

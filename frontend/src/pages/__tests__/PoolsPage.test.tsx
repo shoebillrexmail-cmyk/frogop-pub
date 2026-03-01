@@ -32,7 +32,12 @@ vi.mock('../../hooks/usePool.ts', () => ({
 
 const mockUseDiscoverPools = vi.fn();
 vi.mock('../../hooks/useDiscoverPools.ts', () => ({
-    useDiscoverPools: () => mockUseDiscoverPools(),
+    useDiscoverPools: (...args: unknown[]) => mockUseDiscoverPools(...args),
+}));
+
+const mockFallbackProvider = {} as unknown;
+vi.mock('../../hooks/useFallbackProvider.ts', () => ({
+    useFallbackProvider: () => mockFallbackProvider,
 }));
 
 // Pool address config — provide a non-empty pool address so the page renders data
@@ -316,15 +321,15 @@ describe('PoolsPage', () => {
 
         it('auto-selects the first pool', () => {
             renderPage();
-            // usePool should have been called with the first pool address
-            expect(mockUsePool).toHaveBeenCalledWith(POOL_A);
+            // usePool should have been called with the first pool address + fallback provider
+            expect(mockUsePool).toHaveBeenCalledWith(POOL_A, expect.anything());
         });
 
         it('switching pool updates usePool call', () => {
             renderPage();
             fireEvent.click(screen.getByTestId(`pool-selector-${POOL_B}`));
-            // After click, the next render should call usePool with POOL_B
-            expect(mockUsePool).toHaveBeenCalledWith(POOL_B);
+            // After click, the next render should call usePool with POOL_B + fallback provider
+            expect(mockUsePool).toHaveBeenCalledWith(POOL_B, expect.anything());
         });
 
         it('shows source badge for factory', () => {

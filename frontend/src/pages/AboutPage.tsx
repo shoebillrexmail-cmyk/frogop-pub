@@ -594,6 +594,100 @@ export function AboutPage() {
             question="How is collateral different for CALLs vs PUTs?"
             answer={<>For <span className="neon-green font-mono">CALL</span> options, the writer locks the <em>underlying tokens</em> (e.g., 100 MOTO). For <span className="neon-red font-mono">PUT</span> options, the writer locks the <em>strike value in premium tokens</em> (e.g., if strike is 40 PILL per MOTO and amount is 100 MOTO, the writer locks 4,000 PILL). In both cases, collateral is 100%.</>}
           />
+          <FaqItem
+            question="What is fair value?"
+            answer={<>Fair value is the estimated option price calculated using the Black-Scholes model. It depends on the current MOTO/PILL price, time to expiry, and expected volatility. The default assumption is 80% annual volatility (typical for altcoins), but you can adjust this in the Write panel. Fair value is just a reference — you set the actual premium.</>}
+          />
+          <FaqItem
+            question="What does volatility mean?"
+            answer="Volatility measures how much the price is expected to fluctuate over time. Higher volatility means larger expected price swings, which makes options more valuable (both calls and puts). The default 80% is typical for altcoins. You can adjust the volatility assumption in the Write panel to see how it affects fair value."
+          />
+          <FaqItem
+            question="How do I roll an option?"
+            answer="Rolling lets a writer extend or modify an existing option. From the options table, click 'Roll' on any OPEN option you wrote. You can adjust the expiry, strike, or premium and create a new option while cancelling the old one. This is useful when market conditions change and you want to keep earning premium."
+          />
+          <FaqItem
+            question="Can I browse without connecting my wallet?"
+            answer="Yes. You can view all pools, option listings, prices, and strategy suggestions without connecting your wallet. You only need to connect when you want to take an action — writing, buying, exercising, or cancelling an option."
+          />
+        </div>
+      </section>
+
+      {/* How Pricing Works */}
+      <section className="mb-12">
+        <h2 className="text-2xl font-semibold text-terminal-text-primary mb-4">How Pricing Works</h2>
+        <div className="terminal-card rounded-xl p-6 space-y-4">
+          <p className="text-sm text-terminal-text-secondary leading-relaxed">
+            When you write an option, the Write panel shows a <span className="text-cyan-400 font-mono">fair value</span> estimate
+            calculated using the Black-Scholes pricing model — the same model used by Deribit, Robinhood, and
+            traditional options exchanges worldwide.
+          </p>
+          <div className="bg-terminal-bg-primary rounded-lg p-4 text-sm space-y-2">
+            <p className="text-terminal-text-primary font-medium">Fair value depends on:</p>
+            <ul className="space-y-1 text-terminal-text-secondary">
+              <li className="flex items-start gap-2">
+                <span className="text-accent font-mono mt-0.5">›</span>
+                <span><strong>Current price</strong> — the MOTO/PILL ratio from the indexer or NativeSwap</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-accent font-mono mt-0.5">›</span>
+                <span><strong>Strike price</strong> — how far in- or out-of-the-money the option is</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-accent font-mono mt-0.5">›</span>
+                <span><strong>Time to expiry</strong> — more time = more valuable</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-accent font-mono mt-0.5">›</span>
+                <span><strong>Volatility</strong> — default 80% annual, adjustable via the slider in the Write panel</span>
+              </li>
+            </ul>
+          </div>
+          <p className="text-sm text-terminal-text-muted leading-relaxed">
+            Fair value is a suggestion, not a requirement. You can set any premium you like. If you
+            price above fair value, your option may take longer to attract a buyer. If you price below,
+            it may sell quickly but you earn less.
+          </p>
+        </div>
+      </section>
+
+      {/* Strategies Explained */}
+      <section className="mb-12">
+        <h2 className="text-2xl font-semibold text-terminal-text-primary mb-6">Strategies Explained</h2>
+        <div className="space-y-4">
+          <div className="terminal-card rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-terminal-text-primary mb-2 font-mono">Covered Call</h3>
+            <p className="text-sm text-terminal-text-secondary leading-relaxed mb-2">
+              Own MOTO and sell a CALL at 120% of the current price. You earn the premium immediately.
+              If MOTO rises past the strike, the buyer exercises and you sell at the strike price. If it
+              doesn&apos;t, you keep both your MOTO and the premium.
+            </p>
+            <p className="text-xs text-terminal-text-muted font-mono">
+              Max profit: premium + appreciation up to strike. Max loss: opportunity cost if price rises above strike.
+            </p>
+          </div>
+          <div className="terminal-card rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-terminal-text-primary mb-2 font-mono">Protective Put</h3>
+            <p className="text-sm text-terminal-text-secondary leading-relaxed mb-2">
+              Buy a PUT in the 80-95% range to insure your MOTO against a price drop. If the price falls
+              below the strike, you can exercise and sell at the higher strike price. Your maximum loss
+              is capped at the premium paid.
+            </p>
+            <p className="text-xs text-terminal-text-muted font-mono">
+              Max loss: premium paid. If no puts are available, you can write one to supply the market and earn premium.
+            </p>
+          </div>
+          <div className="terminal-card rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-terminal-text-primary mb-2 font-mono">Collar</h3>
+            <p className="text-sm text-terminal-text-secondary leading-relaxed mb-2">
+              Combine a covered call (sell upside at 120%) with a protective put (buy insurance at 80%).
+              The premium earned from the call offsets the cost of the put, often resulting in near-zero
+              net cost. You cap both your upside and downside.
+            </p>
+            <p className="text-xs text-terminal-text-muted font-mono">
+              Net premium is color-coded: green for credit (you earn), amber for debit (you pay).
+            </p>
+          </div>
         </div>
       </section>
 
@@ -704,10 +798,22 @@ export function AboutPage() {
                 <span className="text-status-positive">✓</span> 100% collateralization
               </li>
               <li className="flex items-center gap-2">
-                <span className="text-status-positive">✓</span> Integration tests passing
+                <span className="text-status-positive">✓</span> Batch cancel &amp; batch settle
               </li>
               <li className="flex items-center gap-2">
-                <span className="text-status-warning">⟳</span> Frontend MVP
+                <span className="text-status-positive">✓</span> Option rolling (extend or re-strike)
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-status-positive">✓</span> Strategy templates (Covered Call, Protective Put, Collar)
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-status-positive">✓</span> Fair value (Black-Scholes) pricing guide
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-status-positive">✓</span> Browse pools without wallet
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-status-positive">✓</span> Integration tests passing
               </li>
             </ul>
           </div>

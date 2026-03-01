@@ -115,7 +115,7 @@ describe('QuickStrategies', () => {
 
         it('shows no puts message when none available', () => {
             render(<QuickStrategies {...DEFAULT_PROPS} options={[]} />);
-            expect(screen.getByTestId('strategy-protective-put')).toHaveTextContent(/no suitable puts/i);
+            expect(screen.getByTestId('strategy-protective-put')).toHaveTextContent(/no puts in the 80/i);
         });
 
         it('calls onProtectivePut with the OptionData on click', () => {
