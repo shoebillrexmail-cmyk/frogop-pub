@@ -265,4 +265,28 @@ describe('WriteOptionPanel', () => {
             expect(mockSendTransaction).toHaveBeenCalled();
         });
     });
+
+    // -----------------------------------------------------------------------
+    // initialValues pre-fill
+    // -----------------------------------------------------------------------
+
+    it('pre-fills form fields from initialValues prop', () => {
+        const initialValues = {
+            optionType: 0, // CALL
+            strikeStr: '60',
+            amountStr: '2',
+            premiumStr: '3.5',
+            selectedDays: 30,
+        };
+        render(<WriteOptionPanel {...DEFAULT_PROPS} initialValues={initialValues} />);
+        expect((screen.getByTestId('input-strike') as HTMLInputElement).value).toBe('60');
+        expect((screen.getByTestId('input-amount') as HTMLInputElement).value).toBe('2');
+        expect((screen.getByTestId('input-premium') as HTMLInputElement).value).toBe('3.5');
+    });
+
+    it('defaults apply when initialValues not provided', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+        expect((screen.getByTestId('input-amount') as HTMLInputElement).value).toBe('1');
+        expect((screen.getByTestId('input-strike') as HTMLInputElement).value).toBe('');
+    });
 });

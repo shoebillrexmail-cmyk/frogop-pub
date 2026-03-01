@@ -27,6 +27,14 @@ const DAY_PRESETS = [
     { label: '90d', days: 90 },
 ] as const;
 
+export interface WriteOptionInitialValues {
+    optionType?: number;
+    amountStr?: string;
+    strikeStr?: string;
+    premiumStr?: string;
+    selectedDays?: number;
+}
+
 interface WriteOptionPanelProps {
     poolAddress: string;
     poolInfo: PoolInfo;
@@ -37,6 +45,8 @@ interface WriteOptionPanelProps {
     network: WalletConnectNetwork;
     /** Current MOTO/PILL spot price for BS suggested premium */
     motoPillRatio?: number | null;
+    /** Pre-fill form values from strategy templates */
+    initialValues?: WriteOptionInitialValues;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -67,6 +77,7 @@ export function WriteOptionPanel({
     provider,
     network,
     motoPillRatio,
+    initialValues,
     onClose,
     onSuccess,
 }: WriteOptionPanelProps) {
@@ -76,6 +87,16 @@ export function WriteOptionPanel({
     const [premiumStr, setPremiumStr] = useState('');
     const [selectedDays, setSelectedDays] = useState<number>(7);
     const expiryBlocks = selectedDays * BLOCK_CONSTANTS.BLOCKS_PER_DAY;
+
+    // Seed form from strategy template on mount
+    useEffect(() => {
+        if (!initialValues) return;
+        if (initialValues.optionType !== undefined) setOptionType(initialValues.optionType);
+        if (initialValues.amountStr !== undefined) setAmountStr(initialValues.amountStr);
+        if (initialValues.strikeStr !== undefined) setStrikeStr(initialValues.strikeStr);
+        if (initialValues.premiumStr !== undefined) setPremiumStr(initialValues.premiumStr);
+        if (initialValues.selectedDays !== undefined) setSelectedDays(initialValues.selectedDays);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: seed once on mount
     const [validationError, setValidationError] = useState<string | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'writing' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
