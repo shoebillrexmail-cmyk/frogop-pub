@@ -13,6 +13,7 @@ set -euo pipefail
 REMOTE="public"
 EXCLUDED_PATHS=(
     "internal/"
+    "docs/"
     ".github/workflows/"
     "SPRINTBOARD.md"
     "AGENTS.md"
