@@ -17,6 +17,7 @@ import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount, BLOCK_CONSTANTS } from '../config/index.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import { useActiveFlow } from '../hooks/useActiveFlow.ts';
+import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { useSuggestedPremium } from '../hooks/useSuggestedPremium.ts';
 import { StepIndicator } from './StepIndicator.tsx';
 import type { StepStatus } from './StepIndicator.tsx';
@@ -150,6 +151,12 @@ export function WriteOptionPanel({
         label: 'Write Option',
         strategyLabel,
     });
+
+    // Check for OTHER active write flows for this pool (different UUID)
+    const { activeFlows } = useTransactionContext();
+    const otherWriteFlows = activeFlows.filter(
+        (f) => f.actionType === 'writeOption' && f.poolAddress === poolAddress && f.optionId !== instanceId,
+    );
 
     // ActiveFlowBanner state
     const [flowDismissed, setFlowDismissed] = useState(false);
@@ -614,6 +621,14 @@ export function WriteOptionPanel({
                             </span>
                         </div>
                     </div>
+
+                    {/* Existing write flows hint */}
+                    {otherWriteFlows.length > 0 && (
+                        <div className="bg-cyan-900/10 border border-cyan-800 rounded p-2.5 text-xs font-mono text-cyan-300" data-testid="other-flows-hint">
+                            {otherWriteFlows.length} other write flow{otherWriteFlows.length > 1 ? 's' : ''} active for this pool.
+                            Use the pill in the header to resume{otherWriteFlows.length > 1 ? ' them' : ' it'}.
+                        </div>
+                    )}
 
                     {/* Flow limit warning */}
                     {!canStartFlow && (

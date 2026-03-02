@@ -128,9 +128,25 @@ export function PoolsPage() {
     const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
     const [settleTarget, setSettleTarget] = useState<OptionData | null>(null);
 
+    // Close all action modals — used before opening a resumed flow's modal.
+    const closeAllModals = useCallback(() => {
+        setWriteOpen(false);
+        setWriteInitialValues(undefined);
+        setWriteStrategyLabel(undefined);
+        setWriteFlowInstanceId(undefined);
+        setBuyTarget(null);
+        setBuyStrategyLabel(undefined);
+        setCancelTarget(null);
+        setExerciseTarget(null);
+        setSettleTarget(null);
+        setCollarOpen(false);
+    }, []);
+
     // Apply a resume request — opens the appropriate modal.
     // Extracted to useCallback so setState is not called directly in the effect body.
     const applyResume = useCallback((req: ResumeRequest) => {
+        closeAllModals();
+
         if (req.actionType === 'writeOption') {
             const formState = req.formState;
             if (formState) {
@@ -143,6 +159,7 @@ export function PoolsPage() {
                 });
                 setWriteFlowInstanceId(formState['flowInstanceId'] ?? undefined);
             }
+            setWriteStrategyLabel(req.strategyLabel ?? undefined);
             setWriteOpen(true);
             return;
         }
@@ -150,6 +167,7 @@ export function PoolsPage() {
         if (req.actionType === 'buyOption' && req.optionId) {
             const opt = options.find((o) => o.id.toString() === req.optionId);
             if (opt) {
+                setBuyStrategyLabel(req.strategyLabel ?? undefined);
                 setBuyTarget(opt);
             } else {
                 abandonFlowById(req.flowId);
@@ -167,7 +185,7 @@ export function PoolsPage() {
                 alert('Option no longer available. Flow abandoned.');
             }
         }
-    }, [options, abandonFlowById]);
+    }, [options, abandonFlowById, closeAllModals]);
 
     // Handle resume requests from the flow card
     useEffect(() => {

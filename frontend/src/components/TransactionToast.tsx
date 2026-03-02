@@ -1,11 +1,13 @@
 /**
- * TransactionToast — fixed-position floating pill showing pending TX count.
+ * TransactionToast — header-integrated pill showing pending TX / active flow count.
  *
  * Click expands a dropdown with each pending TX: label, elapsed time, status icon.
  * Shows one FlowResumeCard per active two-step flow (parallel flows supported).
  * Auto-dismisses confirmed notifications after 10s.
+ *
+ * Rendered inside the header bar so it stays visible above modal backdrops.
  */
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
@@ -53,6 +55,7 @@ export function TransactionToast() {
     const [expanded, setExpanded] = useState(false);
     const [, setTick] = useState(0);
     const [collarDismissed, setCollarDismissed] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     // Update elapsed times every 15s
     useEffect(() => {
@@ -68,6 +71,18 @@ export function TransactionToast() {
             return () => clearTimeout(timer);
         }
     }, [pendingCount, activeFlows.length, expanded]);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        if (!expanded) return;
+        const handler = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setExpanded(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [expanded]);
 
     const toggle = useCallback(() => setExpanded((v) => !v), []);
 
@@ -92,10 +107,39 @@ export function TransactionToast() {
     if (visible.length === 0 && pendingCount === 0 && !hasFlows && !collarInProgress) return null;
 
     return (
-        <div className="fixed bottom-4 right-4 z-50 font-mono" role="status" aria-live="polite">
-            {/* Expanded dropdown */}
+        <div className="relative font-mono" ref={containerRef} role="status" aria-live="polite">
+            {/* Pill button (inline in header) */}
+            {(pendingCount > 0 || failedCount > 0 || hasFlows || collarInProgress) && (
+                <button
+                    onClick={toggle}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-terminal-bg-primary border border-terminal-border-subtle rounded-full hover:border-accent transition-colors"
+                    aria-label={pendingCount > 0 ? `${pendingCount} pending transactions` : failedCount > 0 ? `${failedCount} failed` : hasFlows ? `${activeFlows.length} active flow(s)` : ''}
+                    data-testid="tx-pill"
+                >
+                    {pendingCount > 0 && (
+                        <span className="w-2 h-2 rounded-full bg-orange-400 pulse-orange" aria-hidden="true" />
+                    )}
+                    {pendingCount === 0 && failedCount > 0 && !hasFlows && (
+                        <span className="w-2 h-2 rounded-full bg-rose-400" aria-hidden="true" />
+                    )}
+                    {pendingCount === 0 && failedCount === 0 && hasFlows && (
+                        <span className="w-2 h-2 rounded-full bg-cyan-400" aria-hidden="true" />
+                    )}
+                    <span className="text-xs text-terminal-text-primary">
+                        {pendingCount > 0
+                            ? `${pendingCount} pending`
+                            : failedCount > 0
+                                ? `${failedCount} failed`
+                                : hasFlows
+                                    ? `${activeFlows.length} flow${activeFlows.length > 1 ? 's' : ''}`
+                                    : ''}
+                    </span>
+                </button>
+            )}
+
+            {/* Dropdown (opens below pill) */}
             {expanded && (visible.length > 0 || hasFlows || collarInProgress) && (
-                <div className="mb-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl shadow-lg overflow-hidden max-w-xs w-72">
+                <div className="absolute top-full right-0 mt-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl shadow-lg overflow-hidden w-72 z-[61]">
                     <div className="px-3 py-2 border-b border-terminal-border-subtle text-xs text-terminal-text-muted">
                         Transactions
                         {activeFlows.length > 0 && (
@@ -108,7 +152,7 @@ export function TransactionToast() {
                         <FlowResumeCard
                             key={flow.flowId}
                             flow={flow}
-                            onResume={() => requestResume(flow.flowId)}
+                            onResume={() => { requestResume(flow.flowId); setExpanded(false); }}
                             onAbandon={() => abandonFlow(flow.flowId)}
                         />
                     ))}
@@ -165,37 +209,6 @@ export function TransactionToast() {
                         View All Transactions
                     </Link>
                 </div>
-            )}
-
-            {/* Floating pill */}
-            {(pendingCount > 0 || failedCount > 0 || hasFlows || collarInProgress) && (
-                <button
-                    onClick={toggle}
-                    className="flex items-center gap-2 px-4 py-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-full shadow-lg hover:border-accent transition-colors"
-                    aria-label={pendingCount > 0 ? `${pendingCount} pending transactions` : failedCount > 0 ? `${failedCount} failed` : hasFlows ? `${activeFlows.length} active flow(s)` : ''}
-                >
-                    {pendingCount > 0 && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-orange-400 pulse-orange" aria-hidden="true" />
-                    )}
-                    {pendingCount === 0 && failedCount > 0 && !hasFlows && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-400" aria-hidden="true" />
-                    )}
-                    {pendingCount === 0 && failedCount === 0 && hasFlows && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" aria-hidden="true" />
-                    )}
-                    <span className="text-xs text-terminal-text-primary">
-                        {pendingCount > 0
-                            ? `${pendingCount} pending`
-                            : failedCount > 0
-                                ? `${failedCount} failed`
-                                : hasFlows
-                                    ? `${activeFlows.length} flow${activeFlows.length > 1 ? 's' : ''}`
-                                    : ''}
-                    </span>
-                    {pendingCount > 0 && (
-                        <span className="text-xs text-terminal-text-muted">~10 min</span>
-                    )}
-                </button>
             )}
         </div>
     );

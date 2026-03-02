@@ -13,7 +13,7 @@ export function Layout() {
   const { walletAddress, connecting, openConnectModal, disconnect, provider } = useWalletConnect();
   const connected = !!walletAddress;
   const [menuOpen, setMenuOpen] = useState(false);
-  const { pendingCount, reopenRequest, clearReopenRequest } = useTransactionContext();
+  const { reopenRequest, clearReopenRequest } = useTransactionContext();
 
   // WebSocket provider for real-time block subscriptions
   const { connected: wsConnected, currentBlock: wsBlock } = useWebSocketProvider();
@@ -31,7 +31,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-terminal-bg-primary font-sans">
-      <header className="bg-terminal-bg-elevated border-b border-terminal-border-subtle">
+      <header className="bg-terminal-bg-elevated border-b border-terminal-border-subtle relative z-[60]">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <img src="/frogop_512.png" alt="FroGop" className="h-20 w-20" />
@@ -57,12 +57,12 @@ export function Layout() {
           </nav>
 
           <div className="flex items-center gap-3">
+            {/* Transaction pill — always visible in header */}
+            <TransactionToast />
+
             {/* Wallet button */}
             {connected && walletAddress ? (
               <div className="flex items-center gap-2">
-                {pendingCount > 0 && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-orange-400 pulse-orange" title={`${pendingCount} pending TX`} />
-                )}
                 <span className="hidden sm:block text-sm text-terminal-text-muted font-mono">
                   {formatAddress(walletAddress)}
                 </span>
@@ -123,7 +123,6 @@ export function Layout() {
           <Outlet />
         </WsBlockContext.Provider>
       </main>
-      <TransactionToast />
       {reopenRequest && (
         <TransactionDetailModal tx={reopenRequest.tx} onClose={clearReopenRequest} />
       )}

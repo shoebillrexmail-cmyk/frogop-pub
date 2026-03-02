@@ -272,6 +272,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
                 poolAddress: flow.poolAddress,
                 optionId: flow.optionId,
                 formState: flow.formState,
+                strategyLabel: flow.strategyLabel,
             });
         },
         [activeFlows],

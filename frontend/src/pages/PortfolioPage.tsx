@@ -134,6 +134,13 @@ export function PortfolioPage() {
 
     // Apply exercise resume — extracted to avoid direct setState in the effect body.
     const applyResume = useCallback((req: ResumeRequest) => {
+        // Close any open modal before opening the resume target
+        setCancelTarget(null);
+        setExerciseTarget(null);
+        setSettleTarget(null);
+        setRollTarget(null);
+        setTransferTarget(null);
+
         if (req.optionId) {
             const opt = purchasedOptions.find((o) => o.id.toString() === req.optionId);
             if (opt) {

@@ -76,4 +76,5 @@ export interface ResumeRequest {
     readonly poolAddress: string;
     readonly optionId: string | null;
     readonly formState: Record<string, string> | null;
+    readonly strategyLabel: string | null;
 }
