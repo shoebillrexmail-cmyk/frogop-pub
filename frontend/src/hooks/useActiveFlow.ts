@@ -8,7 +8,7 @@
  * Supports parallel flows: each modal looks up its own flow by identity
  * (actionType + poolAddress + optionId) from the flows array.
  */
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useRef } from 'react';
 import { useTransactionContext } from './useTransactionContext.ts';
 import { flowIdentityKey, MAX_PARALLEL_FLOWS } from '../contexts/flowDefs.ts';
 import type { FlowActionType, ActiveFlow } from '../contexts/flowDefs.ts';
@@ -74,9 +74,13 @@ export function useActiveFlow({
         return myFlow.formState;
     }, [myFlow]);
 
+    // Track the most recently claimed flowId so updateFlow/abandonFlow work
+    // even before React re-renders with the new myFlow from activeFlows.
+    const claimedFlowIdRef = useRef<string | null>(null);
+
     const claimFlow = useCallback(
         (formState?: Record<string, string>) => {
-            return ctx.claimFlow({
+            const flow = ctx.claimFlow({
                 actionType,
                 poolAddress,
                 optionId,
@@ -84,21 +88,32 @@ export function useActiveFlow({
                 formState,
                 strategyLabel,
             });
+            if (flow) {
+                claimedFlowIdRef.current = flow.flowId;
+            }
+            return flow;
         },
         [ctx, actionType, poolAddress, optionId, label, strategyLabel],
     );
 
+    const resolveFlowId = (): string | null => myFlow?.flowId ?? claimedFlowIdRef.current;
+
     const updateFlow = useCallback(
         (updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => {
-            if (!myFlow) return;
-            ctx.updateFlow(myFlow.flowId, updates);
+            const flowId = resolveFlowId();
+            if (!flowId) return;
+            ctx.updateFlow(flowId, updates);
         },
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- resolveFlowId reads ref + myFlow
         [ctx, myFlow],
     );
 
     const abandonFlow = useCallback(() => {
-        if (!myFlow) return;
-        ctx.abandonFlow(myFlow.flowId);
+        const flowId = resolveFlowId();
+        if (!flowId) return;
+        ctx.abandonFlow(flowId);
+        claimedFlowIdRef.current = null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- resolveFlowId reads ref + myFlow
     }, [ctx, myFlow]);
 
     return {
