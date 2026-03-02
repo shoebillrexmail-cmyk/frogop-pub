@@ -362,19 +362,17 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
                 if (tx.poolAddress !== poolAddress) return false;
                 if (tx.status !== 'confirmed') return false;
                 if (!tx.flowId) return false;
-                // Only resume if the flow is still active (prevents cross-contamination)
-                if (!activeFlows.some((f) => f.flowId === tx.flowId)) return false;
                 // Check if the same flow has a step 2 already
                 const hasStep2 = state.transactions.some(
                     (t) => t.flowId === tx.flowId && t.flowStep === 2,
                 );
                 if (hasStep2) return false;
-                // If optionId is specified, check meta
+                // If optionId is specified, check meta (UUID prevents cross-contamination)
                 if (optionId && tx.meta['optionId'] !== optionId) return false;
                 return true;
             });
         },
-        [state.transactions, activeFlows],
+        [state.transactions],
     );
 
     const clearOld = useCallback(() => {
