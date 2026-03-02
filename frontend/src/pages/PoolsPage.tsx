@@ -15,6 +15,7 @@ import { usePriceCandles } from '../hooks/usePriceCandles.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { PoolInfoCard } from '../components/PoolInfoCard.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
+import { OptionsChain } from '../components/OptionsChain.tsx';
 import { PriceChart } from '../components/PriceChart.tsx';
 import { WriteOptionPanel } from '../components/WriteOptionPanel.tsx';
 import type { WriteOptionInitialValues } from '../components/WriteOptionPanel.tsx';
@@ -53,6 +54,15 @@ export function PoolsPage() {
     const [userSelectedPool, setUserSelectedPool] = useState<string | null>(() => {
         try { return sessionStorage.getItem('frogop_selected_pool'); } catch { return null; }
     });
+
+    type ViewMode = 'chain' | 'list';
+    const [viewMode, setViewMode] = useState<ViewMode>(() => {
+        try { return (sessionStorage.getItem('frogop_options_view') as ViewMode) || 'chain'; } catch { return 'chain'; }
+    });
+    const handleViewMode = (mode: ViewMode) => {
+        setViewMode(mode);
+        try { sessionStorage.setItem('frogop_options_view', mode); } catch { /* noop */ }
+    };
 
     // Derive effective selected pool: user choice if valid, else first pool
     const selectedPoolAddr = useMemo(() => {
@@ -350,19 +360,51 @@ export function PoolsPage() {
                             onTokenChange={setChartToken}
                         />
                     )}
-                    <OptionsTable
-                        options={options}
-                        walletHex={walletHex}
-                        walletConnected={walletConnected}
-                        currentBlock={currentBlock ?? undefined}
-                        gracePeriodBlocks={poolInfo.gracePeriodBlocks}
-                        motoPillRatio={motoPillRatio}
-                        poolAddress={selectedPoolAddr}
-                        onBuy={handleBuy}
-                        onCancel={handleCancel}
-                        onExercise={handleExercise}
-                        onSettle={handleSettle}
-                    />
+                    {/* View toggle: Chain / List */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-terminal-text-muted font-mono">View:</span>
+                        {(['chain', 'list'] as const).map((m) => (
+                            <button
+                                key={m}
+                                onClick={() => handleViewMode(m)}
+                                className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
+                                    viewMode === m
+                                        ? 'bg-accent text-terminal-bg-primary'
+                                        : 'text-terminal-text-muted border border-terminal-border-subtle hover:text-terminal-text-primary'
+                                }`}
+                                data-testid={`view-mode-${m}`}
+                            >
+                                {m === 'chain' ? 'Chain' : 'List'}
+                            </button>
+                        ))}
+                    </div>
+
+                    {viewMode === 'chain' ? (
+                        <OptionsChain
+                            options={options}
+                            walletHex={walletHex}
+                            walletConnected={walletConnected}
+                            currentBlock={currentBlock ?? undefined}
+                            motoPillRatio={motoPillRatio}
+                            poolAddress={selectedPoolAddr}
+                            buyFeeBps={poolInfo.buyFeeBps}
+                            onBuy={handleBuy}
+                        />
+                    ) : (
+                        <OptionsTable
+                            options={options}
+                            walletHex={walletHex}
+                            walletConnected={walletConnected}
+                            currentBlock={currentBlock ?? undefined}
+                            gracePeriodBlocks={poolInfo.gracePeriodBlocks}
+                            motoPillRatio={motoPillRatio}
+                            poolAddress={selectedPoolAddr}
+                            onBuy={handleBuy}
+                            onCancel={handleCancel}
+                            onExercise={handleExercise}
+                            onSettle={handleSettle}
+                        />
+                    )}
                 </div>
             )}
 

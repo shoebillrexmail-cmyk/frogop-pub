@@ -117,6 +117,8 @@ function renderPage() {
 describe('PoolsPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // Clear sessionStorage so chain view is default
+        try { sessionStorage.clear(); } catch { /* noop */ }
         // Default: single pool from env, loaded successfully
         mockUseDiscoverPools.mockReturnValue({
             pools: [{ address: 'opt1pftest000', underlying: '', premiumToken: '' }],
@@ -143,6 +145,11 @@ describe('PoolsPage', () => {
         } as ReturnType<typeof useWalletConnect>);
     });
 
+    /** Switch from chain (default) to list view */
+    function switchToList() {
+        fireEvent.click(screen.getByTestId('view-mode-list'));
+    }
+
     it('renders pool info card with fee data', () => {
         renderPage();
         expect(screen.getByText(/MOTO \/ PILL Pool/i)).toBeInTheDocument();
@@ -150,22 +157,30 @@ describe('PoolsPage', () => {
         expect(screen.getByText(/Buy fee:/)).toBeInTheDocument();
     });
 
-    it('renders options table with all rows by default', () => {
+    it('defaults to chain view', () => {
         renderPage();
+        expect(screen.getByText('Options Chain')).toBeInTheDocument();
+    });
+
+    it('renders options table with all rows in list view', () => {
+        renderPage();
+        switchToList();
         expect(screen.getByTestId('option-row-0')).toBeInTheDocument();
         expect(screen.getByTestId('option-row-1')).toBeInTheDocument();
         expect(screen.getByTestId('option-row-2')).toBeInTheDocument();
         expect(screen.getByTestId('option-row-3')).toBeInTheDocument();
     });
 
-    it('displays CALL and PUT type labels', () => {
+    it('displays CALL and PUT type labels in list view', () => {
         renderPage();
+        switchToList();
         expect(screen.getAllByText('CALL').length).toBeGreaterThan(0);
         expect(screen.getAllByText('PUT').length).toBeGreaterThan(0);
     });
 
     it('filter by OPEN hides non-OPEN rows', () => {
         renderPage();
+        switchToList();
         fireEvent.click(screen.getByTestId('filter-open'));
 
         expect(screen.getByTestId('option-row-0')).toBeInTheDocument();
@@ -176,6 +191,7 @@ describe('PoolsPage', () => {
 
     it('filter by EXPIRED shows only expired rows', () => {
         renderPage();
+        switchToList();
         fireEvent.click(screen.getByTestId('filter-expired'));
 
         expect(screen.queryByTestId('option-row-0')).not.toBeInTheDocument();
@@ -245,25 +261,28 @@ describe('PoolsPage', () => {
         expect(discoveryRefetch).toHaveBeenCalledOnce();
     });
 
-    describe('row actions — disconnected wallet', () => {
+    describe('row actions — disconnected wallet (list view)', () => {
         it('OPEN option shows Buy button for disconnected user', () => {
             renderPage();
+            switchToList();
             expect(screen.getByTestId('buy-0')).toBeInTheDocument();
         });
 
         it('EXPIRED option shows Settle button', () => {
             renderPage();
+            switchToList();
             expect(screen.getByTestId('settle-2')).toBeInTheDocument();
         });
 
         it('CANCELLED option shows no action', () => {
             renderPage();
+            switchToList();
             expect(screen.queryByTestId('buy-3')).not.toBeInTheDocument();
             expect(screen.queryByTestId('cancel-3')).not.toBeInTheDocument();
         });
     });
 
-    describe('row actions — writer wallet', () => {
+    describe('row actions — writer wallet (list view)', () => {
         beforeEach(() => {
             // Simulate connected wallet = writer
             const mockAddr = {
@@ -282,6 +301,7 @@ describe('PoolsPage', () => {
 
         it('OPEN option shows Cancel for writer', () => {
             renderPage();
+            switchToList();
             expect(screen.getByTestId('cancel-0')).toBeInTheDocument();
             expect(screen.queryByTestId('buy-0')).not.toBeInTheDocument();
         });
