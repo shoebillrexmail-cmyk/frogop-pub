@@ -2220,7 +2220,9 @@ Then `cd frontend && npm run dev` — the Portfolio page will use your local ind
 
 | # | Item | Priority | Notes |
 |---|------|----------|-------|
-| B.1 | **On-chain TX history** — replace localStorage-based TX tracking with RPC/indexer-sourced history | Medium | Currently all pill/history data is browser-only (cleared with browser data). Options data comes from contract, but TX tracking is purely client-side localStorage. Fetch TX history from RPC or indexer for persistent, device-independent history. |
+| B.1 | **On-chain TX history** — replace localStorage-based TX tracking with RPC/indexer-sourced history | Medium | Currently all pill/history data is browser-only (cleared with browser data). Options data comes from contract, but TX tracking is purely client-side localStorage. Fetch TX history from RPC or indexer for persistent, device-independent history. Use localStorage only as fast cache / pending-TX tracker, not source of truth. |
+| B.2 | **Browser storage awareness** — inform users that TX history is browser-local | High | Add info note on TransactionHistoryPage and pill dropdown footer. Show one-time toast warning after wallet connect if TX history is empty but user has on-chain options (suggests data was cleared). |
+| B.3 | **Reduce localStorage criticality** — cross-reference browser state with on-chain data | Medium | Collar progress: detect completed legs from on-chain options instead of relying solely on localStorage flags. Active flows: detect orphaned approvals on-chain (confirmed allowance with no corresponding buy/write TX) and offer to resume. |
 
 ---
 
