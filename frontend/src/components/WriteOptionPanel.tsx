@@ -22,7 +22,7 @@ import { useSuggestedPremium } from '../hooks/useSuggestedPremium.ts';
 import { StepIndicator } from './StepIndicator.tsx';
 import type { StepStatus } from './StepIndicator.tsx';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
-import { formatTxError } from '../utils/formatTxError.ts';
+import { TxErrorBlock } from './TxErrorBlock.tsx';
 import { classifyMoneyness } from '../utils/optionsChain.ts';
 import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
@@ -758,17 +758,7 @@ export function WriteOptionPanel({
 
                     {/* TX error with retry */}
                     {txError && (
-                        <div className="bg-rose-900/10 border border-rose-800 rounded p-3 text-xs font-mono space-y-2" data-testid="tx-error">
-                            <p className="text-rose-400">{formatTxError(txError).message}</p>
-                            <p className="text-terminal-text-muted">{formatTxError(txError).guidance}</p>
-                            <button
-                                onClick={() => { setTxError(null); setTxStatus('idle'); }}
-                                className="btn-secondary px-3 py-1 text-xs rounded"
-                                data-testid="btn-retry"
-                            >
-                                Retry
-                            </button>
-                        </div>
+                        <TxErrorBlock error={txError} onRetry={() => { setTxError(null); setTxStatus('idle'); }} />
                     )}
 
                     {/* TX success receipt */}

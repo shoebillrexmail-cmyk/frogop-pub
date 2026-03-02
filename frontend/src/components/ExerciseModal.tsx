@@ -22,7 +22,7 @@ import { calcExercisePnl } from '../utils/optionMath.js';
 import { StepIndicator } from './StepIndicator.tsx';
 import type { StepStatus } from './StepIndicator.tsx';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
-import { formatTxError } from '../utils/formatTxError.ts';
+import { TxErrorBlock } from './TxErrorBlock.tsx';
 import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
@@ -64,7 +64,7 @@ export function ExerciseModal({
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
 
-    const { trackApproval, trackAction, approvalConfirmed } = useTransactionFlow(poolAddress, option.id.toString());
+    const { trackApproval, trackAction } = useTransactionFlow(poolAddress, option.id.toString());
 
     const {
         canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow, myFlow, abandonFlow,
@@ -131,7 +131,8 @@ export function ExerciseModal({
     const tokenBalance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
     const hasBalance = tokenBalance !== null && tokenBalance >= payAmount;
-    const needsApproval = !approvalConfirmed && !approvalReady && allowance !== null && allowance < payAmount;
+    // Always check on-chain allowance — approvalReady (confirmed flow status) prevents double-approval.
+    const needsApproval = !approvalReady && allowance !== null && allowance < payAmount;
     const busy = txStatus === 'approving' || txStatus === 'exercising';
 
     async function handleApprove() {
@@ -229,15 +230,15 @@ export function ExerciseModal({
         }
     }
 
-    // Step indicator state derivation
+    // Step indicator — driven by on-chain allowance, not localStorage
     const step1Status: StepStatus =
         txStatus === 'approving' ? 'active' :
-        (!needsApproval || approvalConfirmed || approvalReady) ? 'done' :
+        !needsApproval ? 'done' :
         txStatus === 'error' && !txId ? 'failed' : 'pending';
     const step2Status: StepStatus =
         txStatus === 'exercising' ? 'active' :
         txStatus === 'done' ? 'done' :
-        txStatus === 'error' && (approvalConfirmed || approvalReady || !needsApproval) ? 'failed' : 'pending';
+        txStatus === 'error' && !needsApproval ? 'failed' : 'pending';
     const currentStep: 1 | 2 = needsApproval && step1Status !== 'done' ? 1 : 2;
 
     const typeLabel = isCall ? 'CALL' : 'PUT';
@@ -400,17 +401,7 @@ export function ExerciseModal({
 
                     {/* TX error with retry */}
                     {txError && (
-                        <div className="bg-rose-900/10 border border-rose-800 rounded p-3 text-xs font-mono space-y-2" data-testid="tx-error">
-                            <p className="text-rose-400">{formatTxError(txError).message}</p>
-                            <p className="text-terminal-text-muted">{formatTxError(txError).guidance}</p>
-                            <button
-                                onClick={() => { setTxError(null); setTxStatus('idle'); }}
-                                className="btn-secondary px-3 py-1 text-xs rounded"
-                                data-testid="btn-retry"
-                            >
-                                Retry
-                            </button>
-                        </div>
+                        <TxErrorBlock error={txError} onRetry={() => { setTxError(null); setTxStatus('idle'); }} />
                     )}
 
                     {/* Success receipt */}

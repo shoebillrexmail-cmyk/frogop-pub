@@ -15,7 +15,7 @@ import { POOL_WRITE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount } from '../config/index.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
-import { formatTxError } from '../utils/formatTxError.ts';
+import { TxErrorBlock } from './TxErrorBlock.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface BatchCancelModalProps {
@@ -204,17 +204,7 @@ export function BatchCancelModal({
                     </div>
 
                     {txError && (
-                        <div className="bg-rose-900/10 border border-rose-800 rounded p-3 text-xs font-mono space-y-2" data-testid="tx-error">
-                            <p className="text-rose-400">{formatTxError(txError).message}</p>
-                            <p className="text-terminal-text-muted">{formatTxError(txError).guidance}</p>
-                            <button
-                                onClick={() => { setTxError(null); setTxStatus('idle'); }}
-                                className="btn-secondary px-3 py-1 text-xs rounded"
-                                data-testid="btn-retry"
-                            >
-                                Retry
-                            </button>
-                        </div>
+                        <TxErrorBlock error={txError} onRetry={() => { setTxError(null); setTxStatus('idle'); }} />
                     )}
 
                     {txStatus === 'done' && txId && (

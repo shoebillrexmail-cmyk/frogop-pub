@@ -20,7 +20,7 @@ import { POOL_WRITE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount } from '../config/index.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
-import { formatTxError } from '../utils/formatTxError.ts';
+import { TxErrorBlock } from './TxErrorBlock.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface RollModalProps {
@@ -90,9 +90,10 @@ export function RollModal({
         try { return BigInt(newExpiry); } catch { return 0n; }
     }, [newExpiry]);
 
+    // Fixed-point: (newStrike * amount) / 1e18 — same as oldCollateral calc
     const newCollateral = isCall
         ? option.underlyingAmount
-        : parsedStrike * option.underlyingAmount;
+        : (parsedStrike * option.underlyingAmount) / (10n ** 18n);
 
     const isExpired = currentBlock !== null && currentBlock >= option.expiryBlock;
     const feeBps = isExpired ? 0n : poolInfo.cancelFeeBps;
@@ -298,17 +299,7 @@ export function RollModal({
 
                     {/* TX error with retry */}
                     {txError && (
-                        <div className="bg-rose-900/10 border border-rose-800 rounded p-3 text-xs font-mono space-y-2" data-testid="tx-error">
-                            <p className="text-rose-400">{formatTxError(txError).message}</p>
-                            <p className="text-terminal-text-muted">{formatTxError(txError).guidance}</p>
-                            <button
-                                onClick={() => { setTxError(null); setTxStatus('idle'); }}
-                                className="btn-secondary px-3 py-1 text-xs rounded"
-                                data-testid="btn-retry"
-                            >
-                                Retry
-                            </button>
-                        </div>
+                        <TxErrorBlock error={txError} onRetry={() => { setTxError(null); setTxStatus('idle'); }} />
                     )}
 
                     {/* Success receipt */}
