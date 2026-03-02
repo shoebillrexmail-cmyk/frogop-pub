@@ -219,12 +219,23 @@ export function WriteOptionPanel({
         const maxLoss = col > premiumBi ? col - premiumBi : 0n;
 
         // Yield = premium / collateral * 100
-        const yieldPct = Number(premiumBi) / Number(col) * 100;
-        const annualizedYieldPct = selectedDays > 0 ? yieldPct * 365 / selectedDays : 0;
+        // CALL: collateral is MOTO, premium is PILL — normalize via spot price
+        let yieldPct: number | null;
+        if (optionType === OptionType.CALL) {
+            if (motoPillRatio && motoPillRatio > 0) {
+                const collateralInPill = Number(amountBi) / 1e18 * motoPillRatio;
+                yieldPct = Number(premiumBi) / 1e18 / collateralInPill * 100;
+            } else {
+                yieldPct = null;
+            }
+        } else {
+            yieldPct = Number(premiumBi) / Number(col) * 100;
+        }
+        const annualizedYieldPct = yieldPct !== null && selectedDays > 0 ? yieldPct * 365 / selectedDays : null;
         const collateralSym = optionType === OptionType.CALL ? 'MOTO' : 'PILL';
 
         return { maxProfit, breakeven, maxLoss, yieldPct, annualizedYieldPct, collateralSym };
-    }, [premiumStr, strikeStr, amountStr, optionType, selectedDays]);
+    }, [premiumStr, strikeStr, amountStr, optionType, selectedDays, motoPillRatio]);
 
     // Black-Scholes suggested premium
     const { suggestedPremium, annualizedVol } = useSuggestedPremium(
@@ -702,11 +713,16 @@ export function WriteOptionPanel({
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-terminal-text-muted">Yield</span>
-                                <span className="text-terminal-text-primary">
-                                    {writerOutlook.yieldPct.toFixed(2)}%
-                                    {writerOutlook.annualizedYieldPct > 0 && (
-                                        <span className="text-terminal-text-muted"> ({writerOutlook.annualizedYieldPct.toFixed(1)}% ann.)</span>
-                                    )}
+                                <span className="text-terminal-text-primary" data-testid="writer-yield">
+                                    {writerOutlook.yieldPct !== null
+                                        ? <>
+                                            {writerOutlook.yieldPct.toFixed(2)}%
+                                            {writerOutlook.annualizedYieldPct !== null && writerOutlook.annualizedYieldPct > 0 && (
+                                                <span className="text-terminal-text-muted"> ({writerOutlook.annualizedYieldPct.toFixed(1)}% ann.)</span>
+                                            )}
+                                          </>
+                                        : <span className="text-terminal-text-muted">needs spot price</span>
+                                    }
                                 </span>
                             </div>
                             <div className="flex justify-between">

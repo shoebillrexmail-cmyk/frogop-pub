@@ -1,5 +1,5 @@
 /**
- * PoolsPage tests — real data rendering, filter controls, row action visibility,
+ * PoolsPage tests — two-tab layout, filter controls, row action visibility,
  * and factory-driven pool discovery.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -117,7 +117,7 @@ function renderPage() {
 describe('PoolsPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        // Clear sessionStorage so chain view is default
+        // Clear sessionStorage so buy tab + chain view is default
         try { sessionStorage.clear(); } catch { /* noop */ }
         // Default: single pool from env, loaded successfully
         mockUseDiscoverPools.mockReturnValue({
@@ -145,22 +145,74 @@ describe('PoolsPage', () => {
         } as ReturnType<typeof useWalletConnect>);
     });
 
+    /** Switch to write tab */
+    function switchToWriteTab() {
+        fireEvent.click(screen.getByTestId('tab-write'));
+    }
+
     /** Switch from chain (default) to list view */
     function switchToList() {
         fireEvent.click(screen.getByTestId('view-mode-list'));
     }
 
-    it('renders pool info card with fee data', () => {
+    // -----------------------------------------------------------------------
+    // Header bar
+    // -----------------------------------------------------------------------
+
+    it('renders pool header bar with fee data', () => {
         renderPage();
-        expect(screen.getByText(/MOTO \/ PILL Pool/i)).toBeInTheDocument();
-        expect(screen.getByText(/Options:/)).toBeInTheDocument();
-        expect(screen.getByText(/Buy fee:/)).toBeInTheDocument();
+        expect(screen.getByTestId('pool-header-bar')).toBeInTheDocument();
+        expect(screen.getByTestId('pool-name')).toHaveTextContent('MOTO / PILL Pool');
+        expect(screen.getByTestId('fees-summary')).toBeInTheDocument();
     });
 
-    it('defaults to chain view', () => {
+    // -----------------------------------------------------------------------
+    // Tab structure
+    // -----------------------------------------------------------------------
+
+    it('defaults to buy tab with chain visible', () => {
         renderPage();
+        expect(screen.getByTestId('buy-tab-content')).toBeInTheDocument();
+        expect(screen.queryByTestId('write-tab-content')).not.toBeInTheDocument();
         expect(screen.getByText('Options Chain')).toBeInTheDocument();
     });
+
+    it('click write tab shows yield overview and strategies', () => {
+        renderPage();
+        switchToWriteTab();
+        expect(screen.getByTestId('write-tab-content')).toBeInTheDocument();
+        expect(screen.getByTestId('yield-overview')).toBeInTheDocument();
+        expect(screen.getByTestId('writer-how-it-works')).toBeInTheDocument();
+        expect(screen.getByTestId('strategy-covered-call')).toBeInTheDocument();
+        expect(screen.getByTestId('strategy-write-custom')).toBeInTheDocument();
+        expect(screen.queryByTestId('buy-tab-content')).not.toBeInTheDocument();
+    });
+
+    it('tab persists to sessionStorage', () => {
+        renderPage();
+        switchToWriteTab();
+        expect(sessionStorage.getItem('frogop_pool_tab')).toBe('write');
+    });
+
+    it('protective put card appears on buy tab', () => {
+        renderPage();
+        expect(screen.getByTestId('protective-put-card')).toBeInTheDocument();
+    });
+
+    it('protective put card does NOT appear on write tab', () => {
+        renderPage();
+        switchToWriteTab();
+        expect(screen.queryByTestId('protective-put-card')).not.toBeInTheDocument();
+    });
+
+    it('buy value prop line is visible on buy tab', () => {
+        renderPage();
+        expect(screen.getByTestId('buy-value-prop')).toBeInTheDocument();
+    });
+
+    // -----------------------------------------------------------------------
+    // Options table (list view within buy tab)
+    // -----------------------------------------------------------------------
 
     it('renders options table with all rows in list view', () => {
         renderPage();

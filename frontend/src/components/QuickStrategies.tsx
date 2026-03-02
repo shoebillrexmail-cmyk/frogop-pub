@@ -1,30 +1,25 @@
 /**
- * QuickStrategies — three strategy template cards for the Pools page.
+ * QuickStrategies — three writer-focused strategy template cards for the Write tab.
  *
- * Covered Call, Protective Put, and Collar. Each computes suggested parameters
- * from the current MOTO/PILL spot price and drives existing modals.
+ * Covered Call, Collar, and Write Custom. Each drives existing modals.
+ * Protective Put has been moved to the Buy tab as an inline card.
  */
 import { useMemo } from 'react';
-import type { OptionData, PoolInfo } from '../services/types.ts';
+import type { PoolInfo } from '../services/types.ts';
 import {
     calcCoveredCallParams,
-    findBestProtectivePut,
     calcCollarParams,
-    calcWritePutParams,
     type WriteOptionInitialValues,
 } from '../utils/strategyMath.js';
-import { formatTokenAmount } from '../config/index.ts';
 
 interface QuickStrategiesProps {
     poolInfo: PoolInfo;
-    options: OptionData[];
     motoPillRatio: number | null;
     motoBal: number | null;
     walletConnected?: boolean;
     onCoveredCall: (values: WriteOptionInitialValues) => void;
-    onProtectivePut: (option: OptionData) => void;
-    onWritePut?: (values: WriteOptionInitialValues) => void;
     onCollar: () => void;
+    onWriteCustom: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,25 +78,18 @@ function StrategyCard({
 // ---------------------------------------------------------------------------
 
 export function QuickStrategies({
-    options,
     motoPillRatio,
     motoBal,
     walletConnected = true,
     onCoveredCall,
-    onProtectivePut,
-    onWritePut,
     onCollar,
+    onWriteCustom,
 }: QuickStrategiesProps) {
     const noPrice = motoPillRatio === null || motoPillRatio <= 0;
 
     const coveredCall = useMemo(
         () => (noPrice ? null : calcCoveredCallParams(motoPillRatio, motoBal)),
         [noPrice, motoPillRatio, motoBal],
-    );
-
-    const bestPut = useMemo(
-        () => (noPrice ? null : findBestProtectivePut(options, motoPillRatio)),
-        [noPrice, options, motoPillRatio],
     );
 
     const collar = useMemo(
@@ -114,7 +102,7 @@ export function QuickStrategies({
             {/* Covered Call */}
             <StrategyCard
                 title="Covered Call"
-                tagline="Earn yield on MOTO"
+                tagline="Earn on MOTO you hold"
                 tooltip="Write a CALL above the current price. You earn premium upfront but cap your upside if the price rises past the strike."
                 disabled={noPrice}
                 testId="strategy-covered-call"
@@ -151,70 +139,10 @@ export function QuickStrategies({
                 ) : null}
             </StrategyCard>
 
-            {/* Protective Put */}
-            <StrategyCard
-                title="Protective Put"
-                tagline="Insure your MOTO"
-                tooltip="Buy a PUT below the current price. If the price drops below the strike, you can exercise for guaranteed value. Cost: premium paid."
-                disabled={noPrice}
-                testId="strategy-protective-put"
-                action={
-                    <div className="space-y-2">
-                        {/* Buy Put — always visible, disabled when no put or no wallet */}
-                        <button
-                            onClick={() => bestPut && onProtectivePut(bestPut)}
-                            disabled={noPrice || !bestPut || !walletConnected}
-                            className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
-                            data-testid="strategy-protective-put-btn"
-                        >
-                            {!walletConnected ? 'Connect wallet to trade' : bestPut ? 'Buy Put' : 'No puts available'}
-                        </button>
-                        {/* Write a Put — always visible when onWritePut provided */}
-                        {onWritePut && (
-                            <button
-                                onClick={() => {
-                                    const params = calcWritePutParams(motoPillRatio!, motoBal);
-                                    if (params) onWritePut(params);
-                                }}
-                                disabled={noPrice || !walletConnected}
-                                className="w-full btn-outline py-2 text-xs font-mono rounded border border-terminal-border-subtle hover:border-accent/50 disabled:opacity-50 transition-colors"
-                                data-testid="strategy-write-put-btn"
-                            >
-                                {!walletConnected ? 'Connect wallet to write' : 'Write a Put — Earn premium'}
-                            </button>
-                        )}
-                    </div>
-                }
-            >
-                <p className="text-[10px] text-gray-500 font-mono">80–95% of spot (OTM)</p>
-                {noPrice ? (
-                    <p className="text-xs text-terminal-text-muted font-mono">Price data unavailable</p>
-                ) : bestPut ? (
-                    <div className="text-xs font-mono space-y-1">
-                        <div className="flex justify-between">
-                            <span className="text-terminal-text-muted">Strike</span>
-                            <span className="text-terminal-text-secondary">{formatTokenAmount(bestPut.strikePrice)} PILL</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-terminal-text-muted">Premium</span>
-                            <span className="text-rose-400">{formatTokenAmount(bestPut.premium)} PILL</span>
-                        </div>
-                        <p className="text-[10px] text-terminal-text-muted">
-                            Protects your MOTO if price drops below {formatTokenAmount(bestPut.strikePrice)} PILL
-                        </p>
-                        <p className="text-[10px] text-terminal-text-muted">Max loss: premium paid</p>
-                    </div>
-                ) : (
-                    <p className="text-xs text-terminal-text-muted font-mono">
-                        No puts in the 80–95% range yet — write one to seed liquidity.
-                    </p>
-                )}
-            </StrategyCard>
-
             {/* Collar */}
             <StrategyCard
                 title="Collar"
-                tagline="Lock in a price range"
+                tagline="Hedge + earn"
                 tooltip="Combine a Covered Call (earn premium) and Protective Put (buy protection). Limits both upside and downside — often zero or near-zero net cost."
                 disabled={noPrice}
                 testId="strategy-collar"
@@ -250,6 +178,34 @@ export function QuickStrategies({
                         </div>
                     </div>
                 ) : null}
+            </StrategyCard>
+
+            {/* Write Custom */}
+            <StrategyCard
+                title="Write Custom"
+                tagline="Full control"
+                tooltip="Write any option with custom parameters — choose your own strike, amount, premium, and expiry."
+                disabled={false}
+                testId="strategy-write-custom"
+                action={
+                    <button
+                        onClick={onWriteCustom}
+                        disabled={!walletConnected}
+                        className="w-full btn-primary py-2 text-xs font-mono rounded disabled:opacity-50"
+                        data-testid="strategy-write-custom-btn"
+                    >
+                        {walletConnected ? 'Write Option' : 'Connect wallet to write'}
+                    </button>
+                }
+            >
+                <div className="text-xs font-mono space-y-1">
+                    <p className="text-terminal-text-muted">Set your own terms:</p>
+                    <ul className="text-terminal-text-muted space-y-0.5 ml-2">
+                        <li>Any strike price</li>
+                        <li>Any amount & premium</li>
+                        <li>CALL or PUT</li>
+                    </ul>
+                </div>
             </StrategyCard>
         </div>
     );

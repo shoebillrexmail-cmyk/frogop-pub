@@ -1,6 +1,9 @@
 /**
- * PoolsPage — on-chain pool view with factory discovery, options table,
- * write panel, and action modals.
+ * PoolsPage — on-chain pool view with two-tab layout:
+ *   "Buy Options" — options chain/table with protective put card
+ *   "Earn by Writing" — yield overview, strategy cards, how-it-works
+ *
+ * All modal trigger chains and resume flow logic are preserved unchanged.
  */
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -13,7 +16,7 @@ import { useBlockTracker } from '../hooks/useBlockTracker.ts';
 import { usePriceRatio } from '../hooks/usePriceRatio.ts';
 import { usePriceCandles } from '../hooks/usePriceCandles.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
-import { PoolInfoCard } from '../components/PoolInfoCard.tsx';
+import { PoolHeaderBar } from '../components/PoolHeaderBar.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
 import { OptionsChain } from '../components/OptionsChain.tsx';
 import { PriceChart } from '../components/PriceChart.tsx';
@@ -24,16 +27,21 @@ import { CancelModal } from '../components/CancelModal.tsx';
 import { ExerciseModal } from '../components/ExerciseModal.tsx';
 import { SettleModal } from '../components/SettleModal.tsx';
 import { QuickStrategies } from '../components/QuickStrategies.tsx';
+import { YieldOverview } from '../components/YieldOverview.tsx';
+import { WriterHowItWorks } from '../components/WriterHowItWorks.tsx';
 import { CollarModal } from '../components/CollarModal.tsx';
-import { CONTRACT_ADDRESSES, currentNetwork, formatAddress } from '../config/index.ts';
+import { CONTRACT_ADDRESSES, currentNetwork, formatAddress, formatTokenAmount } from '../config/index.ts';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
 import { NotificationBanner } from '../components/NotificationBanner.tsx';
 import { useNotifications } from '../hooks/useNotifications.ts';
 import { useStatusChangeDetector, describeChange } from '../hooks/useStatusChangeDetector.ts';
 import { OnboardingOverlay } from '../components/OnboardingOverlay.tsx';
 import { useOnboardingState } from '../hooks/useOnboardingState.ts';
+import { findBestProtectivePut } from '../utils/strategyMath.js';
 import type { OptionData } from '../services/types.ts';
 import type { ResumeRequest } from '../contexts/flowDefs.ts';
+
+type PoolTab = 'buy' | 'write';
 
 const NATIVESWAP_ADDRESS = import.meta.env.VITE_NATIVESWAP_ADDRESS || '';
 
@@ -54,6 +62,15 @@ export function PoolsPage() {
     const [userSelectedPool, setUserSelectedPool] = useState<string | null>(() => {
         try { return sessionStorage.getItem('frogop_selected_pool'); } catch { return null; }
     });
+
+    // Tab state — persisted to sessionStorage
+    const [activeTab, setActiveTab] = useState<PoolTab>(() => {
+        try { return (sessionStorage.getItem('frogop_pool_tab') as PoolTab) || 'buy'; } catch { return 'buy'; }
+    });
+    const handleTabChange = (tab: PoolTab) => {
+        setActiveTab(tab);
+        try { sessionStorage.setItem('frogop_pool_tab', tab); } catch { /* noop */ }
+    };
 
     type ViewMode = 'chain' | 'list';
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -97,6 +114,7 @@ export function PoolsPage() {
     const [chartToken, setChartToken] = useState('MOTO_PILL');
     const [chartInterval, setChartInterval] = useState('1d');
     const { candles } = usePriceCandles(chartToken, chartInterval);
+    const [chartOpen, setChartOpen] = useState(false);
 
     // Resume flow routing
     const { transactions, resumeRequest, clearResumeRequest, abandonFlow: abandonFlowById } = useTransactionContext();
@@ -120,7 +138,6 @@ export function PoolsPage() {
     const [buyStrategyLabel, setBuyStrategyLabel] = useState<string | undefined>();
     const [collarOpen, setCollarOpen] = useState(false);
     // Auto-open CollarModal when navigated with ?openCollar=true
-    // Use React-recommended pattern: adjust state during render to avoid cascading effects
     const openCollarParam = searchParams.get('openCollar');
     const [prevOpenCollarParam, setPrevOpenCollarParam] = useState(openCollarParam);
     if (openCollarParam !== prevOpenCollarParam) {
@@ -153,7 +170,6 @@ export function PoolsPage() {
     }, []);
 
     // Apply a resume request — opens the appropriate modal.
-    // Extracted to useCallback so setState is not called directly in the effect body.
     const applyResume = useCallback((req: ResumeRequest) => {
         closeAllModals();
 
@@ -224,6 +240,12 @@ export function PoolsPage() {
     const loading = discoveryLoading || poolLoading;
     const error = discoveryError || poolError;
 
+    // Protective Put — computed for Buy tab inline card
+    const bestProtectivePut = useMemo(() => {
+        if (!motoPillRatio || motoPillRatio <= 0) return null;
+        return findBestProtectivePut(options, motoPillRatio);
+    }, [options, motoPillRatio]);
+
     function handleRefetch() {
         refetchPools();
         refetchPool();
@@ -258,13 +280,6 @@ export function PoolsPage() {
         if (!walletConnected) return;
         setBuyStrategyLabel('Protective Put');
         setBuyTarget(option);
-    }
-
-    function handleWritePut(values: WriteOptionInitialValues) {
-        if (!walletConnected) return;
-        setWriteStrategyLabel('Protective Put');
-        setWriteInitialValues(values);
-        setWriteOpen(true);
     }
 
     function handleCollarWriteCall(values: WriteOptionInitialValues) {
@@ -333,77 +348,199 @@ export function PoolsPage() {
             {/* Main content */}
             {!error && poolInfo && selectedPoolAddr && (
                 <div className="space-y-4">
-                    <PoolInfoCard
+                    {/* Compact header bar */}
+                    <PoolHeaderBar
                         poolInfo={poolInfo}
                         poolAddress={selectedPoolAddr}
                         motoPillRatio={motoPillRatio}
                         priceLastUpdated={priceLastUpdated}
-                        onWriteOption={walletConnected ? () => setWriteOpen(true) : undefined}
                     />
-                    <QuickStrategies
-                        poolInfo={poolInfo}
-                        options={options}
-                        motoPillRatio={motoPillRatio}
-                        motoBal={null}
-                        walletConnected={walletConnected}
-                        onCoveredCall={handleCoveredCall}
-                        onProtectivePut={handleProtectivePut}
-                        onWritePut={handleWritePut}
-                        onCollar={() => setCollarOpen(true)}
-                    />
-                    {candles.length > 0 && (
-                        <PriceChart
-                            candles={candles}
-                            token={chartToken}
-                            interval={chartInterval}
-                            onIntervalChange={setChartInterval}
-                            onTokenChange={setChartToken}
-                        />
-                    )}
-                    {/* View toggle: Chain / List */}
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs text-terminal-text-muted font-mono">View:</span>
-                        {(['chain', 'list'] as const).map((m) => (
+
+                    {/* Tab bar */}
+                    <div className="flex gap-0 border-b border-terminal-border-subtle" data-testid="pool-tabs">
+                        {(['buy', 'write'] as const).map((tab) => (
                             <button
-                                key={m}
-                                onClick={() => handleViewMode(m)}
-                                className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
-                                    viewMode === m
-                                        ? 'bg-accent text-terminal-bg-primary'
-                                        : 'text-terminal-text-muted border border-terminal-border-subtle hover:text-terminal-text-primary'
+                                key={tab}
+                                onClick={() => handleTabChange(tab)}
+                                className={`px-5 py-2.5 text-sm font-mono font-semibold transition-colors border-b-2 ${
+                                    activeTab === tab
+                                        ? 'text-accent border-accent'
+                                        : 'text-terminal-text-muted border-transparent hover:text-terminal-text-primary'
                                 }`}
-                                data-testid={`view-mode-${m}`}
+                                data-testid={`tab-${tab}`}
                             >
-                                {m === 'chain' ? 'Chain' : 'List'}
+                                {tab === 'buy' ? 'Buy Options' : 'Earn by Writing'}
                             </button>
                         ))}
                     </div>
 
-                    {viewMode === 'chain' ? (
-                        <OptionsChain
-                            options={options}
-                            walletHex={walletHex}
-                            walletConnected={walletConnected}
-                            currentBlock={currentBlock ?? undefined}
-                            motoPillRatio={motoPillRatio}
-                            poolAddress={selectedPoolAddr}
-                            buyFeeBps={poolInfo.buyFeeBps}
-                            onBuy={handleBuy}
-                        />
-                    ) : (
-                        <OptionsTable
-                            options={options}
-                            walletHex={walletHex}
-                            walletConnected={walletConnected}
-                            currentBlock={currentBlock ?? undefined}
-                            gracePeriodBlocks={poolInfo.gracePeriodBlocks}
-                            motoPillRatio={motoPillRatio}
-                            poolAddress={selectedPoolAddr}
-                            onBuy={handleBuy}
-                            onCancel={handleCancel}
-                            onExercise={handleExercise}
-                            onSettle={handleSettle}
-                        />
+                    {/* ============================================ */}
+                    {/* BUY TAB                                      */}
+                    {/* ============================================ */}
+                    {activeTab === 'buy' && (
+                        <div className="space-y-4" data-testid="buy-tab-content">
+                            {/* Value prop */}
+                            <p className="text-xs text-terminal-text-muted font-mono" data-testid="buy-value-prop">
+                                Capped risk &middot; Leveraged exposure &middot; No liquidation
+                            </p>
+
+                            {/* Collapsible PriceChart */}
+                            {candles.length > 0 && (
+                                <div>
+                                    <button
+                                        onClick={() => setChartOpen((v) => !v)}
+                                        className="text-xs font-mono text-terminal-text-muted hover:text-terminal-text-primary transition-colors flex items-center gap-1 mb-2"
+                                        data-testid="toggle-chart"
+                                    >
+                                        <span className={`transition-transform ${chartOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+                                        Price Chart
+                                    </button>
+                                    {chartOpen && (
+                                        <PriceChart
+                                            candles={candles}
+                                            token={chartToken}
+                                            interval={chartInterval}
+                                            onIntervalChange={setChartInterval}
+                                            onTokenChange={setChartToken}
+                                        />
+                                    )}
+                                </div>
+                            )}
+
+                            {/* View toggle: Chain / List */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-terminal-text-muted font-mono">View:</span>
+                                {(['chain', 'list'] as const).map((m) => (
+                                    <button
+                                        key={m}
+                                        onClick={() => handleViewMode(m)}
+                                        className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
+                                            viewMode === m
+                                                ? 'bg-accent text-terminal-bg-primary'
+                                                : 'text-terminal-text-muted border border-terminal-border-subtle hover:text-terminal-text-primary'
+                                        }`}
+                                        data-testid={`view-mode-${m}`}
+                                    >
+                                        {m === 'chain' ? 'Chain' : 'List'}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Options Chain / Table — hero section */}
+                            {viewMode === 'chain' ? (
+                                <OptionsChain
+                                    options={options}
+                                    walletHex={walletHex}
+                                    walletConnected={walletConnected}
+                                    currentBlock={currentBlock ?? undefined}
+                                    motoPillRatio={motoPillRatio}
+                                    poolAddress={selectedPoolAddr}
+                                    buyFeeBps={poolInfo.buyFeeBps}
+                                    onBuy={handleBuy}
+                                />
+                            ) : (
+                                <OptionsTable
+                                    options={options}
+                                    walletHex={walletHex}
+                                    walletConnected={walletConnected}
+                                    currentBlock={currentBlock ?? undefined}
+                                    gracePeriodBlocks={poolInfo.gracePeriodBlocks}
+                                    motoPillRatio={motoPillRatio}
+                                    poolAddress={selectedPoolAddr}
+                                    onBuy={handleBuy}
+                                    onCancel={handleCancel}
+                                    onExercise={handleExercise}
+                                    onSettle={handleSettle}
+                                />
+                            )}
+
+                            {/* Protective Put card — inline on Buy tab */}
+                            <div
+                                className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-4"
+                                data-testid="protective-put-card"
+                            >
+                                <h4 className="text-sm font-bold text-terminal-text-primary font-mono mb-1">
+                                    Protective Put
+                                </h4>
+                                <p className="text-xs text-terminal-text-muted font-mono mb-3">
+                                    Hedge your MOTO — buy downside protection
+                                </p>
+                                {bestProtectivePut ? (
+                                    <div className="text-xs font-mono space-y-1 mb-3">
+                                        <div className="flex justify-between">
+                                            <span className="text-terminal-text-muted">Strike</span>
+                                            <span className="text-terminal-text-secondary">{formatTokenAmount(bestProtectivePut.strikePrice)} PILL</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-terminal-text-muted">Premium</span>
+                                            <span className="text-rose-400">{formatTokenAmount(bestProtectivePut.premium)} PILL</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-terminal-text-muted font-mono mb-3">
+                                        No puts available in the 80-95% range yet.
+                                    </p>
+                                )}
+                                <button
+                                    onClick={() => bestProtectivePut && handleProtectivePut(bestProtectivePut)}
+                                    disabled={!bestProtectivePut || !walletConnected}
+                                    className="btn-secondary px-4 py-2 text-xs font-mono rounded disabled:opacity-50"
+                                    data-testid="buy-protective-put-btn"
+                                >
+                                    {walletConnected ? (bestProtectivePut ? 'Buy Put' : 'No puts available') : 'Connect wallet'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ============================================ */}
+                    {/* WRITE TAB                                     */}
+                    {/* ============================================ */}
+                    {activeTab === 'write' && (
+                        <div className="space-y-4" data-testid="write-tab-content">
+                            {/* Yield Overview */}
+                            <YieldOverview
+                                options={options}
+                                motoPillRatio={motoPillRatio}
+                                walletHex={walletHex}
+                            />
+
+                            {/* How It Works explainer */}
+                            <WriterHowItWorks />
+
+                            {/* Strategy cards */}
+                            <QuickStrategies
+                                poolInfo={poolInfo}
+                                motoPillRatio={motoPillRatio}
+                                motoBal={null}
+                                walletConnected={walletConnected}
+                                onCoveredCall={handleCoveredCall}
+                                onCollar={() => setCollarOpen(true)}
+                                onWriteCustom={() => setWriteOpen(true)}
+                            />
+
+                            {/* Collapsible PriceChart on Write tab too */}
+                            {candles.length > 0 && (
+                                <div>
+                                    <button
+                                        onClick={() => setChartOpen((v) => !v)}
+                                        className="text-xs font-mono text-terminal-text-muted hover:text-terminal-text-primary transition-colors flex items-center gap-1 mb-2"
+                                    >
+                                        <span className={`transition-transform ${chartOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+                                        Price Chart
+                                    </button>
+                                    {chartOpen && (
+                                        <PriceChart
+                                            candles={candles}
+                                            token={chartToken}
+                                            interval={chartInterval}
+                                            onIntervalChange={setChartInterval}
+                                            onTokenChange={setChartToken}
+                                        />
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             )}

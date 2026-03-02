@@ -123,16 +123,38 @@ describe('calcBreakeven', () => {
 // calcYield
 // ---------------------------------------------------------------------------
 describe('calcYield', () => {
-    it('CALL yield = premium / underlyingAmount * 100', () => {
+    it('CALL yield with spot price = premium / (amount * spot) * 100', () => {
+        // 5 PILL premium / (1 MOTO * 50 PILL/MOTO) = 5/50 = 10%
         const opt = makeOption({
             optionType: OptionType.CALL,
             premium: 5n * ONE,
-            underlyingAmount: 100n * ONE,
+            underlyingAmount: 1n * ONE,
         });
-        expect(calcYield(opt)).toBeCloseTo(5.0, 1);
+        expect(calcYield(opt, 50)).toBeCloseTo(10.0, 1);
     });
 
-    it('PUT yield = premium / (strike * amount) * 100', () => {
+    it('CALL yield returns null without motoPillRatio', () => {
+        const opt = makeOption({
+            optionType: OptionType.CALL,
+            premium: 5n * ONE,
+            underlyingAmount: 1n * ONE,
+        });
+        expect(calcYield(opt)).toBeNull();
+        expect(calcYield(opt, null)).toBeNull();
+        expect(calcYield(opt, 0)).toBeNull();
+    });
+
+    it('CALL yield with larger amounts', () => {
+        // 10 PILL premium / (2 MOTO * 50 PILL/MOTO) = 10/100 = 10%
+        const opt = makeOption({
+            optionType: OptionType.CALL,
+            premium: 10n * ONE,
+            underlyingAmount: 2n * ONE,
+        });
+        expect(calcYield(opt, 50)).toBeCloseTo(10.0, 1);
+    });
+
+    it('PUT yield = premium / (strike * amount) * 100 (unchanged)', () => {
         const opt = makeOption({
             optionType: OptionType.PUT,
             strikePrice: 50n * ONE,
@@ -140,6 +162,18 @@ describe('calcYield', () => {
             premium: 10n * ONE,
         });
         // collateral = 50 * 2 = 100; yield = 10/100 * 100 = 10%
+        expect(calcYield(opt)).toBeCloseTo(10.0, 1);
+    });
+
+    it('PUT yield does not require motoPillRatio', () => {
+        const opt = makeOption({
+            optionType: OptionType.PUT,
+            strikePrice: 50n * ONE,
+            underlyingAmount: 2n * ONE,
+            premium: 10n * ONE,
+        });
+        // Works without ratio
+        expect(calcYield(opt, null)).toBeCloseTo(10.0, 1);
         expect(calcYield(opt)).toBeCloseTo(10.0, 1);
     });
 

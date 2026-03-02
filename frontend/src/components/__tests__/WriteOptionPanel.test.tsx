@@ -335,6 +335,41 @@ describe('WriteOptionPanel', () => {
         expect(outlook.textContent).toContain('Collateral at risk');
     });
 
+    it('shows correct CALL yield using spot price (not cross-denom)', () => {
+        // 5 PILL premium / (1 MOTO * 50 spot) = 10%, NOT 500%
+        render(<WriteOptionPanel {...DEFAULT_PROPS} motoPillRatio={50} />);
+        fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '1' } });
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
+
+        const yieldEl = screen.getByTestId('writer-yield');
+        expect(yieldEl.textContent).toContain('10.00%');
+        // Verify it does NOT show the old buggy value
+        expect(yieldEl.textContent).not.toContain('500');
+    });
+
+    it('shows "needs spot price" for CALL yield when no motoPillRatio', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} motoPillRatio={null} />);
+        fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '1' } });
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
+
+        const yieldEl = screen.getByTestId('writer-yield');
+        expect(yieldEl.textContent).toContain('needs spot price');
+    });
+
+    it('shows correct PUT yield without needing spot price', () => {
+        // PUT: 5 PILL premium / (50 * 1 = 50 PILL collateral) = 10%
+        render(<WriteOptionPanel {...DEFAULT_PROPS} motoPillRatio={null} />);
+        fireEvent.click(screen.getByTestId('type-put'));
+        fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '1' } });
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
+
+        const yieldEl = screen.getByTestId('writer-yield');
+        expect(yieldEl.textContent).toContain('10.00%');
+    });
+
     it('hides writer outlook when premium is empty', () => {
         render(<WriteOptionPanel {...DEFAULT_PROPS} />);
         fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '1' } });

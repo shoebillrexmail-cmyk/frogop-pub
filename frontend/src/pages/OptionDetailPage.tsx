@@ -98,7 +98,7 @@ export function OptionDetailPage() {
     const typeLabel = isCall ? 'CALL' : 'PUT';
     const typeColor = isCall ? 'text-green-400' : 'text-rose-400';
     const breakeven = calcBreakeven(option);
-    const yieldPct = calcYield(option);
+    const yieldPct = calcYield(option, motoPillRatio);
     const statusLabel = walletHex ? getUserStatusLabel(option, walletHex) : STATUS_LABELS[option.status];
     const statusColor = STATUS_COLORS[option.status] ?? 'text-gray-400 border-gray-600';
     const blocksLeft = currentBlock ? option.expiryBlock - currentBlock : null;

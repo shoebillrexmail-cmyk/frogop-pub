@@ -660,7 +660,7 @@ export function OptionsTable({
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary text-xs">
                                         {(() => {
-                                            const y = calcYield(option);
+                                            const y = calcYield(option, motoPillRatio);
                                             return y !== null ? <>{y.toFixed(2)}%</> : <span className="text-terminal-text-muted">—</span>;
                                         })()}
                                     </td>

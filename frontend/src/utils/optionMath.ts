@@ -29,11 +29,23 @@ export function calcBreakeven(option: OptionData): bigint | null {
     return option.strikePrice > option.premium ? option.strikePrice - option.premium : 0n;
 }
 
-/** Yield = premium earned / collateral locked × 100 (as percentage). */
-export function calcYield(option: OptionData): number | null {
+/**
+ * Yield = premium earned / collateral locked × 100 (as percentage).
+ *
+ * CALL: collateral is MOTO but premium is PILL — need spot price to normalize.
+ *   yield = premium_pill / (amount_moto × spot_pill_per_moto) × 100
+ *   Returns null if motoPillRatio unavailable.
+ *
+ * PUT: both collateral and premium are PILL-denominated — no conversion needed.
+ */
+export function calcYield(option: OptionData, motoPillRatio?: number | null): number | null {
     if (option.premium <= 0n || option.underlyingAmount <= 0n) return null;
     if (option.optionType === OptionType.CALL) {
-        return Number(option.premium) / Number(option.underlyingAmount) * 100;
+        if (!motoPillRatio || motoPillRatio <= 0) return null;
+        // Convert MOTO collateral to PILL equivalent, then compute yield
+        const collateralInPill = Number(option.underlyingAmount) / 1e18 * motoPillRatio;
+        if (collateralInPill <= 0) return null;
+        return Number(option.premium) / 1e18 / collateralInPill * 100;
     }
     // PUT collateral = strikePrice × underlyingAmount / ONE (normalize 36-dec → 18-dec)
     const collateral = (option.strikePrice * option.underlyingAmount) / ONE;

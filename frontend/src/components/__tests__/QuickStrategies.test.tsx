@@ -1,13 +1,11 @@
 /**
- * QuickStrategies tests — strategy card section rendering and callbacks.
+ * QuickStrategies tests — writer-focused strategy cards for Write tab.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { OptionType, OptionStatus } from '../../services/types.ts';
-import type { OptionData, PoolInfo } from '../../services/types.ts';
+import { OptionType } from '../../services/types.ts';
+import type { PoolInfo } from '../../services/types.ts';
 import { QuickStrategies } from '../QuickStrategies.tsx';
-
-const ONE = 10n ** 18n;
 
 const POOL_INFO: PoolInfo = {
     underlying: '0xaaaa',
@@ -19,28 +17,13 @@ const POOL_INFO: PoolInfo = {
     gracePeriodBlocks: 144n,
 };
 
-function makeOpenPut(id: bigint, strikeFloat: number): OptionData {
-    return {
-        id,
-        writer: '0x' + 'aa'.repeat(32),
-        buyer: '0x' + '00'.repeat(32),
-        optionType: OptionType.PUT,
-        strikePrice: BigInt(Math.round(strikeFloat * 1e18)),
-        underlyingAmount: 1n * ONE,
-        premium: 2n * ONE,
-        expiryBlock: 900000n,
-        status: OptionStatus.OPEN,
-    };
-}
-
 const DEFAULT_PROPS = {
     poolInfo: POOL_INFO,
-    options: [] as OptionData[],
     motoPillRatio: 50 as number | null,
     motoBal: null as number | null,
     onCoveredCall: vi.fn(),
-    onProtectivePut: vi.fn(),
     onCollar: vi.fn(),
+    onWriteCustom: vi.fn(),
 };
 
 describe('QuickStrategies', () => {
@@ -48,11 +31,16 @@ describe('QuickStrategies', () => {
         vi.clearAllMocks();
     });
 
-    it('renders all three strategy cards', () => {
+    it('renders Covered Call, Collar, and Write Custom cards', () => {
         render(<QuickStrategies {...DEFAULT_PROPS} />);
         expect(screen.getByTestId('strategy-covered-call')).toBeInTheDocument();
-        expect(screen.getByTestId('strategy-protective-put')).toBeInTheDocument();
         expect(screen.getByTestId('strategy-collar')).toBeInTheDocument();
+        expect(screen.getByTestId('strategy-write-custom')).toBeInTheDocument();
+    });
+
+    it('does NOT render Protective Put card', () => {
+        render(<QuickStrategies {...DEFAULT_PROPS} />);
+        expect(screen.queryByTestId('strategy-protective-put')).not.toBeInTheDocument();
     });
 
     // -----------------------------------------------------------------------
@@ -60,17 +48,16 @@ describe('QuickStrategies', () => {
     // -----------------------------------------------------------------------
 
     describe('when motoPillRatio is null', () => {
-        it('all strategy buttons are disabled', () => {
+        it('Covered Call and Collar buttons are disabled', () => {
             render(<QuickStrategies {...DEFAULT_PROPS} motoPillRatio={null} />);
             expect(screen.getByTestId('strategy-covered-call-btn')).toBeDisabled();
-            expect(screen.getByTestId('strategy-protective-put-btn')).toBeDisabled();
             expect(screen.getByTestId('strategy-collar-btn')).toBeDisabled();
         });
 
-        it('shows price unavailable message', () => {
+        it('shows price unavailable message for Covered Call and Collar', () => {
             render(<QuickStrategies {...DEFAULT_PROPS} motoPillRatio={null} />);
             const msgs = screen.getAllByText(/price data unavailable/i);
-            expect(msgs.length).toBe(3);
+            expect(msgs.length).toBe(2); // Covered Call + Collar
         });
     });
 
@@ -97,62 +84,6 @@ describe('QuickStrategies', () => {
     });
 
     // -----------------------------------------------------------------------
-    // Protective Put card
-    // -----------------------------------------------------------------------
-
-    describe('Protective Put card', () => {
-        it('shows best put details when a suitable put exists', () => {
-            const put = makeOpenPut(1n, 43.75); // 87.5% of 50
-            render(<QuickStrategies {...DEFAULT_PROPS} options={[put]} />);
-            expect(screen.getByTestId('strategy-protective-put')).toHaveTextContent('43.7500');
-        });
-
-        it('disables Buy Put button when no suitable put found', () => {
-            render(<QuickStrategies {...DEFAULT_PROPS} options={[]} />);
-            expect(screen.getByTestId('strategy-protective-put-btn')).toBeDisabled();
-            expect(screen.getByTestId('strategy-protective-put-btn')).toHaveTextContent('No puts available');
-        });
-
-        it('shows no puts message when none available', () => {
-            render(<QuickStrategies {...DEFAULT_PROPS} options={[]} />);
-            expect(screen.getByTestId('strategy-protective-put')).toHaveTextContent(/no puts in the 80/i);
-        });
-
-        it('calls onProtectivePut with the OptionData on click', () => {
-            const put = makeOpenPut(5n, 43.75);
-            const onProtectivePut = vi.fn();
-            render(<QuickStrategies {...DEFAULT_PROPS} options={[put]} onProtectivePut={onProtectivePut} />);
-            fireEvent.click(screen.getByTestId('strategy-protective-put-btn'));
-            expect(onProtectivePut).toHaveBeenCalledWith(put);
-        });
-
-        it('shows Write a Put button when onWritePut is provided', () => {
-            const onWritePut = vi.fn();
-            render(<QuickStrategies {...DEFAULT_PROPS} onWritePut={onWritePut} />);
-            expect(screen.getByTestId('strategy-write-put-btn')).toBeInTheDocument();
-            expect(screen.getByTestId('strategy-write-put-btn')).toHaveTextContent(/Write a Put/);
-        });
-
-        it('shows Write a Put alongside Buy Put when put exists', () => {
-            const put = makeOpenPut(1n, 43.75);
-            const onWritePut = vi.fn();
-            render(<QuickStrategies {...DEFAULT_PROPS} options={[put]} onWritePut={onWritePut} />);
-            // Both buttons visible simultaneously
-            expect(screen.getByTestId('strategy-protective-put-btn')).toBeEnabled();
-            expect(screen.getByTestId('strategy-write-put-btn')).toBeInTheDocument();
-        });
-
-        it('calls onWritePut on Write a Put click', () => {
-            const onWritePut = vi.fn();
-            render(<QuickStrategies {...DEFAULT_PROPS} onWritePut={onWritePut} />);
-            fireEvent.click(screen.getByTestId('strategy-write-put-btn'));
-            expect(onWritePut).toHaveBeenCalledOnce();
-            const args = onWritePut.mock.calls[0][0];
-            expect(args.optionType).toBe(OptionType.PUT);
-        });
-    });
-
-    // -----------------------------------------------------------------------
     // Collar card
     // -----------------------------------------------------------------------
 
@@ -169,6 +100,30 @@ describe('QuickStrategies', () => {
             render(<QuickStrategies {...DEFAULT_PROPS} onCollar={onCollar} />);
             fireEvent.click(screen.getByTestId('strategy-collar-btn'));
             expect(onCollar).toHaveBeenCalledOnce();
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // Write Custom card
+    // -----------------------------------------------------------------------
+
+    describe('Write Custom card', () => {
+        it('renders and triggers onWriteCustom callback', () => {
+            const onWriteCustom = vi.fn();
+            render(<QuickStrategies {...DEFAULT_PROPS} onWriteCustom={onWriteCustom} />);
+            expect(screen.getByTestId('strategy-write-custom')).toBeInTheDocument();
+            fireEvent.click(screen.getByTestId('strategy-write-custom-btn'));
+            expect(onWriteCustom).toHaveBeenCalledOnce();
+        });
+
+        it('is always enabled when wallet is connected (no price dependency)', () => {
+            render(<QuickStrategies {...DEFAULT_PROPS} motoPillRatio={null} />);
+            expect(screen.getByTestId('strategy-write-custom-btn')).not.toBeDisabled();
+        });
+
+        it('is disabled when wallet is not connected', () => {
+            render(<QuickStrategies {...DEFAULT_PROPS} walletConnected={false} />);
+            expect(screen.getByTestId('strategy-write-custom-btn')).toBeDisabled();
         });
     });
 });
