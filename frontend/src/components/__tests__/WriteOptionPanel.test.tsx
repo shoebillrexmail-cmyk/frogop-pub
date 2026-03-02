@@ -225,7 +225,7 @@ describe('WriteOptionPanel', () => {
         fireEvent.click(screen.getByTestId('btn-write'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Transaction broadcast/i)).toBeInTheDocument();
+            expect(screen.getByTestId('transaction-receipt')).toBeInTheDocument();
         });
     });
 
