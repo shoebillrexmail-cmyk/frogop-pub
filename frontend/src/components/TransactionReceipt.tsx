@@ -5,7 +5,7 @@
  * a consistent receipt showing: TX type badge, token movements, fees, explorer
  * link, and contextual "What happens next" guidance.
  */
-import { EXPLORER_TX_URL } from '../config/index.ts';
+import { explorerTxUrl } from '../config/index.ts';
 
 export type ReceiptType =
     | 'buy'
@@ -110,7 +110,7 @@ export function TransactionReceipt({
                         {txId.slice(0, 16)}...{txId.slice(-8)}
                     </span>
                     <a
-                        href={`${EXPLORER_TX_URL}${txId}`}
+                        href={explorerTxUrl(txId)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-accent hover:text-accent/80 whitespace-nowrap"

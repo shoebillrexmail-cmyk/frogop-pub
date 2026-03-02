@@ -5,7 +5,7 @@
  *   1. Approve MOTO collateral (if allowance insufficient)
  *   2. Submit writeOption() transaction
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -23,6 +23,7 @@ import { StepIndicator } from './StepIndicator.tsx';
 import type { StepStatus } from './StepIndicator.tsx';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { formatTxError } from '../utils/formatTxError.ts';
+import { classifyMoneyness } from '../utils/optionsChain.ts';
 import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
@@ -191,6 +192,39 @@ export function WriteOptionPanel({
     const collateral = amount && (optionType === OptionType.CALL
         ? amount
         : strike ? strike * amount / (10n ** 18n) : null);
+
+    // Moneyness classification
+    const moneynessResult = useMemo(() => {
+        if (!motoPillRatio || !strikeStr) return null;
+        const strikeNum = Number(strikeStr);
+        return classifyMoneyness(optionType, strikeNum, motoPillRatio);
+    }, [optionType, strikeStr, motoPillRatio]);
+
+    // Writer outlook — PnL preview
+    const writerOutlook = useMemo(() => {
+        const premiumBi = parseBigIntTokens(premiumStr);
+        const strikeBi = parseBigIntTokens(strikeStr);
+        const amountBi = parseBigIntTokens(amountStr);
+        if (!premiumBi || premiumBi <= 0n || !strikeBi || strikeBi <= 0n || !amountBi || amountBi <= 0n) return null;
+
+        const col = optionType === OptionType.CALL
+            ? amountBi
+            : strikeBi * amountBi / (10n ** 18n);
+        if (col <= 0n) return null;
+
+        const maxProfit = premiumBi;
+        const breakeven = optionType === OptionType.CALL
+            ? strikeBi + premiumBi
+            : strikeBi - premiumBi;
+        const maxLoss = col > premiumBi ? col - premiumBi : 0n;
+
+        // Yield = premium / collateral * 100
+        const yieldPct = Number(premiumBi) / Number(col) * 100;
+        const annualizedYieldPct = selectedDays > 0 ? yieldPct * 365 / selectedDays : 0;
+        const collateralSym = optionType === OptionType.CALL ? 'MOTO' : 'PILL';
+
+        return { maxProfit, breakeven, maxLoss, yieldPct, annualizedYieldPct, collateralSym };
+    }, [premiumStr, strikeStr, amountStr, optionType, selectedDays]);
 
     // Black-Scholes suggested premium
     const { suggestedPremium, annualizedVol } = useSuggestedPremium(
@@ -492,6 +526,35 @@ export function WriteOptionPanel({
                             />
                             <span className="text-terminal-text-muted text-xs font-mono">PILL</span>
                         </div>
+                        {/* Moneyness badge */}
+                        {motoPillRatio != null && motoPillRatio > 0 && (
+                            <div className="mt-1.5 space-y-1" data-testid="moneyness-section">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-terminal-text-muted font-mono">
+                                        Spot: <span className="text-terminal-text-secondary">{motoPillRatio.toFixed(2)} PILL</span>
+                                    </span>
+                                    {moneynessResult && (
+                                        <span
+                                            className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded ${
+                                                moneynessResult.moneyness === 'ITM'
+                                                    ? 'bg-green-900/40 text-green-400'
+                                                    : moneynessResult.moneyness === 'ATM'
+                                                        ? 'bg-cyan-900/40 text-cyan-400'
+                                                        : 'bg-orange-900/40 text-orange-400'
+                                            }`}
+                                            data-testid="moneyness-badge"
+                                        >
+                                            {moneynessResult.label}
+                                        </span>
+                                    )}
+                                </div>
+                                {moneynessResult?.guidance && (
+                                    <p className="text-[10px] text-yellow-400 font-mono" data-testid="moneyness-guidance">
+                                        {moneynessResult.guidance}
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Premium */}
@@ -621,6 +684,39 @@ export function WriteOptionPanel({
                             </span>
                         </div>
                     </div>
+
+                    {/* Writer Outlook */}
+                    {writerOutlook && (
+                        <div
+                            className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 space-y-1.5 text-xs font-mono"
+                            data-testid="writer-outlook"
+                        >
+                            <span className="text-[10px] text-terminal-text-muted uppercase tracking-wider">Writer Outlook</span>
+                            <div className="flex justify-between">
+                                <span className="text-terminal-text-muted">Max profit</span>
+                                <span className="text-green-400">{formatBigInt(writerOutlook.maxProfit)} PILL</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-terminal-text-muted">Breakeven</span>
+                                <span className="text-cyan-400">{formatBigInt(writerOutlook.breakeven)} PILL</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-terminal-text-muted">Yield</span>
+                                <span className="text-terminal-text-primary">
+                                    {writerOutlook.yieldPct.toFixed(2)}%
+                                    {writerOutlook.annualizedYieldPct > 0 && (
+                                        <span className="text-terminal-text-muted"> ({writerOutlook.annualizedYieldPct.toFixed(1)}% ann.)</span>
+                                    )}
+                                </span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-terminal-text-muted">Collateral at risk</span>
+                                <span className="text-rose-400">
+                                    {formatBigInt(writerOutlook.maxLoss)} {writerOutlook.collateralSym}
+                                </span>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Existing write flows hint */}
                     {otherWriteFlows.length > 0 && (

@@ -289,4 +289,81 @@ describe('WriteOptionPanel', () => {
         expect((screen.getByTestId('input-amount') as HTMLInputElement).value).toBe('1');
         expect((screen.getByTestId('input-strike') as HTMLInputElement).value).toBe('');
     });
+
+    // -----------------------------------------------------------------------
+    // Moneyness badge (Story B)
+    // -----------------------------------------------------------------------
+
+    it('shows spot price and moneyness badge when motoPillRatio is provided', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} motoPillRatio={50} />);
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '60' } });
+
+        const section = screen.getByTestId('moneyness-section');
+        expect(section).toBeInTheDocument();
+        expect(section.textContent).toContain('50.00 PILL');
+        expect(screen.getByTestId('moneyness-badge')).toBeInTheDocument();
+    });
+
+    it('does not show moneyness section when motoPillRatio is null', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} motoPillRatio={null} />);
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '60' } });
+        expect(screen.queryByTestId('moneyness-section')).not.toBeInTheDocument();
+    });
+
+    it('shows guidance text for deep ITM strike', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} motoPillRatio={100} />);
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '40' } });
+        // CALL with strike 40 and spot 100 → deep ITM
+        expect(screen.getByTestId('moneyness-guidance')).toBeInTheDocument();
+    });
+
+    // -----------------------------------------------------------------------
+    // Writer Outlook (Story C)
+    // -----------------------------------------------------------------------
+
+    it('shows writer outlook when amount, strike, and premium are valid', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+        fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '1' } });
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
+
+        const outlook = screen.getByTestId('writer-outlook');
+        expect(outlook).toBeInTheDocument();
+        expect(outlook.textContent).toContain('Max profit');
+        expect(outlook.textContent).toContain('Breakeven');
+        expect(outlook.textContent).toContain('Yield');
+        expect(outlook.textContent).toContain('Collateral at risk');
+    });
+
+    it('hides writer outlook when premium is empty', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+        fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '1' } });
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '' } });
+
+        expect(screen.queryByTestId('writer-outlook')).not.toBeInTheDocument();
+    });
+
+    it('shows correct breakeven for CALL (strike + premium)', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+        fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '1' } });
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
+
+        const outlook = screen.getByTestId('writer-outlook');
+        // Breakeven = 50 + 5 = 55.0000
+        expect(outlook.textContent).toContain('55.0000');
+    });
+
+    it('shows correct breakeven for PUT (strike - premium)', () => {
+        render(<WriteOptionPanel {...DEFAULT_PROPS} />);
+        fireEvent.click(screen.getByTestId('type-put'));
+        fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '1' } });
+        fireEvent.change(screen.getByTestId('input-strike'), { target: { value: '50' } });
+        fireEvent.change(screen.getByTestId('input-premium'), { target: { value: '5' } });
+
+        const outlook = screen.getByTestId('writer-outlook');
+        // Breakeven = 50 - 5 = 45.0000
+        expect(outlook.textContent).toContain('45.0000');
+    });
 });

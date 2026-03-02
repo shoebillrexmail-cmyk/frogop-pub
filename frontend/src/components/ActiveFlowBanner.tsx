@@ -5,7 +5,7 @@
  * Gives users visibility and choice: Continue (keep flow) or Start Fresh (abandon + reset).
  */
 import type { ActiveFlow, FlowStatus } from '../contexts/flowDefs.ts';
-import { EXPLORER_TX_URL } from '../config/index.ts';
+import { explorerTxUrl } from '../config/index.ts';
 
 interface ActiveFlowBannerProps {
     flow: ActiveFlow;
@@ -79,7 +79,7 @@ export function ActiveFlowBanner({ flow, onContinue, onStartFresh }: ActiveFlowB
 
             {txId && (
                 <a
-                    href={`${EXPLORER_TX_URL}${txId}`}
+                    href={explorerTxUrl(txId)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[10px] font-mono text-accent hover:text-accent/80 block truncate"

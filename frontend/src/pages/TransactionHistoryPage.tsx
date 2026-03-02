@@ -7,7 +7,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import type { TrackedTransaction, TxStatus, TxType } from '../contexts/transactionDefs.ts';
-import { EXPLORER_TX_URL, formatAddress } from '../config/index.ts';
+import { explorerTxUrl, formatAddress } from '../config/index.ts';
 
 const PAGE_SIZE = 25;
 
@@ -233,7 +233,7 @@ export function TransactionHistoryPage() {
                                         <td className="px-3 py-2">
                                             {tx.txId ? (
                                                 <a
-                                                    href={`${EXPLORER_TX_URL}${tx.txId}`}
+                                                    href={explorerTxUrl(tx.txId)}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="text-accent hover:underline"

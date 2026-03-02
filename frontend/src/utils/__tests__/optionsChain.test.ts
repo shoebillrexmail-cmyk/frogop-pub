@@ -5,6 +5,7 @@ import {
     findAtmStrikeIndex,
     isCallItm,
     isPutItm,
+    classifyMoneyness,
 } from '../optionsChain.js';
 import type { ChainRow } from '../optionsChain.js';
 import { OptionType, OptionStatus } from '../../services/types.js';
@@ -260,5 +261,64 @@ describe('isPutItm', () => {
 
     it('false when spot is null', () => {
         expect(isPutItm(100n * e18, null)).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// classifyMoneyness
+// ---------------------------------------------------------------------------
+
+describe('classifyMoneyness', () => {
+    it('returns null when spot is 0', () => {
+        expect(classifyMoneyness(OptionType.CALL, 100, 0)).toBeNull();
+    });
+
+    it('returns null when spot is NaN', () => {
+        expect(classifyMoneyness(OptionType.CALL, 100, NaN)).toBeNull();
+    });
+
+    it('returns null when strike is 0', () => {
+        expect(classifyMoneyness(OptionType.CALL, 0, 100)).toBeNull();
+    });
+
+    it('CALL ATM when strike within 5% of spot', () => {
+        const result = classifyMoneyness(OptionType.CALL, 102, 100);
+        expect(result).not.toBeNull();
+        expect(result!.moneyness).toBe('ATM');
+    });
+
+    it('CALL OTM when strike > spot by more than 5%', () => {
+        const result = classifyMoneyness(OptionType.CALL, 120, 100);
+        expect(result!.moneyness).toBe('OTM');
+        expect(result!.pctFromSpot).toBeCloseTo(0.2);
+        expect(result!.label).toContain('OTM');
+    });
+
+    it('CALL ITM when strike < spot by more than 5%', () => {
+        const result = classifyMoneyness(OptionType.CALL, 80, 100);
+        expect(result!.moneyness).toBe('ITM');
+        expect(result!.pctFromSpot).toBeCloseTo(-0.2);
+    });
+
+    it('PUT OTM when strike < spot by more than 5%', () => {
+        const result = classifyMoneyness(OptionType.PUT, 80, 100);
+        expect(result!.moneyness).toBe('OTM');
+    });
+
+    it('PUT ITM when strike > spot by more than 5%', () => {
+        const result = classifyMoneyness(OptionType.PUT, 140, 100);
+        expect(result!.moneyness).toBe('ITM');
+    });
+
+    it('deep ITM guidance for CALL with strike 60% below spot', () => {
+        const result = classifyMoneyness(OptionType.CALL, 40, 100);
+        expect(result!.moneyness).toBe('ITM');
+        expect(result!.guidance).toContain('Deep ITM');
+    });
+
+    it('far OTM guidance for CALL with strike 60% above spot', () => {
+        const result = classifyMoneyness(OptionType.CALL, 160, 100);
+        expect(result!.moneyness).toBe('OTM');
+        expect(result!.guidance).toContain('Far OTM');
     });
 });

@@ -7,7 +7,7 @@
  */
 import type { TrackedTransaction } from '../contexts/transactionDefs.ts';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
-import { EXPLORER_TX_URL } from '../config/index.ts';
+import { explorerTxUrl } from '../config/index.ts';
 import { mapTxTypeToReceiptType, buildMovementsFromMeta } from '../utils/txDetailHelpers.ts';
 
 // ---------------------------------------------------------------------------
@@ -108,7 +108,7 @@ export function TransactionDetailModal({ tx, onClose }: TransactionDetailModalPr
                                         {tx.txId.slice(0, 16)}...{tx.txId.slice(-8)}
                                     </span>
                                     <a
-                                        href={`${EXPLORER_TX_URL}${tx.txId}`}
+                                        href={explorerTxUrl(tx.txId)}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-accent hover:text-accent/80 whitespace-nowrap"
@@ -147,7 +147,7 @@ export function TransactionDetailModal({ tx, onClose }: TransactionDetailModalPr
                                         {tx.txId.slice(0, 16)}...{tx.txId.slice(-8)}
                                     </span>
                                     <a
-                                        href={`${EXPLORER_TX_URL}${tx.txId}`}
+                                        href={explorerTxUrl(tx.txId)}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-accent hover:text-accent/80 whitespace-nowrap"
@@ -169,7 +169,7 @@ export function TransactionDetailModal({ tx, onClose }: TransactionDetailModalPr
                                         {tx.txId.slice(0, 16)}...{tx.txId.slice(-8)}
                                     </span>
                                     <a
-                                        href={`${EXPLORER_TX_URL}${tx.txId}`}
+                                        href={explorerTxUrl(tx.txId)}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-accent hover:text-accent/80 whitespace-nowrap"

@@ -170,6 +170,65 @@ export function buildChain(
     return { buckets, activeBuckets };
 }
 
+// ── Moneyness classification ──────────────────────────────────────────
+
+export type Moneyness = 'ITM' | 'ATM' | 'OTM';
+
+export interface MoneynessResult {
+    moneyness: Moneyness;
+    /** Signed percentage from spot (positive = above spot, negative = below) */
+    pctFromSpot: number;
+    /** Human-readable label, e.g. "OTM +20.0% from spot" */
+    label: string;
+    /** Soft guidance for deep ITM/OTM, or null */
+    guidance: string | null;
+}
+
+const ATM_THRESHOLD = 0.05;       // ±5% of spot
+const DEEP_ITM_THRESHOLD = 0.30;  // >30% toward ITM
+const FAR_OTM_THRESHOLD = 0.50;   // >50% away OTM
+
+/**
+ * Classify strike vs spot for a CALL or PUT.
+ * Returns null if spot is unavailable or zero.
+ */
+export function classifyMoneyness(
+    optionType: number,
+    strike: number,
+    spot: number,
+): MoneynessResult | null {
+    if (!spot || spot === 0 || !Number.isFinite(spot)) return null;
+    if (!strike || strike === 0 || !Number.isFinite(strike)) return null;
+
+    const pctFromSpot = (strike - spot) / spot;
+    const absPct = Math.abs(pctFromSpot);
+
+    let moneyness: Moneyness;
+    const isCall = optionType === OptionType.CALL;
+
+    if (absPct <= ATM_THRESHOLD) {
+        moneyness = 'ATM';
+    } else if (isCall) {
+        // CALL: strike < spot = ITM, strike > spot = OTM
+        moneyness = strike < spot ? 'ITM' : 'OTM';
+    } else {
+        // PUT: strike > spot = ITM, strike < spot = OTM
+        moneyness = strike > spot ? 'ITM' : 'OTM';
+    }
+
+    const sign = pctFromSpot >= 0 ? '+' : '';
+    const label = `${moneyness} ${sign}${(pctFromSpot * 100).toFixed(1)}% from spot`;
+
+    let guidance: string | null = null;
+    if (moneyness === 'ITM' && absPct > DEEP_ITM_THRESHOLD) {
+        guidance = 'Deep ITM — high chance of exercise, low time premium.';
+    } else if (moneyness === 'OTM' && absPct > FAR_OTM_THRESHOLD) {
+        guidance = 'Far OTM — low chance of exercise, may not attract buyers.';
+    }
+
+    return { moneyness, pctFromSpot, label, guidance };
+}
+
 // ── ATM helpers ────────────────────────────────────────────────────────
 
 const PRECISION = 1e18;

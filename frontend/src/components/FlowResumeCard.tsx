@@ -6,7 +6,7 @@
  * and Resume / Abandon buttons.
  */
 import type { ActiveFlow, FlowStatus } from '../contexts/flowDefs.ts';
-import { EXPLORER_TX_URL } from '../config/index.ts';
+import { explorerTxUrl } from '../config/index.ts';
 
 interface FlowResumeCardProps {
     flow: ActiveFlow;
@@ -111,7 +111,7 @@ export function FlowResumeCard({ flow, onResume, onAbandon }: FlowResumeCardProp
             <div className="flex gap-2">
                 {viewTxId && (
                     <a
-                        href={`${EXPLORER_TX_URL}${viewTxId}`}
+                        href={explorerTxUrl(viewTxId)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex-1 text-center text-[10px] font-mono py-1 rounded bg-terminal-bg-elevated border border-terminal-border-subtle text-accent hover:text-accent/80 transition-colors"
