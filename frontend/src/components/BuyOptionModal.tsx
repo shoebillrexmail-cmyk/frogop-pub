@@ -123,15 +123,16 @@ export function BuyOptionModal({
         spenderHex: poolHex,
         walletAddress: address,
         provider,
+        currentBlock: currentBlock ?? null,
     });
 
     const pillBalance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
     const hasBalance = pillBalance !== null && pillBalance >= buyerPays;
-    // Always check on-chain allowance — do not let stale localStorage override.
-    // approvalReady (from confirmed flow status) is safe to include: it prevents
-    // double-approval when an approval TX is broadcast but not yet reflected on-chain.
-    const needsApproval = !approvalReady && allowance !== null && allowance < buyerPays;
+    // Prevent double-approve during mempool window: if we have a pending approval TX,
+    // don't show the approve button even though on-chain allowance hasn't updated yet.
+    const approvalPending = myFlow?.status === 'approval_pending' && myFlow.approvalTxId != null;
+    const needsApproval = !approvalPending && !approvalReady && allowance !== null && allowance < buyerPays;
     const busy = txStatus === 'approving' || txStatus === 'buying';
 
     // Greeks (computed only when spot price available)
@@ -199,7 +200,6 @@ export function BuyOptionModal({
             if (!mounted.current) return;
             const msg = err instanceof Error ? err.message : 'Approval failed';
             setTxError(msg.includes('mempool-chain') ? 'Too many pending transactions. Wait for a confirmation before starting another.' : msg);
-            updateFlow({ status: 'approval_failed' });
             setTxStatus('error');
         } finally {
             sendingRef.current = false;
@@ -212,7 +212,6 @@ export function BuyOptionModal({
         setTxError(null);
         setTxStatus('buying');
         try {
-            if (isMyFlow) updateFlow({ status: 'action_pending' });
             const poolContract = getContract(
                 poolAddress,
                 POOL_WRITE_ABI,
@@ -245,7 +244,6 @@ export function BuyOptionModal({
             if (!mounted.current) return;
             const msg = err instanceof Error ? err.message : 'Purchase failed';
             setTxError(msg.includes('mempool-chain') ? 'Too many pending transactions. Wait for a confirmation before starting another.' : msg);
-            if (isMyFlow) updateFlow({ status: 'action_failed' });
             setTxStatus('error');
         } finally {
             sendingRef.current = false;

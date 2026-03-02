@@ -21,6 +21,8 @@ interface UseTokenInfoParams {
     /** Connected wallet address object (has toString() = MLDSA hash hex) */
     walletAddress: Address | null;
     provider: AbstractRpcProvider | null;
+    /** When provided, auto-refreshes on each new block (e.g. from useWsBlock()) */
+    currentBlock?: bigint | null;
 }
 
 async function resolveHex(provider: AbstractRpcProvider, addr: string): Promise<string> {
@@ -47,6 +49,7 @@ export function useTokenInfo({
     spenderHex,
     walletAddress,
     provider,
+    currentBlock,
 }: UseTokenInfoParams): { info: TokenInfo | null; loading: boolean; error: string | null; refetch: () => void } {
     const [info, setInfo] = useState<TokenInfo | null>(null);
     const [loading, setLoading] = useState(false);
@@ -116,7 +119,7 @@ export function useTokenInfo({
         return () => {
             cancelled = true;
         };
-    }, [tokenAddress, spenderHex, walletAddress, provider, tick]);
+    }, [tokenAddress, spenderHex, walletAddress, provider, tick, currentBlock]);
 
     return { info, loading, error, refetch };
 }

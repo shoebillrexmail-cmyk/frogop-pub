@@ -11,7 +11,7 @@
 import { useMemo, useCallback, useRef } from 'react';
 import { useTransactionContext } from './useTransactionContext.ts';
 import { flowIdentityKey, MAX_PARALLEL_FLOWS } from '../contexts/flowDefs.ts';
-import type { FlowActionType, ActiveFlow } from '../contexts/flowDefs.ts';
+import type { FlowActionType, ActiveFlow, StoredFlow } from '../contexts/flowDefs.ts';
 
 interface UseActiveFlowParams {
     actionType: FlowActionType;
@@ -34,8 +34,8 @@ export interface UseActiveFlowResult {
     resumedFormState: Record<string, string> | null;
     /** Claim a flow slot. Returns the flow on success, null if at limit. */
     claimFlow: (formState?: Record<string, string>) => ActiveFlow | null;
-    /** Update the active flow status/txIds */
-    updateFlow: (updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => void;
+    /** Update the active flow txIds */
+    updateFlow: (updates: Partial<Pick<StoredFlow, 'approvalTxId' | 'actionTxId'>>) => void;
     /** Remove this flow from the active flows */
     abandonFlow: () => void;
 }
@@ -99,7 +99,7 @@ export function useActiveFlow({
     const resolveFlowId = (): string | null => myFlow?.flowId ?? claimedFlowIdRef.current;
 
     const updateFlow = useCallback(
-        (updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => {
+        (updates: Partial<Pick<StoredFlow, 'approvalTxId' | 'actionTxId'>>) => {
             const flowId = resolveFlowId();
             if (!flowId) return;
             ctx.updateFlow(flowId, updates);

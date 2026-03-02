@@ -24,6 +24,7 @@ import type { StepStatus } from './StepIndicator.tsx';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { TxErrorBlock } from './TxErrorBlock.tsx';
 import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
+import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface ExerciseModalProps {
@@ -59,6 +60,7 @@ export function ExerciseModal({
 }: ExerciseModalProps) {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
+    const wsBlock = useWsBlock();
     const [poolHex, setPoolHex] = useState<string | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'exercising' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
@@ -126,13 +128,16 @@ export function ExerciseModal({
         spenderHex: poolHex,
         walletAddress: address,
         provider,
+        currentBlock: wsBlock,
     });
 
     const tokenBalance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
     const hasBalance = tokenBalance !== null && tokenBalance >= payAmount;
-    // Always check on-chain allowance — approvalReady (confirmed flow status) prevents double-approval.
-    const needsApproval = !approvalReady && allowance !== null && allowance < payAmount;
+    // Prevent double-approve during mempool window: if we have a pending approval TX,
+    // don't show the approve button even though on-chain allowance hasn't updated yet.
+    const approvalPending = myFlow?.status === 'approval_pending' && myFlow.approvalTxId != null;
+    const needsApproval = !approvalPending && !approvalReady && allowance !== null && allowance < payAmount;
     const busy = txStatus === 'approving' || txStatus === 'exercising';
 
     async function handleApprove() {
@@ -177,7 +182,6 @@ export function ExerciseModal({
             if (!mounted.current) return;
             const msg = err instanceof Error ? err.message : 'Approval failed';
             setTxError(msg.includes('mempool-chain') ? 'Too many pending transactions. Wait for a confirmation before starting another.' : msg);
-            updateFlow({ status: 'approval_failed' });
             setTxStatus('error');
         } finally {
             sendingRef.current = false;
@@ -190,7 +194,6 @@ export function ExerciseModal({
         setTxError(null);
         setTxStatus('exercising');
         try {
-            if (isMyFlow) updateFlow({ status: 'action_pending' });
             const poolContract = getContract(
                 poolAddress,
                 POOL_WRITE_ABI,
@@ -223,7 +226,6 @@ export function ExerciseModal({
             if (!mounted.current) return;
             const msg = err instanceof Error ? err.message : 'Exercise failed';
             setTxError(msg.includes('mempool-chain') ? 'Too many pending transactions. Wait for a confirmation before starting another.' : msg);
-            if (isMyFlow) updateFlow({ status: 'action_failed' });
             setTxStatus('error');
         } finally {
             sendingRef.current = false;

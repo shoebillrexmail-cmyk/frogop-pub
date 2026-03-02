@@ -25,6 +25,7 @@ import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { TxErrorBlock } from './TxErrorBlock.tsx';
 import { classifyMoneyness } from '../utils/optionsChain.ts';
 import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
+import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 const DAY_PRESETS = [
@@ -98,6 +99,7 @@ export function WriteOptionPanel({
 }: WriteOptionPanelProps) {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
+    const wsBlock = useWsBlock();
 
     // Per-instance UUID: adopt from resume prop, or generate fresh.
     // Used as `optionId` in the flow identity key so parallel write flows
@@ -265,11 +267,13 @@ export function WriteOptionPanel({
         spenderHex: poolHex,
         walletAddress: address,
         provider,
+        currentBlock: wsBlock,
     });
 
     const balance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
-    const needsApproval = !approvalReady && collateral !== null && allowance !== null && allowance < collateral;
+    const approvalPending = myFlow?.status === 'approval_pending' && myFlow.approvalTxId != null;
+    const needsApproval = !approvalPending && !approvalReady && collateral !== null && allowance !== null && allowance < collateral;
 
     function validate(): string | null {
         if (!amount || amount <= 0n) return 'Amount must be greater than 0';
@@ -334,7 +338,6 @@ export function WriteOptionPanel({
             if (!mounted.current) return;
             const msg = err instanceof Error ? err.message : 'Approval failed';
             setTxError(msg.includes('mempool-chain') ? 'Too many pending transactions. Wait for a confirmation before starting another.' : msg);
-            updateFlow({ status: 'approval_failed' });
             setTxStatus('error');
         } finally {
             sendingRef.current = false;
@@ -359,7 +362,6 @@ export function WriteOptionPanel({
         setTxStatus('writing');
 
         try {
-            if (isMyFlow) updateFlow({ status: 'action_pending' });
             // Contract expects absolute block number, not relative duration
             const currentBlock = await provider.getBlockNumber();
             const expiry = BigInt(currentBlock) + duration;
@@ -403,7 +405,6 @@ export function WriteOptionPanel({
             if (!mounted.current) return;
             const msg = err instanceof Error ? err.message : 'Write option failed';
             setTxError(msg.includes('mempool-chain') ? 'Too many pending transactions. Wait for a confirmation before starting another.' : msg);
-            if (isMyFlow) updateFlow({ status: 'action_failed' });
             setTxStatus('error');
         } finally {
             sendingRef.current = false;

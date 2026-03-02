@@ -17,8 +17,8 @@ import { useReducer, useEffect, useCallback, useMemo, useState, useRef, type Rea
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { TransactionContext } from './transactionDefs.ts';
 import type { TrackedTransaction, TransactionContextValue, ReopenRequest } from './transactionDefs.ts';
-import { flowIdentityKey, MAX_PARALLEL_FLOWS } from './flowDefs.ts';
-import type { ActiveFlow, FlowActionType, ResumeRequest } from './flowDefs.ts';
+import { flowIdentityKey, deriveFlowStatus, MAX_PARALLEL_FLOWS } from './flowDefs.ts';
+import type { ActiveFlow, StoredFlow, FlowActionType, ResumeRequest } from './flowDefs.ts';
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -67,28 +67,34 @@ function reducer(state: TransactionState, action: TransactionAction): Transactio
 const FLOWS_STORAGE_PREFIX = 'frogop_active_flows_';
 const STALE_FLOW_MS = 4 * 60 * 60 * 1000; // 4 hours
 
-function loadFlows(key: string): ActiveFlow[] {
+function loadFlows(key: string): StoredFlow[] {
     try {
         const raw = localStorage.getItem(key);
         if (!raw) return [];
-        const flows = JSON.parse(raw) as ActiveFlow[];
-        if (!Array.isArray(flows)) return [];
-        // Filter out stale approval_pending flows
-        return flows.filter((flow) => {
-            if (
-                flow.status === 'approval_pending' &&
-                Date.now() - new Date(flow.claimedAt).getTime() > STALE_FLOW_MS
-            ) {
-                return false;
-            }
-            return true;
-        });
+        const parsed = JSON.parse(raw) as Record<string, unknown>[];
+        if (!Array.isArray(parsed)) return [];
+        // Strip legacy `status` field and filter stale flows
+        return parsed
+            .map((entry) => {
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars -- stripping legacy field
+                const { status, ...rest } = entry;
+                return rest as unknown as StoredFlow;
+            })
+            .filter((flow) => {
+                if (
+                    !flow.approvalTxId && !flow.actionTxId &&
+                    Date.now() - new Date(flow.claimedAt).getTime() > STALE_FLOW_MS
+                ) {
+                    return false;
+                }
+                return true;
+            });
     } catch {
         return [];
     }
 }
 
-function saveFlows(key: string, flows: ActiveFlow[]) {
+function saveFlows(key: string, flows: StoredFlow[]) {
     try {
         if (flows.length > 0) {
             localStorage.setItem(key, JSON.stringify(flows));
@@ -113,8 +119,8 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     const storageKey = walletAddress ? `${STORAGE_PREFIX}${walletAddress}` : null;
     const flowKey = walletAddress ? `${FLOWS_STORAGE_PREFIX}${walletAddress}` : null;
 
-    // --- Active Flows state ---
-    const [activeFlows, setActiveFlows] = useState<ActiveFlow[]>([]);
+    // --- Active Flows state (stored without status; status derived at read-time) ---
+    const [storedFlows, setStoredFlows] = useState<StoredFlow[]>([]);
     const [resumeRequest, setResumeRequest] = useState<ResumeRequest | null>(null);
     const [reopenRequest, setReopenRequest] = useState<ReopenRequest | null>(null);
 
@@ -126,65 +132,32 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     const [prevFlowKey, setPrevFlowKey] = useState(flowKey);
     if (flowKey !== prevFlowKey) {
         setPrevFlowKey(flowKey);
-        setActiveFlows(flowKey ? loadFlows(flowKey) : []);
+        setStoredFlows(flowKey ? loadFlows(flowKey) : []);
     }
+
+    // Derive activeFlows from storedFlows + tracked transactions (pure computation)
+    const activeFlows = useMemo<ActiveFlow[]>(
+        () => storedFlows.map((f) => ({ ...f, status: deriveFlowStatus(f, state.transactions) })),
+        [storedFlows, state.transactions],
+    );
 
     // Persist flows to localStorage on every change
     useEffect(() => {
         if (!flowKey) return;
-        saveFlows(flowKey, activeFlows);
-    }, [activeFlows, flowKey]);
+        saveFlows(flowKey, storedFlows);
+    }, [storedFlows, flowKey]);
 
     // Multi-tab sync via storage event
     useEffect(() => {
         if (!flowKey) return;
         const handler = (e: StorageEvent) => {
             if (e.key === flowKey) {
-                setActiveFlows(e.newValue ? loadFlows(flowKey) : []);
+                setStoredFlows(e.newValue ? loadFlows(flowKey) : []);
             }
         };
         window.addEventListener('storage', handler);
         return () => window.removeEventListener('storage', handler);
     }, [flowKey]);
-
-    // Auto-sync flow statuses when tracked TXs change.
-    const syncFlowStatus = useCallback(() => {
-        setActiveFlows((current) => {
-            if (current.length === 0) return current;
-            let changed = false;
-            const updated = current.map((flow) => {
-                if (flow.status === 'approval_pending' && flow.approvalTxId) {
-                    const approvalTx = state.transactions.find((tx) => tx.txId === flow.approvalTxId);
-                    if (approvalTx?.status === 'confirmed') {
-                        changed = true;
-                        return { ...flow, status: 'approval_confirmed' as const };
-                    }
-                    if (approvalTx?.status === 'failed') {
-                        changed = true;
-                        return { ...flow, status: 'approval_failed' as const };
-                    }
-                }
-                if (flow.status === 'action_pending' && flow.actionTxId) {
-                    const actionTx = state.transactions.find((tx) => tx.txId === flow.actionTxId);
-                    if (actionTx?.status === 'confirmed') {
-                        changed = true;
-                        return { ...flow, status: 'action_confirmed' as const };
-                    }
-                    if (actionTx?.status === 'failed') {
-                        changed = true;
-                        return { ...flow, status: 'action_failed' as const };
-                    }
-                }
-                return flow;
-            });
-            return changed ? updated : current;
-        });
-    }, [state.transactions]);
-
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing flow status from external TX confirmations
-        syncFlowStatus();
-    }, [syncFlowStatus]);
 
     // Auto-release flows 3s after action_confirmed
     useEffect(() => {
@@ -195,7 +168,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             scheduledRemovalsRef.current.add(flow.flowId);
             setTimeout(() => {
                 scheduledRemovalsRef.current.delete(flow.flowId);
-                setActiveFlows((prev) => prev.filter((f) => f.flowId !== flow.flowId));
+                setStoredFlows((prev) => prev.filter((f) => f.flowId !== flow.flowId));
             }, 3000);
         }
     }, [activeFlows]);
@@ -214,21 +187,20 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             const key = flowIdentityKey(params.actionType, params.poolAddress, params.optionId);
 
             // Check if same identity flow already exists
-            const existingIdx = activeFlows.findIndex(
+            const existingIdx = storedFlows.findIndex(
                 (f) => flowIdentityKey(f.actionType, f.poolAddress, f.optionId) === key,
             );
 
             // At limit and no existing flow to replace → blocked
-            if (existingIdx === -1 && activeFlows.length >= MAX_PARALLEL_FLOWS) {
+            if (existingIdx === -1 && storedFlows.length >= MAX_PARALLEL_FLOWS) {
                 return null;
             }
 
-            const flow: ActiveFlow = {
+            const stored: StoredFlow = {
                 flowId: crypto.randomUUID(),
                 actionType: params.actionType,
                 poolAddress: params.poolAddress,
                 optionId: params.optionId ?? null,
-                status: 'approval_pending',
                 approvalTxId: null,
                 actionTxId: null,
                 claimedAt: new Date().toISOString(),
@@ -239,18 +211,19 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
 
             if (existingIdx !== -1) {
                 // Replace existing flow with same identity (retry scenario)
-                setActiveFlows((prev) => prev.map((f, i) => (i === existingIdx ? flow : f)));
+                setStoredFlows((prev) => prev.map((f, i) => (i === existingIdx ? stored : f)));
             } else {
-                setActiveFlows((prev) => [...prev, flow]);
+                setStoredFlows((prev) => [...prev, stored]);
             }
-            return flow;
+            // Return as ActiveFlow with derived status for the caller
+            return { ...stored, status: 'approval_pending' };
         },
-        [activeFlows],
+        [storedFlows],
     );
 
     const updateFlowFn = useCallback(
-        (flowId: string, updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => {
-            setActiveFlows((prev) =>
+        (flowId: string, updates: Partial<Pick<StoredFlow, 'approvalTxId' | 'actionTxId'>>) => {
+            setStoredFlows((prev) =>
                 prev.map((f) => (f.flowId === flowId ? { ...f, ...updates } : f)),
             );
         },
@@ -258,7 +231,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     );
 
     const abandonFlowFn = useCallback((flowId: string) => {
-        setActiveFlows((prev) => prev.filter((f) => f.flowId !== flowId));
+        setStoredFlows((prev) => prev.filter((f) => f.flowId !== flowId));
         setResumeRequest((prev) => (prev?.flowId === flowId ? null : prev));
     }, []);
 

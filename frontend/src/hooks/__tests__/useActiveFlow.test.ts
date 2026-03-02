@@ -44,6 +44,7 @@ const mockContext = (overrides: Record<string, unknown> = {}) => {
             claimedAt: new Date().toISOString(),
             label: 'Write Option',
             formState: null,
+            strategyLabel: null,
         })),
         updateFlow: vi.fn(),
         abandonFlow: vi.fn(),
@@ -84,6 +85,7 @@ describe('useActiveFlow', () => {
             claimedAt: new Date().toISOString(),
             label: 'Buy #42',
             formState: null,
+            strategyLabel: null,
         };
         mockContext({ activeFlows: [otherFlow] });
 
@@ -106,6 +108,7 @@ describe('useActiveFlow', () => {
             claimedAt: new Date().toISOString(),
             label: `Buy #${i}`,
             formState: null,
+            strategyLabel: null,
         }));
         mockContext({ activeFlows: flows });
 
@@ -128,6 +131,7 @@ describe('useActiveFlow', () => {
             claimedAt: new Date().toISOString(),
             label: 'Buy #7',
             formState: null,
+            strategyLabel: null,
         };
         mockContext({ activeFlows: [myFlow] });
 
@@ -156,6 +160,7 @@ describe('useActiveFlow', () => {
             claimedAt: new Date().toISOString(),
             label: 'Write Option',
             formState: { strike: '50', amount: '1', premium: '5', days: '7', optionType: '0' },
+            strategyLabel: null,
         };
         mockContext({ activeFlows: [myFlow] });
 
@@ -200,6 +205,7 @@ describe('useActiveFlow', () => {
             claimedAt: new Date().toISOString(),
             label: 'Write',
             formState: null,
+            strategyLabel: null,
         };
         mockContext({ activeFlows: [flow] });
 
@@ -221,6 +227,7 @@ describe('useActiveFlow', () => {
             claimedAt: new Date().toISOString(),
             label: 'Buy #5',
             formState: null,
+            strategyLabel: null,
         };
         mockContext({ activeFlows: [flow] });
 
