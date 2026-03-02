@@ -107,7 +107,7 @@ export function BatchSettleModal({
                 label: `Batch Settle ${ids.length} option(s)`,
                 flowId: null,
                 flowStep: null,
-                meta: { count: String(ids.length) },
+                meta: { count: String(ids.length), optionIds: ids.map(String).join(',') },
             });
             setTxStatus('done');
         } catch (err) {

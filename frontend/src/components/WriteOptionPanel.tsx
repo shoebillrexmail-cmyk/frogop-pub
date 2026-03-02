@@ -238,7 +238,12 @@ export function WriteOptionPanel({
 
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
-            trackApproval(receipt.transactionId, `Approve ${collateralSymbol} for Write`, formState);
+            const typeLabel_ = optionType === OptionType.CALL ? 'CALL' : 'PUT';
+            trackApproval(receipt.transactionId, `Approve ${formatBigInt(collateral)} ${collateralSymbol} for Write ${typeLabel_}`, {
+                ...formState,
+                collateralToken: collateralSymbol,
+                collateral: formatBigInt(collateral),
+            });
             updateFlow({ approvalTxId: receipt.transactionId });
             refetchToken();
             setTxStatus('idle');
@@ -300,7 +305,15 @@ export function WriteOptionPanel({
 
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
-            trackAction(receipt.transactionId, 'writeOption', 'Write Option');
+            const typeLabel_ = optionType === OptionType.CALL ? 'CALL' : 'PUT';
+            trackAction(receipt.transactionId, 'writeOption', `Write ${typeLabel_} — ${amountStr} MOTO @ ${strikeStr} PILL`, {
+                optionType: String(optionType),
+                amount: amountStr,
+                strike: strikeStr,
+                premium: premiumStr,
+                collateralToken: collateralSymbol,
+                collateral: collateral ? formatBigInt(collateral) : '?',
+            });
             if (isMyFlow) updateFlow({ actionTxId: receipt.transactionId });
             setTxStatus('done');
         } catch (err) {

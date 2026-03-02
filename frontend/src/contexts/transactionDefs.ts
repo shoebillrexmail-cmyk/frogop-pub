@@ -29,6 +29,10 @@ export interface TrackedTransaction {
     meta: Record<string, string>;
 }
 
+export interface ReopenRequest {
+    readonly tx: TrackedTransaction;
+}
+
 export interface TransactionContextValue {
     transactions: TrackedTransaction[];
     pendingCount: number;
@@ -55,6 +59,11 @@ export interface TransactionContextValue {
     resumeRequest: ResumeRequest | null;
     requestResume: (flowId: string) => void;
     clearResumeRequest: () => void;
+
+    // Reopen (view TX detail from pill/history)
+    reopenRequest: ReopenRequest | null;
+    requestReopen: (tx: TrackedTransaction) => void;
+    clearReopenRequest: () => void;
 }
 
 // ---------------------------------------------------------------------------

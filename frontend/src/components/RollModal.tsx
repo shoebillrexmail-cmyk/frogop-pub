@@ -140,16 +140,25 @@ export function RollModal({
             });
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
+            const typeLabel_ = isCall ? 'CALL' : 'PUT';
             addTransaction({
                 txId: receipt.transactionId,
                 type: 'rollOption',
                 status: 'broadcast',
                 poolAddress,
                 broadcastBlock: null,
-                label: `Roll Option #${option.id}`,
+                label: `Roll ${typeLabel_} #${option.id} — fee ${fmt(cancelFee)} ${collateralToken}`,
                 flowId: null,
                 flowStep: null,
-                meta: {},
+                meta: {
+                    optionId: option.id.toString(),
+                    optionType: typeLabel_,
+                    oldStrike: fmt(option.strikePrice),
+                    newStrike: fmt(parsedStrike),
+                    newPremium: fmt(parsedPremium),
+                    cancelFee: fmt(cancelFee),
+                    collateralToken,
+                },
             });
             setTxStatus('done');
         } catch (err) {

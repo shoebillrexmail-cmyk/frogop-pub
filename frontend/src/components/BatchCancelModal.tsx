@@ -127,7 +127,7 @@ export function BatchCancelModal({
                 label: `Batch Cancel ${ids.length} option(s)`,
                 flowId: null,
                 flowStep: null,
-                meta: { count: String(ids.length) },
+                meta: { count: String(ids.length), optionIds: ids.map(String).join(',') },
             });
             setTxStatus('done');
         } catch (err) {

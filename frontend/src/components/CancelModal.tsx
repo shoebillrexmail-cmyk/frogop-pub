@@ -102,10 +102,20 @@ export function CancelModal({
             });
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
+            const typeLabel_ = isCall ? 'CALL' : 'PUT';
             addTransaction({
                 txId: receipt.transactionId, type: 'cancelOption', status: 'broadcast',
                 poolAddress, broadcastBlock: null,
-                label: `Cancel Option #${option.id}`, flowId: null, flowStep: null, meta: {},
+                label: `Cancel ${typeLabel_} #${option.id} — recover ${fmt(returned)} ${collateralToken}`,
+                flowId: null, flowStep: null,
+                meta: {
+                    optionId: option.id.toString(),
+                    optionType: typeLabel_,
+                    collateral: fmt(collateral),
+                    collateralToken,
+                    fee: fmt(fee),
+                    returned: fmt(returned),
+                },
             });
             setTxStatus('done');
         } catch (err) {

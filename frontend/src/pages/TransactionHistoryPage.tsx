@@ -75,7 +75,7 @@ function exportCSV(transactions: TrackedTransaction[]): void {
 }
 
 export function TransactionHistoryPage() {
-    const { transactions, clearOld } = useTransactionContext();
+    const { transactions, clearOld, requestReopen } = useTransactionContext();
     const [page, setPage] = useState(0);
     const [statusFilter, setStatusFilter] = useState<TxStatus | 'all'>('all');
     const [typeFilter, setTypeFilter] = useState<TxType | 'all'>('all');
@@ -196,6 +196,7 @@ export function TransactionHistoryPage() {
                                     <th className="px-3 py-2">Option</th>
                                     <th className="px-3 py-2">Status</th>
                                     <th className="px-3 py-2">TX ID</th>
+                                    <th className="px-3 py-2">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -234,6 +235,15 @@ export function TransactionHistoryPage() {
                                                     {tx.txId.slice(0, 8)}...
                                                 </a>
                                             ) : '—'}
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <button
+                                                onClick={() => requestReopen(tx)}
+                                                className="text-accent hover:underline text-xs font-mono"
+                                                data-testid={`view-tx-${tx.txId.slice(0, 8)}`}
+                                            >
+                                                View
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}

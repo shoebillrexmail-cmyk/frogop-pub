@@ -16,7 +16,7 @@
 import { useReducer, useEffect, useCallback, useMemo, useState, useRef, type ReactNode } from 'react';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { TransactionContext } from './transactionDefs.ts';
-import type { TrackedTransaction, TransactionContextValue } from './transactionDefs.ts';
+import type { TrackedTransaction, TransactionContextValue, ReopenRequest } from './transactionDefs.ts';
 import { flowIdentityKey, MAX_PARALLEL_FLOWS } from './flowDefs.ts';
 import type { ActiveFlow, FlowActionType, ResumeRequest } from './flowDefs.ts';
 
@@ -116,6 +116,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     // --- Active Flows state ---
     const [activeFlows, setActiveFlows] = useState<ActiveFlow[]>([]);
     const [resumeRequest, setResumeRequest] = useState<ResumeRequest | null>(null);
+    const [reopenRequest, setReopenRequest] = useState<ReopenRequest | null>(null);
 
     // Track scheduled auto-removals so we don't set duplicate timers
     const scheduledRemovalsRef = useRef(new Set<string>());
@@ -278,6 +279,14 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         setResumeRequest(null);
     }, []);
 
+    const requestReopenFn = useCallback((tx: TrackedTransaction) => {
+        setReopenRequest({ tx });
+    }, []);
+
+    const clearReopenRequestFn = useCallback(() => {
+        setReopenRequest(null);
+    }, []);
+
     // --- Transaction management (unchanged) ---
 
     // Load from localStorage when wallet changes
@@ -390,12 +399,16 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             resumeRequest,
             requestResume: requestResumeFn,
             clearResumeRequest,
+            reopenRequest,
+            requestReopen: requestReopenFn,
+            clearReopenRequest: clearReopenRequestFn,
         }),
         [
             state.transactions, pendingCount, recentTransactions,
             addTransaction, updateTransaction, getFlowTransaction, findResumableApproval, clearOld,
             activeFlows, claimFlow, updateFlowFn, abandonFlowFn,
             resumeRequest, requestResumeFn, clearResumeRequest,
+            reopenRequest, requestReopenFn, clearReopenRequestFn,
         ],
     );
 

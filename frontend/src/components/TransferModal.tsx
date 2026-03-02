@@ -122,10 +122,16 @@ export function TransferModal({
             });
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
+            const addrShort = resolvedHex.slice(0, 8) + '...';
             addTransaction({
                 txId: receipt.transactionId, type: 'transferOption', status: 'broadcast',
                 poolAddress, broadcastBlock: null,
-                label: `Transfer Option #${option.id}`, flowId: null, flowStep: null, meta: {},
+                label: `Transfer #${option.id} → ${addrShort}`,
+                flowId: null, flowStep: null,
+                meta: {
+                    optionId: option.id.toString(),
+                    toAddress: resolvedHex,
+                },
             });
             setTxStatus('done');
         } catch (err) {

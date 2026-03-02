@@ -45,7 +45,7 @@ function elapsed(createdAt: string): string {
 }
 
 export function TransactionToast() {
-    const { recentTransactions, pendingCount, activeFlows, requestResume, abandonFlow } = useTransactionContext();
+    const { recentTransactions, pendingCount, activeFlows, requestResume, abandonFlow, requestReopen } = useTransactionContext();
     const [expanded, setExpanded] = useState(false);
     const [, setTick] = useState(0);
 
@@ -66,9 +66,9 @@ export function TransactionToast() {
 
     const toggle = useCallback(() => setExpanded((v) => !v), []);
 
-    // Show recent TXs (pending + recently confirmed)
+    // Show only pending/broadcast TXs — confirmed belong in history only
     const visible = recentTransactions.filter(
-        (tx) => tx.status !== 'failed',
+        (tx) => tx.status === 'broadcast' || tx.status === 'pending',
     ).slice(0, 8);
 
     const hasFlows = activeFlows.length > 0;
@@ -97,9 +97,18 @@ export function TransactionToast() {
                     ))}
                     <div className="max-h-64 overflow-y-auto">
                         {visible.map((tx: TrackedTransaction) => (
-                            <div
+                            <button
                                 key={tx.txId}
-                                className="px-3 py-2 border-b border-terminal-border-subtle last:border-b-0 flex items-center gap-2"
+                                data-testid={`pill-tx-${tx.txId.slice(0, 8)}`}
+                                className="w-full text-left px-3 py-2 border-b border-terminal-border-subtle last:border-b-0 flex items-center gap-2 hover:bg-terminal-bg-secondary/30 cursor-pointer"
+                                onClick={() => {
+                                    if (tx.flowId) {
+                                        requestResume(tx.flowId);
+                                    } else {
+                                        requestReopen(tx);
+                                    }
+                                    setExpanded(false);
+                                }}
                             >
                                 <span className={`text-sm ${statusColor(tx.status)}`}>
                                     {statusIcon(tx.status)}
@@ -113,7 +122,7 @@ export function TransactionToast() {
                                         {tx.status === 'broadcast' && ' \u2022 ~10 min'}
                                     </div>
                                 </div>
-                            </div>
+                            </button>
                         ))}
                     </div>
                     <Link
@@ -131,18 +140,20 @@ export function TransactionToast() {
                 <button
                     onClick={toggle}
                     className="flex items-center gap-2 px-4 py-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-full shadow-lg hover:border-accent transition-colors"
-                    aria-label={pendingCount > 0 ? `${pendingCount} pending transactions` : `${visible.length} recent transactions`}
+                    aria-label={pendingCount > 0 ? `${pendingCount} pending transactions` : hasFlows ? `${activeFlows.length} active flow(s)` : ''}
                 >
                     {pendingCount > 0 && (
                         <span className="w-2.5 h-2.5 rounded-full bg-orange-400 pulse-orange" aria-hidden="true" />
                     )}
-                    {pendingCount === 0 && visible.length > 0 && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-green-400" aria-hidden="true" />
+                    {pendingCount === 0 && hasFlows && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" aria-hidden="true" />
                     )}
                     <span className="text-xs text-terminal-text-primary">
                         {pendingCount > 0
                             ? `${pendingCount} pending`
-                            : `${visible.length} tx`}
+                            : hasFlows
+                                ? `${activeFlows.length} flow${activeFlows.length > 1 ? 's' : ''}`
+                                : ''}
                     </span>
                     {pendingCount > 0 && (
                         <span className="text-xs text-terminal-text-muted">~10 min</span>

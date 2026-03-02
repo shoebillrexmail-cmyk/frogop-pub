@@ -33,6 +33,9 @@ vi.mock('../hooks/useTransactionContext.ts', () => ({
         resumeRequest: null,
         requestResume: vi.fn(),
         clearResumeRequest: vi.fn(),
+        reopenRequest: null,
+        requestReopen: vi.fn(),
+        clearReopenRequest: vi.fn(),
     })),
 }));
 

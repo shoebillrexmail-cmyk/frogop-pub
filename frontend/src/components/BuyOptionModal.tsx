@@ -157,7 +157,15 @@ export function BuyOptionModal({
             });
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
-            trackApproval(receipt.transactionId, `Approve PILL for Buy #${option.id}`);
+            const typeLabel_ = option.optionType === OptionType.CALL ? 'CALL' : 'PUT';
+            trackApproval(receipt.transactionId, `Approve ${fmt(totalCost)} PILL to Buy ${typeLabel_} #${option.id}`, {
+                optionType: typeLabel_,
+                premium: fmt(option.premium),
+                totalCost: fmt(totalCost),
+                fee: fmt(fee),
+                amount: fmt(option.underlyingAmount),
+                strike: fmt(option.strikePrice),
+            });
             updateFlow({ approvalTxId: receipt.transactionId });
             refetchToken();
             setTxStatus('idle');
@@ -197,7 +205,15 @@ export function BuyOptionModal({
             });
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
-            trackAction(receipt.transactionId, 'buyOption', `Buy Option #${option.id}`);
+            const typeLabel_ = option.optionType === OptionType.CALL ? 'CALL' : 'PUT';
+            trackAction(receipt.transactionId, 'buyOption', `Buy ${typeLabel_} #${option.id} — ${fmt(totalCost)} PILL`, {
+                optionType: typeLabel_,
+                premium: fmt(option.premium),
+                totalCost: fmt(totalCost),
+                fee: fmt(fee),
+                amount: fmt(option.underlyingAmount),
+                strike: fmt(option.strikePrice),
+            });
             if (isMyFlow) updateFlow({ actionTxId: receipt.transactionId });
             setTxStatus('done');
         } catch (err) {

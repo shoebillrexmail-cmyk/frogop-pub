@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { formatAddress } from '../config';
 import { TransactionToast } from './TransactionToast';
+import { TransactionDetailModal } from './TransactionDetailModal';
 import { useTransactionPoller } from '../hooks/useTransactionPoller';
 import { useTransactionContext } from '../hooks/useTransactionContext';
 import { useWebSocketProvider, WsBlockContext } from '../hooks/useWebSocketProvider';
@@ -12,7 +13,7 @@ export function Layout() {
   const { walletAddress, connecting, openConnectModal, disconnect, provider } = useWalletConnect();
   const connected = !!walletAddress;
   const [menuOpen, setMenuOpen] = useState(false);
-  const { pendingCount } = useTransactionContext();
+  const { pendingCount, reopenRequest, clearReopenRequest } = useTransactionContext();
 
   // WebSocket provider for real-time block subscriptions
   const { connected: wsConnected, currentBlock: wsBlock } = useWebSocketProvider();
@@ -123,6 +124,9 @@ export function Layout() {
         </WsBlockContext.Provider>
       </main>
       <TransactionToast />
+      {reopenRequest && (
+        <TransactionDetailModal tx={reopenRequest.tx} onClose={clearReopenRequest} />
+      )}
 
       <footer className="bg-terminal-bg-elevated border-t border-terminal-border-subtle py-8">
         <div className="max-w-7xl mx-auto px-4">

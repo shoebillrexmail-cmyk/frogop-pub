@@ -85,10 +85,18 @@ export function SettleModal({
             });
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
+            const typeLabel_ = isCall ? 'CALL' : 'PUT';
             addTransaction({
                 txId: receipt.transactionId, type: 'settle', status: 'broadcast',
                 poolAddress, broadcastBlock: null,
-                label: `Settle Option #${option.id}`, flowId: null, flowStep: null, meta: {},
+                label: `Settle ${typeLabel_} #${option.id} — recover ${fmt(collateral)} ${collateralToken}`,
+                flowId: null, flowStep: null,
+                meta: {
+                    optionId: option.id.toString(),
+                    optionType: typeLabel_,
+                    collateral: fmt(collateral),
+                    collateralToken,
+                },
             });
             setTxStatus('done');
         } catch (err) {

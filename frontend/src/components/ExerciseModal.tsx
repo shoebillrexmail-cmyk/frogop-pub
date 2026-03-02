@@ -145,7 +145,14 @@ export function ExerciseModal({
             });
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
-            trackApproval(receipt.transactionId, `Approve ${payToken} for Exercise #${option.id}`);
+            trackApproval(receipt.transactionId, `Approve ${fmt(payAmount)} ${payToken} to Exercise ${typeLabel} #${option.id}`, {
+                optionType: typeLabel,
+                payAmount: fmt(payAmount),
+                payToken,
+                receiveAmount: fmt(receiveAmount),
+                receiveToken,
+                fee: fmt(exerciseFee),
+            });
             updateFlow({ approvalTxId: receipt.transactionId });
             refetchToken();
             setTxStatus('idle');
@@ -185,7 +192,14 @@ export function ExerciseModal({
             });
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
-            trackAction(receipt.transactionId, 'exercise', `Exercise Option #${option.id}`);
+            trackAction(receipt.transactionId, 'exercise', `Exercise ${typeLabel} #${option.id} — pay ${fmt(payAmount)} ${payToken}`, {
+                optionType: typeLabel,
+                payAmount: fmt(payAmount),
+                payToken,
+                receiveAmount: fmt(receiveAmount),
+                receiveToken,
+                fee: fmt(exerciseFee),
+            });
             if (isMyFlow) updateFlow({ actionTxId: receipt.transactionId });
             setTxStatus('done');
         } catch (err) {
