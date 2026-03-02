@@ -141,6 +141,11 @@ export function TransactionToast() {
                                     {statusIcon(tx.status)}
                                 </span>
                                 <div className="flex-1 min-w-0">
+                                    {tx.meta['strategyLabel'] && (
+                                        <div className="text-[10px] font-mono text-accent uppercase tracking-wider" data-testid="strategy-badge">
+                                            {tx.meta['strategyLabel']}
+                                        </div>
+                                    )}
                                     <div className="text-xs text-terminal-text-primary truncate">
                                         {tx.label}
                                     </div>

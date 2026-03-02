@@ -49,14 +49,16 @@ function formatTimestamp(iso: string): string {
 }
 
 function exportCSV(transactions: TrackedTransaction[]): void {
-    const header = 'Timestamp,Type,Label,Pool,Option ID,Status,TX ID,Confirmed At\n';
+    const header = 'Timestamp,Type,Label,Strategy,Pool,Option ID,Status,TX ID,Confirmed At\n';
     const rows = transactions.map((tx) => {
         const optionId = tx.meta['optionId'] ?? '';
         const confirmedAt = tx.confirmedAt ?? '';
+        const strategy = tx.meta['strategyLabel'] ?? '';
         return [
             tx.createdAt,
             TX_TYPE_LABELS[tx.type] ?? tx.type,
             `"${tx.label.replace(/"/g, '""')}"`,
+            `"${strategy}"`,
             tx.poolAddress,
             optionId,
             STATUS_LABELS[tx.status] ?? tx.status,
@@ -211,8 +213,13 @@ export function TransactionHistoryPage() {
                                         <td className="px-3 py-2 text-terminal-text-primary">
                                             {TX_TYPE_LABELS[tx.type] ?? tx.type}
                                         </td>
-                                        <td className="px-3 py-2 text-terminal-text-primary max-w-[200px] truncate">
-                                            {tx.label}
+                                        <td className="px-3 py-2 text-terminal-text-primary max-w-[200px]">
+                                            {tx.meta['strategyLabel'] && (
+                                                <span className="block text-[10px] font-mono text-accent uppercase tracking-wider" data-testid="strategy-badge">
+                                                    {tx.meta['strategyLabel']}
+                                                </span>
+                                            )}
+                                            <span className="block truncate">{tx.label}</span>
                                         </td>
                                         <td className="px-3 py-2 text-terminal-text-muted">
                                             {formatAddress(tx.poolAddress)}

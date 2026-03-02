@@ -49,9 +49,16 @@ export function TransactionDetailModal({ tx, onClose }: TransactionDetailModalPr
                 <div className="p-6 space-y-4">
                     {/* Header */}
                     <div className="flex items-center justify-between">
-                        <h2 className="text-base font-bold text-terminal-text-primary font-mono truncate pr-2">
-                            {tx.label}
-                        </h2>
+                        <div className="min-w-0 pr-2">
+                            {tx.meta['strategyLabel'] && (
+                                <span className="block text-[10px] font-mono text-accent uppercase tracking-wider mb-0.5" data-testid="strategy-badge">
+                                    {tx.meta['strategyLabel']}
+                                </span>
+                            )}
+                            <h2 className="text-base font-bold text-terminal-text-primary font-mono truncate">
+                                {tx.label}
+                            </h2>
+                        </div>
                         <button
                             onClick={onClose}
                             className="text-terminal-text-muted hover:text-terminal-text-primary text-xl leading-none flex-shrink-0"

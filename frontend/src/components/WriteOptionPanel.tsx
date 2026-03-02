@@ -130,7 +130,7 @@ export function WriteOptionPanel({
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
 
-    const { trackApproval, trackAction, resumableMeta } = useTransactionFlow(poolAddress);
+    const { trackApproval, trackAction, resumableMeta } = useTransactionFlow(poolAddress, undefined, strategyLabel);
 
     const {
         canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow, myFlow, abandonFlow, resumedFormState,

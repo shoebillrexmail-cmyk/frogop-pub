@@ -2176,3 +2176,51 @@ Then `cd frontend && npm run dev` — the Portfolio page will use your local ind
 
 ---
 
+## Phase 1.5 UX Sprints (7–13) ✅
+
+> Sprints 7–13 focus on UX improvements to the frontend. No contract changes.
+> Tracked in plan files; summary below.
+
+### Sprint 7–11: UX Foundations ✅ (commit `00bff4d`)
+
+- Step progress indicators in all 2-step modals
+- Transaction receipts with token movement summaries
+- Error formatting with user-friendly guidance
+- Onboarding overlay for first-time users
+- Notification banners for option status changes
+- Breadcrumb-style navigation between pools/portfolio
+
+### Sprint 12: Transaction Resume & Pill ✅ (commit `6424a0b`)
+
+- Rich TX metadata (type labels, token movements) in TrackedTransaction
+- Clickable pill entries route to TransactionDetailModal
+- TransactionDetailModal with full TX details, movements, explorer link
+
+### Sprint 13: Flow Resume, Pill Tracking & Strategy Labels ✅ (commit `2a81e01`)
+
+| # | Task | Status |
+|---|------|--------|
+| 13A.1 | Expand pill resume to all flow statuses (approval_pending, action_pending) | ✅ |
+| 13A.2 | Show failed TXs in pill dropdown (rose dot, persist visibility) | ✅ |
+| 13A.3 | ActiveFlowBanner component (Continue / Start Fresh in modals) | ✅ |
+| 13A.4 | Integrate ActiveFlowBanner into BuyOptionModal, WriteOptionPanel, ExerciseModal | ✅ |
+| 13B.5 | Add strategyLabel to ActiveFlow type | ✅ |
+| 13B.6 | Thread strategyLabel through useActiveFlow and modal props | ✅ |
+| 13B.7 | Pass strategyLabel from PoolsPage strategy handlers | ✅ |
+| 13B.8 | Display strategy badge in FlowResumeCard pill UI | ✅ |
+| 13C.9 | CollarProgressCard component (partial collar progress in pill) | ✅ |
+| 13C.10 | Integrate CollarProgressCard into TransactionToast | ✅ |
+| 13C.11 | Auto-open CollarModal via ?openCollar=true URL param | ✅ |
+
+**Tests**: 390 passing (33 files). **Build**: clean.
+
+---
+
+## Backlog
+
+| # | Item | Priority | Notes |
+|---|------|----------|-------|
+| B.1 | **On-chain TX history** — replace localStorage-based TX tracking with RPC/indexer-sourced history | Medium | Currently all pill/history data is browser-only (cleared with browser data). Options data comes from contract, but TX tracking is purely client-side localStorage. Fetch TX history from RPC or indexer for persistent, device-independent history. |
+
+---
+

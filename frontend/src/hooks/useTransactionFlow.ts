@@ -20,6 +20,7 @@ export interface UseTransactionFlowResult {
 export function useTransactionFlow(
     poolAddress: string,
     optionId?: string,
+    strategyLabel?: string,
 ): UseTransactionFlowResult {
     const { addTransaction, findResumableApproval } = useTransactionContext();
 
@@ -44,10 +45,10 @@ export function useTransactionFlow(
                 label,
                 flowId: activeFlowId,
                 flowStep: 1,
-                meta: { ...meta, ...(optionId ? { optionId } : {}) },
+                meta: { ...meta, ...(optionId ? { optionId } : {}), ...(strategyLabel ? { strategyLabel } : {}) },
             });
         },
-        [addTransaction, poolAddress, activeFlowId, optionId],
+        [addTransaction, poolAddress, activeFlowId, optionId, strategyLabel],
     );
 
     const trackAction = useCallback(
@@ -61,10 +62,10 @@ export function useTransactionFlow(
                 label,
                 flowId: activeFlowId,
                 flowStep: 2,
-                meta: { ...meta, ...(optionId ? { optionId } : {}) },
+                meta: { ...meta, ...(optionId ? { optionId } : {}), ...(strategyLabel ? { strategyLabel } : {}) },
             });
         },
-        [addTransaction, poolAddress, activeFlowId, optionId],
+        [addTransaction, poolAddress, activeFlowId, optionId, strategyLabel],
     );
 
     return {

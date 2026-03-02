@@ -71,7 +71,7 @@ export function BuyOptionModal({
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
 
-    const { trackApproval, trackAction, approvalConfirmed } = useTransactionFlow(poolAddress, option.id.toString());
+    const { trackApproval, trackAction, approvalConfirmed } = useTransactionFlow(poolAddress, option.id.toString(), strategyLabel);
 
     const {
         canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow, myFlow, abandonFlow,
