@@ -66,7 +66,6 @@ const DEFAULT_PROPS = {
     poolInfo: POOL_INFO,
     poolAddress: POOL_ADDRESS,
     walletAddress: 'opt1pftest',
-    walletHex: WALLET_HEX,
     address: makeAddress(WALLET_HEX) as ReturnType<typeof import('@btc-vision/transaction').Address['fromString']>,
     provider: {
         getPublicKeyInfo: vi.fn().mockResolvedValue({ toString: () => POOL_ADDRESS }),
@@ -99,9 +98,10 @@ describe('BuyOptionModal', () => {
     it('renders modal with cost breakdown', () => {
         render(<BuyOptionModal {...DEFAULT_PROPS} />);
         expect(screen.getByTestId('buy-option-modal')).toBeInTheDocument();
-        // Shows total (premium + fee)
-        expect(screen.getByText(/Total/i)).toBeInTheDocument();
-        expect(screen.getByText(/Buy fee/i)).toBeInTheDocument();
+        // Shows buyer cost and fee breakdown
+        expect(screen.getByText(/You pay/i)).toBeInTheDocument();
+        expect(screen.getByText(/Protocol fee/i)).toBeInTheDocument();
+        expect(screen.getByText(/Writer receives/i)).toBeInTheDocument();
     });
 
     it('shows option type label', () => {
@@ -127,10 +127,10 @@ describe('BuyOptionModal', () => {
         expect(screen.queryByTestId('btn-buy')).not.toBeInTheDocument();
     });
 
-    it('shows insufficient balance warning when PILL balance < total cost', () => {
+    it('shows insufficient balance warning when PILL balance < premium', () => {
         mockUseTokenInfo.mockReturnValue({
             info: {
-                balance: 1n * 10n ** 18n,     // only 1 PILL
+                balance: 1n * 10n ** 18n,     // only 1 PILL — less than 5 PILL premium
                 allowance: 10n * 10n ** 18n,
             },
             loading: false,
@@ -209,11 +209,11 @@ describe('BuyOptionModal', () => {
         });
     });
 
-    it('total cost includes 1% fee on premium', () => {
+    it('shows protocol fee deducted from premium', () => {
         render(<BuyOptionModal {...DEFAULT_PROPS} />);
-        // premium = 5 PILL, fee = 0.05 PILL, total = 5.05 PILL
-        // 5.05 PILL = 5050000000000000000 wei → displays as "5.0500 PILL"
-        // Just verify fee line appears
-        expect(screen.getByText(/Buy fee \(1%\)/i)).toBeInTheDocument();
+        // premium = 5 PILL, fee = 0.05 PILL (1%), writer receives 4.95 PILL
+        // Verify fee breakdown shows correctly
+        expect(screen.getByText(/Protocol fee \(1%\)/i)).toBeInTheDocument();
+        expect(screen.getByText(/Writer receives/i)).toBeInTheDocument();
     });
 });

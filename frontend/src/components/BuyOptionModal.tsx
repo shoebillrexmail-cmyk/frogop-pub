@@ -17,7 +17,7 @@ import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { formatTokenAmount } from '../config/index.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import { useActiveFlow } from '../hooks/useActiveFlow.ts';
-import { calcTotalCost, calcBreakeven, calcDelta, calcTheta, blocksToYears } from '../utils/optionMath.js';
+import { calcBuyFee, calcBreakeven, calcDelta, calcTheta, blocksToYears } from '../utils/optionMath.js';
 import { PnLChart } from './PnLChart.tsx';
 import { StepIndicator } from './StepIndicator.tsx';
 import type { StepStatus } from './StepIndicator.tsx';
@@ -50,6 +50,23 @@ function fmt(v: bigint) {
     return formatTokenAmount(v);
 }
 
+function TxErrorBlock({ error, onRetry }: { error: string; onRetry: () => void }) {
+    const { message, guidance } = formatTxError(error);
+    return (
+        <div className="bg-rose-900/10 border border-rose-800 rounded p-3 text-xs font-mono space-y-2" data-testid="tx-error">
+            <p className="text-rose-400">{message}</p>
+            <p className="text-terminal-text-muted">{guidance}</p>
+            <button
+                onClick={onRetry}
+                className="btn-secondary px-3 py-1 text-xs rounded"
+                data-testid="btn-retry"
+            >
+                Retry
+            </button>
+        </div>
+    );
+}
+
 export function BuyOptionModal({
     option,
     poolInfo,
@@ -71,7 +88,7 @@ export function BuyOptionModal({
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
 
-    const { trackApproval, trackAction, approvalConfirmed } = useTransactionFlow(poolAddress, option.id.toString(), strategyLabel);
+    const { trackApproval, trackAction } = useTransactionFlow(poolAddress, option.id.toString(), strategyLabel);
 
     const {
         canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow, myFlow, abandonFlow,
@@ -110,8 +127,11 @@ export function BuyOptionModal({
         }
     }, [poolAddress, provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const totalCost = calcTotalCost(option.premium, poolInfo.buyFeeBps);
-    const fee = totalCost - option.premium;
+    // The contract deducts the buy fee from premium — the buyer pays exactly `premium`.
+    // Writer receives (premium - fee), protocol receives fee.
+    const buyerPays = option.premium;
+    const fee = calcBuyFee(option.premium, poolInfo.buyFeeBps);
+    const writerReceives = option.premium - fee;
 
     // Query PILL balance + allowance for this pool
     const { info: tokenInfo, loading: tokenLoading, refetch: refetchToken } = useTokenInfo({
@@ -123,8 +143,11 @@ export function BuyOptionModal({
 
     const pillBalance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
-    const hasBalance = pillBalance !== null && pillBalance >= totalCost;
-    const needsApproval = !approvalConfirmed && !approvalReady && allowance !== null && allowance < totalCost;
+    const hasBalance = pillBalance !== null && pillBalance >= buyerPays;
+    // Always check on-chain allowance — do not let stale localStorage override.
+    // approvalReady (from confirmed flow status) is safe to include: it prevents
+    // double-approval when an approval TX is broadcast but not yet reflected on-chain.
+    const needsApproval = !approvalReady && allowance !== null && allowance < buyerPays;
     const busy = txStatus === 'approving' || txStatus === 'buying';
 
     // Greeks (computed only when spot price available)
@@ -167,7 +190,7 @@ export function BuyOptionModal({
                 address,
             ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
-            const call = await tokenContract['increaseAllowance'](Address.fromString(poolHex), totalCost);
+            const call = await tokenContract['increaseAllowance'](Address.fromString(poolHex), buyerPays);
             const receipt = await call.sendTransaction({
                 signer: null,
                 mldsaSigner: null,
@@ -178,10 +201,9 @@ export function BuyOptionModal({
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
             const typeLabel_ = option.optionType === OptionType.CALL ? 'CALL' : 'PUT';
-            trackApproval(receipt.transactionId, `Approve ${fmt(totalCost)} PILL to Buy ${typeLabel_} #${option.id}`, {
+            trackApproval(receipt.transactionId, `Approve ${fmt(buyerPays)} PILL to Buy ${typeLabel_} #${option.id}`, {
                 optionType: typeLabel_,
                 premium: fmt(option.premium),
-                totalCost: fmt(totalCost),
                 fee: fmt(fee),
                 amount: fmt(option.underlyingAmount),
                 strike: fmt(option.strikePrice),
@@ -226,10 +248,9 @@ export function BuyOptionModal({
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
             const typeLabel_ = option.optionType === OptionType.CALL ? 'CALL' : 'PUT';
-            trackAction(receipt.transactionId, 'buyOption', `Buy ${typeLabel_} #${option.id} — ${fmt(totalCost)} PILL`, {
+            trackAction(receipt.transactionId, 'buyOption', `Buy ${typeLabel_} #${option.id} — ${fmt(buyerPays)} PILL`, {
                 optionType: typeLabel_,
                 premium: fmt(option.premium),
-                totalCost: fmt(totalCost),
                 fee: fmt(fee),
                 amount: fmt(option.underlyingAmount),
                 strike: fmt(option.strikePrice),
@@ -247,15 +268,15 @@ export function BuyOptionModal({
         }
     }
 
-    // Step indicator state derivation
+    // Step indicator — driven by on-chain allowance, not localStorage
     const step1Status: StepStatus =
         txStatus === 'approving' ? 'active' :
-        (!needsApproval || approvalConfirmed || approvalReady) ? 'done' :
+        !needsApproval ? 'done' :
         txStatus === 'error' && !txId ? 'failed' : 'pending';
     const step2Status: StepStatus =
         txStatus === 'buying' ? 'active' :
         txStatus === 'done' ? 'done' :
-        txStatus === 'error' && (approvalConfirmed || approvalReady || !needsApproval) ? 'failed' : 'pending';
+        txStatus === 'error' && !needsApproval ? 'failed' : 'pending';
     const currentStep: 1 | 2 = needsApproval && step1Status !== 'done' ? 1 : 2;
 
     const typeLabel = option.optionType === OptionType.CALL ? 'CALL' : 'PUT';
@@ -351,21 +372,19 @@ export function BuyOptionModal({
 
                     {/* Cost breakdown */}
                     <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 text-xs font-mono space-y-1.5">
-                        <div className="flex justify-between">
-                            <span className="text-terminal-text-muted">Premium</span>
-                            <span className="text-terminal-text-secondary">{fmt(option.premium)} PILL</span>
+                        <div className="flex justify-between font-semibold">
+                            <span className="text-terminal-text-muted">You pay</span>
+                            <span className="text-terminal-text-primary">{fmt(buyerPays)} PILL</span>
                         </div>
-                        <div className="flex justify-between">
-                            <span className="text-terminal-text-muted">
-                                Buy fee ({Number(poolInfo.buyFeeBps) / 100}%)
-                            </span>
+                        <div className="flex justify-between text-terminal-text-muted">
+                            <span>Writer receives</span>
+                            <span className="text-terminal-text-secondary">{fmt(writerReceives)} PILL</span>
+                        </div>
+                        <div className="flex justify-between text-terminal-text-muted">
+                            <span>Protocol fee ({Number(poolInfo.buyFeeBps) / 100}%)</span>
                             <span className="text-terminal-text-secondary">{fmt(fee)} PILL</span>
                         </div>
                         <hr className="border-terminal-border-subtle" />
-                        <div className="flex justify-between font-semibold">
-                            <span className="text-terminal-text-muted">Total</span>
-                            <span className="text-terminal-text-primary">{fmt(totalCost)} PILL</span>
-                        </div>
                         <div className="flex justify-between mt-1">
                             <span className="text-terminal-text-muted">Your PILL balance</span>
                             <span className={hasBalance ? 'text-green-400' : 'text-rose-400'}>
@@ -377,7 +396,7 @@ export function BuyOptionModal({
                             <div className="flex justify-between">
                                 <span className="text-terminal-text-muted">Allowance</span>
                                 <span className={needsApproval ? 'text-yellow-400' : 'text-terminal-text-secondary'}>
-                                    {fmt(allowance)} PILL{needsApproval ? ' ← req' : ''}
+                                    {fmt(allowance)} PILL{needsApproval ? ' — needs approval' : ''}
                                 </span>
                             </div>
                         )}
@@ -437,17 +456,10 @@ export function BuyOptionModal({
 
                     {/* TX error with retry */}
                     {txError && (
-                        <div className="bg-rose-900/10 border border-rose-800 rounded p-3 text-xs font-mono space-y-2" data-testid="tx-error">
-                            <p className="text-rose-400">{formatTxError(txError).message}</p>
-                            <p className="text-terminal-text-muted">{formatTxError(txError).guidance}</p>
-                            <button
-                                onClick={() => { setTxError(null); setTxStatus('idle'); }}
-                                className="btn-secondary px-3 py-1 text-xs rounded"
-                                data-testid="btn-retry"
-                            >
-                                Retry
-                            </button>
-                        </div>
+                        <TxErrorBlock
+                            error={txError}
+                            onRetry={() => { setTxError(null); setTxStatus('idle'); }}
+                        />
                     )}
 
                     {/* Success receipt */}
@@ -456,7 +468,7 @@ export function BuyOptionModal({
                             type="buy"
                             txId={txId}
                             movements={[
-                                { direction: 'debit', amount: fmt(totalCost), token: 'PILL', label: 'Total cost' },
+                                { direction: 'debit', amount: fmt(buyerPays), token: 'PILL', label: 'Premium paid' },
                                 { direction: 'credit', amount: `Option #${option.id}`, token: typeLabel, label: 'You receive' },
                             ]}
                             fee={{ amount: fmt(fee), token: 'PILL' }}

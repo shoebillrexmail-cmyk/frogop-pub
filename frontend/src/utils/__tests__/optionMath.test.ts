@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     calcTotalCost,
+    calcBuyFee,
     calcBreakeven,
     calcYield,
     calcExercisePnl,
@@ -54,21 +55,11 @@ function makePoolInfo(overrides: Partial<PoolInfo> = {}): PoolInfo {
 const ONE = 10n ** 18n;
 
 // ---------------------------------------------------------------------------
-// calcTotalCost
+// calcTotalCost — buyer pays exactly premium (fee deducted from writer's share)
 // ---------------------------------------------------------------------------
 describe('calcTotalCost', () => {
-    it('computes premium + ceiling fee', () => {
-        const premium = 1000n;
-        const result = calcTotalCost(premium, 100n); // 1%
-        // fee = ceil(1000 * 100 / 10000) = ceil(10) = 10
-        expect(result).toBe(1010n);
-    });
-
-    it('uses ceiling division (rounds up)', () => {
-        const premium = 1001n;
-        const result = calcTotalCost(premium, 100n);
-        // fee = ceil(1001 * 100 / 10000) = ceil(10.01) = 11
-        expect(result).toBe(1001n + 11n);
+    it('returns premium regardless of fee bps', () => {
+        expect(calcTotalCost(1000n, 100n)).toBe(1000n);
     });
 
     it('returns premium when feeBps is 0', () => {
@@ -77,6 +68,29 @@ describe('calcTotalCost', () => {
 
     it('handles zero premium', () => {
         expect(calcTotalCost(0n, 100n)).toBe(0n);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// calcBuyFee — fee deducted from premium (writer receives less)
+// ---------------------------------------------------------------------------
+describe('calcBuyFee', () => {
+    it('computes ceiling fee from premium', () => {
+        // fee = ceil(1000 * 100 / 10000) = 10
+        expect(calcBuyFee(1000n, 100n)).toBe(10n);
+    });
+
+    it('uses ceiling division (rounds up)', () => {
+        // fee = ceil(1001 * 100 / 10000) = ceil(10.01) = 11
+        expect(calcBuyFee(1001n, 100n)).toBe(11n);
+    });
+
+    it('returns 0 when feeBps is 0', () => {
+        expect(calcBuyFee(1000n, 0n)).toBe(0n);
+    });
+
+    it('returns 0 for zero premium', () => {
+        expect(calcBuyFee(0n, 100n)).toBe(0n);
     });
 });
 
@@ -500,7 +514,7 @@ describe('calcPayoffCurve', () => {
         expect(highPoint!.pnl).toBeLessThan(0);
     });
 
-    it('max loss for CALL buyer is premium + fee', () => {
+    it('max loss for CALL buyer is premium (fee is on writer, not buyer)', () => {
         const premium = 5n * ONE;
         const opt = makeOption({
             optionType: OptionType.CALL,
@@ -509,7 +523,8 @@ describe('calcPayoffCurve', () => {
         });
         const curve = calcPayoffCurve(opt, 50, 100n);
         const minPnl = Math.min(...curve.map(p => p.pnl));
-        const totalCostFloat = Number(calcTotalCost(premium, 100n)) / 1e18;
-        expect(Math.abs(minPnl + totalCostFloat)).toBeLessThan(0.01);
+        // Buyer pays premium, so max loss = -premium
+        const premiumFloat = Number(premium) / 1e18;
+        expect(Math.abs(minPnl + premiumFloat)).toBeLessThan(0.01);
     });
 });

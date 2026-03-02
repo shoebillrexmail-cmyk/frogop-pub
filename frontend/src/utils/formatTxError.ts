@@ -10,6 +10,13 @@ interface FormattedError {
 
 const ERROR_PATTERNS: Array<{ pattern: RegExp | string; result: FormattedError }> = [
     {
+        pattern: 'revert error too long',
+        result: {
+            message: 'Contract call failed',
+            guidance: 'The on-chain transaction reverted. Common causes: option was already purchased or cancelled, insufficient token balance, or stale approval. Refresh the page and try again.',
+        },
+    },
+    {
         pattern: 'mempool-chain',
         result: {
             message: 'Too many pending transactions',

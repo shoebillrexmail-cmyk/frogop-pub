@@ -15,11 +15,26 @@ const BLOCKS_PER_YEAR = 52560;
 // Extracted inline calculations
 // ---------------------------------------------------------------------------
 
-/** Total cost = premium + ceil(premium * buyFeeBps / 10000). Matches contract. */
-export function calcTotalCost(premium: bigint, buyFeeBps: bigint): bigint {
-    if (buyFeeBps <= 0n || premium <= 0n) return premium;
-    const fee = (premium * buyFeeBps + 9999n) / 10000n;
-    return premium + fee;
+/**
+ * Buyer's total cost = premium.
+ *
+ * The contract deducts the buy fee from the premium before paying the writer.
+ * The buyer always pays exactly `premium`. No additional charge.
+ */
+export function calcTotalCost(premium: bigint, _buyFeeBps: bigint): bigint {
+    void _buyFeeBps;
+    return premium;
+}
+
+/**
+ * Buy fee = ceil(premium * buyFeeBps / 10000).
+ *
+ * Deducted from premium — the writer receives (premium - fee),
+ * the protocol receives fee. The buyer pays exactly `premium`.
+ */
+export function calcBuyFee(premium: bigint, buyFeeBps: bigint): bigint {
+    if (buyFeeBps <= 0n || premium <= 0n) return 0n;
+    return (premium * buyFeeBps + 9999n) / 10000n;
 }
 
 /** Breakeven price for OPEN/PURCHASED options. Null for settled states. */
