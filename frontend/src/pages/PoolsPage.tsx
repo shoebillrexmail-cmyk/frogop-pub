@@ -106,6 +106,7 @@ export function PoolsPage() {
     const [writeOpen, setWriteOpen] = useState(false);
     const [writeInitialValues, setWriteInitialValues] = useState<WriteOptionInitialValues | undefined>(undefined);
     const [writeStrategyLabel, setWriteStrategyLabel] = useState<string | undefined>();
+    const [writeFlowInstanceId, setWriteFlowInstanceId] = useState<string | undefined>();
     const [buyStrategyLabel, setBuyStrategyLabel] = useState<string | undefined>();
     const [collarOpen, setCollarOpen] = useState(false);
     // Auto-open CollarModal when navigated with ?openCollar=true
@@ -140,6 +141,7 @@ export function PoolsPage() {
                     premiumStr: formState['premium'],
                     selectedDays: formState['days'] !== undefined ? Number(formState['days']) : undefined,
                 });
+                setWriteFlowInstanceId(formState['flowInstanceId'] ?? undefined);
             }
             setWriteOpen(true);
             return;
@@ -448,15 +450,18 @@ export function PoolsPage() {
                     motoPillRatio={motoPillRatio}
                     initialValues={writeInitialValues}
                     strategyLabel={writeStrategyLabel}
+                    flowInstanceId={writeFlowInstanceId}
                     onClose={() => {
                         setWriteOpen(false);
                         setWriteInitialValues(undefined);
                         setWriteStrategyLabel(undefined);
+                        setWriteFlowInstanceId(undefined);
                     }}
                     onSuccess={() => {
                         setWriteOpen(false);
                         setWriteInitialValues(undefined);
                         setWriteStrategyLabel(undefined);
+                        setWriteFlowInstanceId(undefined);
                         refetchPool();
                     }}
                 />

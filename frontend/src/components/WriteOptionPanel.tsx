@@ -56,6 +56,8 @@ interface WriteOptionPanelProps {
     initialValues?: WriteOptionInitialValues;
     /** Strategy label for pill display (e.g. 'Covered Call') */
     strategyLabel?: string;
+    /** Stable UUID for this write flow instance (from resume); generates fresh if omitted */
+    flowInstanceId?: string;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -88,11 +90,18 @@ export function WriteOptionPanel({
     motoPillRatio,
     initialValues,
     strategyLabel,
+    flowInstanceId: flowInstanceIdProp,
     onClose,
     onSuccess,
 }: WriteOptionPanelProps) {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
+
+    // Per-instance UUID: adopt from resume prop, or generate fresh.
+    // Used as `optionId` in the flow identity key so parallel write flows
+    // for the same pool don't collide.
+    const [instanceId] = useState<string>(() => flowInstanceIdProp ?? crypto.randomUUID());
+
     const [optionType, setOptionType] = useState<number>(OptionType.CALL);
     const [amountStr, setAmountStr] = useState('1');
     const [strikeStr, setStrikeStr] = useState('');
@@ -130,13 +139,14 @@ export function WriteOptionPanel({
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
 
-    const { trackApproval, trackAction, resumableMeta } = useTransactionFlow(poolAddress, undefined, strategyLabel);
+    const { trackApproval, trackAction, resumableMeta } = useTransactionFlow(poolAddress, instanceId, strategyLabel);
 
     const {
         canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow, myFlow, abandonFlow, resumedFormState,
     } = useActiveFlow({
         actionType: 'writeOption',
         poolAddress,
+        optionId: instanceId,
         label: 'Write Option',
         strategyLabel,
     });
@@ -230,6 +240,7 @@ export function WriteOptionPanel({
             amount: amountStr,
             premium: premiumStr,
             days: String(selectedDays),
+            flowInstanceId: instanceId,
         };
         const claimed = claimFlow(formState);
         if (!claimed) return;
