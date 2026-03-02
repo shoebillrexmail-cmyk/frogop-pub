@@ -18,6 +18,7 @@ interface UseActiveFlowParams {
     poolAddress: string;
     optionId?: string;
     label: string;
+    strategyLabel?: string;
 }
 
 export interface UseActiveFlowResult {
@@ -44,6 +45,7 @@ export function useActiveFlow({
     poolAddress,
     optionId,
     label,
+    strategyLabel,
 }: UseActiveFlowParams): UseActiveFlowResult {
     const ctx = useTransactionContext();
     const { activeFlows } = ctx;
@@ -80,9 +82,10 @@ export function useActiveFlow({
                 optionId,
                 label,
                 formState,
+                strategyLabel,
             });
         },
-        [ctx, actionType, poolAddress, optionId, label],
+        [ctx, actionType, poolAddress, optionId, label, strategyLabel],
     );
 
     const updateFlow = useCallback(

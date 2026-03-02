@@ -63,6 +63,7 @@ export interface ActiveFlow {
     readonly claimedAt: string; // ISO timestamp
     readonly label: string;
     readonly formState: Record<string, string> | null;
+    readonly strategyLabel: string | null;
 }
 
 // ---------------------------------------------------------------------------

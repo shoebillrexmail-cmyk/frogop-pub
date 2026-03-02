@@ -5,11 +5,13 @@
  * Shows one FlowResumeCard per active two-step flow (parallel flows supported).
  * Auto-dismisses confirmed notifications after 10s.
  */
-import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useWalletConnect } from '@btc-vision/walletconnect';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import type { TrackedTransaction, TxStatus } from '../contexts/TransactionContext.tsx';
 import { FlowResumeCard } from './FlowResumeCard.tsx';
+import { CollarProgressCard } from './CollarProgressCard.tsx';
 
 function statusIcon(status: TxStatus): string {
     switch (status) {
@@ -46,8 +48,11 @@ function elapsed(createdAt: string): string {
 
 export function TransactionToast() {
     const { recentTransactions, pendingCount, activeFlows, requestResume, abandonFlow, requestReopen } = useTransactionContext();
+    const { walletAddress } = useWalletConnect();
+    const navigate = useNavigate();
     const [expanded, setExpanded] = useState(false);
     const [, setTick] = useState(0);
+    const [collarDismissed, setCollarDismissed] = useState(false);
 
     // Update elapsed times every 15s
     useEffect(() => {
@@ -66,18 +71,30 @@ export function TransactionToast() {
 
     const toggle = useCallback(() => setExpanded((v) => !v), []);
 
-    // Show only pending/broadcast TXs — confirmed belong in history only
+    // Show pending/broadcast + failed TXs — confirmed belong in history only
     const visible = recentTransactions.filter(
-        (tx) => tx.status === 'broadcast' || tx.status === 'pending',
+        (tx) => tx.status === 'broadcast' || tx.status === 'pending' || tx.status === 'failed',
     ).slice(0, 8);
 
+    const failedCount = visible.filter((tx) => tx.status === 'failed').length;
     const hasFlows = activeFlows.length > 0;
-    if (visible.length === 0 && pendingCount === 0 && !hasFlows) return null;
+
+    const collarInProgress = useMemo(() => {
+        if (!walletAddress || collarDismissed) return false;
+        try {
+            const raw = localStorage.getItem(`frogop_collar_${walletAddress}`);
+            if (!raw) return false;
+            const { callDone, putDone } = JSON.parse(raw) as { callDone?: boolean; putDone?: boolean };
+            return (callDone || putDone) && !(callDone && putDone);
+        } catch { return false; }
+    }, [walletAddress, collarDismissed]);
+
+    if (visible.length === 0 && pendingCount === 0 && !hasFlows && !collarInProgress) return null;
 
     return (
         <div className="fixed bottom-4 right-4 z-50 font-mono" role="status" aria-live="polite">
             {/* Expanded dropdown */}
-            {expanded && (visible.length > 0 || hasFlows) && (
+            {expanded && (visible.length > 0 || hasFlows || collarInProgress) && (
                 <div className="mb-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl shadow-lg overflow-hidden max-w-xs w-72">
                     <div className="px-3 py-2 border-b border-terminal-border-subtle text-xs text-terminal-text-muted">
                         Transactions
@@ -95,6 +112,16 @@ export function TransactionToast() {
                             onAbandon={() => abandonFlow(flow.flowId)}
                         />
                     ))}
+                    {collarInProgress && walletAddress && (
+                        <CollarProgressCard
+                            walletAddress={walletAddress}
+                            onContinue={() => {
+                                setExpanded(false);
+                                navigate('/pools?openCollar=true');
+                            }}
+                            onDismiss={() => setCollarDismissed(true)}
+                        />
+                    )}
                     <div className="max-h-64 overflow-y-auto">
                         {visible.map((tx: TrackedTransaction) => (
                             <button
@@ -136,24 +163,29 @@ export function TransactionToast() {
             )}
 
             {/* Floating pill */}
-            {(pendingCount > 0 || visible.length > 0 || hasFlows) && (
+            {(pendingCount > 0 || failedCount > 0 || hasFlows || collarInProgress) && (
                 <button
                     onClick={toggle}
                     className="flex items-center gap-2 px-4 py-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-full shadow-lg hover:border-accent transition-colors"
-                    aria-label={pendingCount > 0 ? `${pendingCount} pending transactions` : hasFlows ? `${activeFlows.length} active flow(s)` : ''}
+                    aria-label={pendingCount > 0 ? `${pendingCount} pending transactions` : failedCount > 0 ? `${failedCount} failed` : hasFlows ? `${activeFlows.length} active flow(s)` : ''}
                 >
                     {pendingCount > 0 && (
                         <span className="w-2.5 h-2.5 rounded-full bg-orange-400 pulse-orange" aria-hidden="true" />
                     )}
-                    {pendingCount === 0 && hasFlows && (
+                    {pendingCount === 0 && failedCount > 0 && !hasFlows && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-400" aria-hidden="true" />
+                    )}
+                    {pendingCount === 0 && failedCount === 0 && hasFlows && (
                         <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" aria-hidden="true" />
                     )}
                     <span className="text-xs text-terminal-text-primary">
                         {pendingCount > 0
                             ? `${pendingCount} pending`
-                            : hasFlows
-                                ? `${activeFlows.length} flow${activeFlows.length > 1 ? 's' : ''}`
-                                : ''}
+                            : failedCount > 0
+                                ? `${failedCount} failed`
+                                : hasFlows
+                                    ? `${activeFlows.length} flow${activeFlows.length > 1 ? 's' : ''}`
+                                    : ''}
                     </span>
                     {pendingCount > 0 && (
                         <span className="text-xs text-terminal-text-muted">~10 min</span>

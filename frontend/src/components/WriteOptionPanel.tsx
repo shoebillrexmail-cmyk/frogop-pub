@@ -5,7 +5,7 @@
  *   1. Approve MOTO collateral (if allowance insufficient)
  *   2. Submit writeOption() transaction
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -22,6 +22,7 @@ import { StepIndicator } from './StepIndicator.tsx';
 import type { StepStatus } from './StepIndicator.tsx';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { formatTxError } from '../utils/formatTxError.ts';
+import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 const DAY_PRESETS = [
@@ -53,6 +54,8 @@ interface WriteOptionPanelProps {
     motoPillRatio?: number | null;
     /** Pre-fill form values from strategy templates */
     initialValues?: WriteOptionInitialValues;
+    /** Strategy label for pill display (e.g. 'Covered Call') */
+    strategyLabel?: string;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -84,6 +87,7 @@ export function WriteOptionPanel({
     network,
     motoPillRatio,
     initialValues,
+    strategyLabel,
     onClose,
     onSuccess,
 }: WriteOptionPanelProps) {
@@ -129,12 +133,28 @@ export function WriteOptionPanel({
     const { trackApproval, trackAction, resumableMeta } = useTransactionFlow(poolAddress);
 
     const {
-        canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow, resumedFormState,
+        canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow, myFlow, abandonFlow, resumedFormState,
     } = useActiveFlow({
         actionType: 'writeOption',
         poolAddress,
         label: 'Write Option',
+        strategyLabel,
     });
+
+    // ActiveFlowBanner state
+    const [flowDismissed, setFlowDismissed] = useState(false);
+
+    const handleStartFresh = useCallback(() => {
+        abandonFlow();
+        setFlowDismissed(true);
+        setTxStatus('idle');
+        setTxError(null);
+        setTxId(null);
+    }, [abandonFlow]);
+
+    const handleContinueFlow = useCallback(() => {
+        setFlowDismissed(true);
+    }, []);
 
     // Restore form values from a resumed active flow
     useEffect(() => {
@@ -367,6 +387,15 @@ export function WriteOptionPanel({
                             ✕
                         </button>
                     </div>
+
+                    {/* Active flow banner */}
+                    {myFlow && !flowDismissed && (
+                        <ActiveFlowBanner
+                            flow={myFlow}
+                            onContinue={handleContinueFlow}
+                            onStartFresh={handleStartFresh}
+                        />
+                    )}
 
                     {/* Step progress */}
                     <StepIndicator

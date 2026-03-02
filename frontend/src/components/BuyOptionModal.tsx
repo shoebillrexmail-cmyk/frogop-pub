@@ -5,7 +5,7 @@
  *   1. Approve PILL (if allowance < total cost)
  *   2. buyOption(optionId)
  */
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -23,6 +23,7 @@ import { StepIndicator } from './StepIndicator.tsx';
 import type { StepStatus } from './StepIndicator.tsx';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { formatTxError } from '../utils/formatTxError.ts';
+import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface BuyOptionModalProps {
@@ -37,6 +38,8 @@ interface BuyOptionModalProps {
     motoPillRatio?: number | null;
     /** Current block for time-to-expiry calculation */
     currentBlock?: bigint;
+    /** Strategy label for pill display (e.g. 'Protective Put') */
+    strategyLabel?: string;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -57,6 +60,7 @@ export function BuyOptionModal({
     network,
     motoPillRatio,
     currentBlock,
+    strategyLabel,
     onClose,
     onSuccess,
 }: BuyOptionModalProps) {
@@ -70,13 +74,29 @@ export function BuyOptionModal({
     const { trackApproval, trackAction, approvalConfirmed } = useTransactionFlow(poolAddress, option.id.toString());
 
     const {
-        canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow,
+        canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow, myFlow, abandonFlow,
     } = useActiveFlow({
         actionType: 'buyOption',
         poolAddress,
         optionId: option.id.toString(),
         label: `Buy Option #${option.id}`,
+        strategyLabel,
     });
+
+    // ActiveFlowBanner state
+    const [flowDismissed, setFlowDismissed] = useState(false);
+
+    const handleStartFresh = useCallback(() => {
+        abandonFlow();
+        setFlowDismissed(true);
+        setTxStatus('idle');
+        setTxError(null);
+        setTxId(null);
+    }, [abandonFlow]);
+
+    const handleContinueFlow = useCallback(() => {
+        setFlowDismissed(true);
+    }, []);
 
     // Resolve pool bech32 → hex
     useEffect(() => {
@@ -267,6 +287,15 @@ export function BuyOptionModal({
                             ✕
                         </button>
                     </div>
+
+                    {/* Active flow banner */}
+                    {myFlow && !flowDismissed && (
+                        <ActiveFlowBanner
+                            flow={myFlow}
+                            onContinue={handleContinueFlow}
+                            onStartFresh={handleStartFresh}
+                        />
+                    )}
 
                     {/* Step progress */}
                     <StepIndicator

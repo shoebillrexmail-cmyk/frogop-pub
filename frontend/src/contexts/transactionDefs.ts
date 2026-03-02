@@ -51,6 +51,7 @@ export interface TransactionContextValue {
         optionId?: string;
         label: string;
         formState?: Record<string, string>;
+        strategyLabel?: string;
     }) => ActiveFlow | null;
     updateFlow: (flowId: string, updates: Partial<Pick<ActiveFlow, 'status' | 'approvalTxId' | 'actionTxId'>>) => void;
     abandonFlow: (flowId: string) => void;

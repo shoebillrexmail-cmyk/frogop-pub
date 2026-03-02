@@ -3,6 +3,7 @@
  * write panel, and action modals.
  */
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import { useFallbackProvider } from '../hooks/useFallbackProvider.ts';
@@ -101,9 +102,26 @@ export function PoolsPage() {
         confirmedCountRef.current = confirmed;
     }, [transactions, selectedPoolAddr, refetchPool]);
 
+    const [searchParams, setSearchParams] = useSearchParams();
     const [writeOpen, setWriteOpen] = useState(false);
     const [writeInitialValues, setWriteInitialValues] = useState<WriteOptionInitialValues | undefined>(undefined);
+    const [writeStrategyLabel, setWriteStrategyLabel] = useState<string | undefined>();
+    const [buyStrategyLabel, setBuyStrategyLabel] = useState<string | undefined>();
     const [collarOpen, setCollarOpen] = useState(false);
+    // Auto-open CollarModal when navigated with ?openCollar=true
+    // Use React-recommended pattern: adjust state during render to avoid cascading effects
+    const openCollarParam = searchParams.get('openCollar');
+    const [prevOpenCollarParam, setPrevOpenCollarParam] = useState(openCollarParam);
+    if (openCollarParam !== prevOpenCollarParam) {
+        setPrevOpenCollarParam(openCollarParam);
+        if (openCollarParam === 'true') {
+            setCollarOpen(true);
+            const next = new URLSearchParams(searchParams);
+            next.delete('openCollar');
+            setSearchParams(next, { replace: true });
+        }
+    }
+
     const [buyTarget, setBuyTarget] = useState<OptionData | null>(null);
     const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
     const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
@@ -201,29 +219,34 @@ export function PoolsPage() {
     // Strategy template handlers
     function handleCoveredCall(values: WriteOptionInitialValues) {
         if (!walletConnected) return;
+        setWriteStrategyLabel('Covered Call');
         setWriteInitialValues(values);
         setWriteOpen(true);
     }
 
     function handleProtectivePut(option: OptionData) {
         if (!walletConnected) return;
+        setBuyStrategyLabel('Protective Put');
         setBuyTarget(option);
     }
 
     function handleWritePut(values: WriteOptionInitialValues) {
         if (!walletConnected) return;
+        setWriteStrategyLabel('Protective Put');
         setWriteInitialValues(values);
         setWriteOpen(true);
     }
 
     function handleCollarWriteCall(values: WriteOptionInitialValues) {
         setCollarOpen(false);
+        setWriteStrategyLabel('Collar: Write CALL');
         setWriteInitialValues(values);
         setWriteOpen(true);
     }
 
     function handleCollarBuyPut(option: OptionData) {
         setCollarOpen(false);
+        setBuyStrategyLabel('Collar: Buy PUT');
         setBuyTarget(option);
     }
 
@@ -348,9 +371,11 @@ export function PoolsPage() {
                     network={network}
                     motoPillRatio={motoPillRatio}
                     currentBlock={currentBlock ?? undefined}
-                    onClose={() => setBuyTarget(null)}
+                    strategyLabel={buyStrategyLabel}
+                    onClose={() => { setBuyTarget(null); setBuyStrategyLabel(undefined); }}
                     onSuccess={() => {
                         setBuyTarget(null);
+                        setBuyStrategyLabel(undefined);
                         refetchPool();
                     }}
                 />
@@ -422,13 +447,16 @@ export function PoolsPage() {
                     network={network}
                     motoPillRatio={motoPillRatio}
                     initialValues={writeInitialValues}
+                    strategyLabel={writeStrategyLabel}
                     onClose={() => {
                         setWriteOpen(false);
                         setWriteInitialValues(undefined);
+                        setWriteStrategyLabel(undefined);
                     }}
                     onSuccess={() => {
                         setWriteOpen(false);
                         setWriteInitialValues(undefined);
+                        setWriteStrategyLabel(undefined);
                         refetchPool();
                     }}
                 />

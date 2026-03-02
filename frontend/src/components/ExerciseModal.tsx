@@ -6,7 +6,7 @@
  *
  * Two-step: Approve PILL → exercise()
  */
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
@@ -23,6 +23,7 @@ import { StepIndicator } from './StepIndicator.tsx';
 import type { StepStatus } from './StepIndicator.tsx';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { formatTxError } from '../utils/formatTxError.ts';
+import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface ExerciseModalProps {
@@ -66,13 +67,28 @@ export function ExerciseModal({
     const { trackApproval, trackAction, approvalConfirmed } = useTransactionFlow(poolAddress, option.id.toString());
 
     const {
-        canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow,
+        canStartFlow, approvalReady, claimFlow, updateFlow, isMyFlow, myFlow, abandonFlow,
     } = useActiveFlow({
         actionType: 'exercise',
         poolAddress,
         optionId: option.id.toString(),
         label: `Exercise Option #${option.id}`,
     });
+
+    // ActiveFlowBanner state
+    const [flowDismissed, setFlowDismissed] = useState(false);
+
+    const handleStartFresh = useCallback(() => {
+        abandonFlow();
+        setFlowDismissed(true);
+        setTxStatus('idle');
+        setTxError(null);
+        setTxId(null);
+    }, [abandonFlow]);
+
+    const handleContinueFlow = useCallback(() => {
+        setFlowDismissed(true);
+    }, []);
 
     useEffect(() => {
         if (poolAddress.startsWith('0x')) {
@@ -252,6 +268,15 @@ export function ExerciseModal({
                             ✕
                         </button>
                     </div>
+
+                    {/* Active flow banner */}
+                    {myFlow && !flowDismissed && (
+                        <ActiveFlowBanner
+                            flow={myFlow}
+                            onContinue={handleContinueFlow}
+                            onStartFresh={handleStartFresh}
+                        />
+                    )}
 
                     {/* Step progress */}
                     <StepIndicator

@@ -209,6 +209,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             optionId?: string;
             label: string;
             formState?: Record<string, string>;
+            strategyLabel?: string;
         }): ActiveFlow | null => {
             const key = flowIdentityKey(params.actionType, params.poolAddress, params.optionId);
 
@@ -233,6 +234,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
                 claimedAt: new Date().toISOString(),
                 label: params.label,
                 formState: params.formState ?? null,
+                strategyLabel: params.strategyLabel ?? null,
             };
 
             if (existingIdx !== -1) {

@@ -56,10 +56,27 @@ function elapsed(claimedAt: string): string {
 }
 
 const RESUMABLE: ReadonlySet<FlowStatus> = new Set([
+    'approval_pending',
     'approval_confirmed',
+    'action_pending',
     'approval_failed',
     'action_failed',
 ]);
+
+function resumeTitle(status: FlowStatus): string {
+    switch (status) {
+        case 'approval_pending':
+        case 'action_pending':
+            return 'Reopen modal to view progress';
+        case 'approval_confirmed':
+            return 'Reopens modal to complete step 2';
+        case 'approval_failed':
+        case 'action_failed':
+            return 'Reopen modal to retry';
+        case 'action_confirmed':
+            return '';
+    }
+}
 
 /** Returns the most recent txId available (action > approval). */
 function getViewTxId(flow: ActiveFlow): string | null {
@@ -75,6 +92,11 @@ export function FlowResumeCard({ flow, onResume, onAbandon }: FlowResumeCardProp
             className="px-3 py-2.5 border-b border-terminal-border-subtle bg-terminal-bg-primary/50"
             data-testid="flow-resume-card"
         >
+            {flow.strategyLabel && (
+                <span className="text-[10px] font-mono text-accent uppercase tracking-wider" data-testid="strategy-badge">
+                    {flow.strategyLabel}
+                </span>
+            )}
             <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-mono text-terminal-text-primary font-semibold truncate">
                     {flow.label}
@@ -103,7 +125,7 @@ export function FlowResumeCard({ flow, onResume, onAbandon }: FlowResumeCardProp
                         onClick={onResume}
                         className="flex-1 text-[10px] font-mono py-1 rounded bg-cyan-900/40 border border-cyan-700 text-cyan-300 hover:bg-cyan-900/60 transition-colors"
                         data-testid="flow-resume-btn"
-                        title="Reopens modal to complete step 2"
+                        title={resumeTitle(flow.status)}
                     >
                         Resume
                     </button>
