@@ -2,7 +2,7 @@
  * TransactionContext — persists pending TXs in localStorage, scoped by wallet address.
  *
  * Provides: transactions list, pendingCount, add/update/find helpers.
- * Trims to 20 entries; warns on beforeunload when TXs pending.
+ * Trims to 100 entries; warns on beforeunload when TXs pending.
  *
  * Also manages Active Flows — up to MAX_PARALLEL_FLOWS concurrent two-step
  * (approve → action) flows per wallet. Each flow is keyed by identity
@@ -42,7 +42,7 @@ type TransactionAction =
 function reducer(state: TransactionState, action: TransactionAction): TransactionState {
     switch (action.type) {
         case 'ADD_TX':
-            return { transactions: [action.tx, ...state.transactions].slice(0, 20) };
+            return { transactions: [action.tx, ...state.transactions].slice(0, 100) };
         case 'UPDATE_TX':
             return {
                 transactions: state.transactions.map((tx) =>
@@ -290,7 +290,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
             const raw = localStorage.getItem(storageKey);
             if (raw) {
                 const parsed = JSON.parse(raw) as TrackedTransaction[];
-                dispatch({ type: 'LOAD', transactions: parsed.slice(0, 20) });
+                dispatch({ type: 'LOAD', transactions: parsed.slice(0, 100) });
             } else {
                 dispatch({ type: 'LOAD', transactions: [] });
             }

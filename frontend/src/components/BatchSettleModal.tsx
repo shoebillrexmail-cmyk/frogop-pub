@@ -14,6 +14,8 @@ import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount } from '../config/index.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
+import { TransactionReceipt } from './TransactionReceipt.tsx';
+import { formatTxError } from '../utils/formatTxError.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface BatchSettleModalProps {
@@ -123,7 +125,7 @@ export function BatchSettleModal({
             data-testid="batch-settle-modal-backdrop"
         >
             <div
-                className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl w-full max-w-md shadow-2xl"
+                className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
                 data-testid="batch-settle-modal"
                 onClick={(e) => e.stopPropagation()}
             >
@@ -183,22 +185,28 @@ export function BatchSettleModal({
                     </p>
 
                     {txError && (
-                        <p className="text-rose-400 text-xs font-mono" data-testid="tx-error">
-                            {txError}
-                        </p>
+                        <div className="bg-rose-900/10 border border-rose-800 rounded p-3 text-xs font-mono space-y-2" data-testid="tx-error">
+                            <p className="text-rose-400">{formatTxError(txError).message}</p>
+                            <p className="text-terminal-text-muted">{formatTxError(txError).guidance}</p>
+                            <button
+                                onClick={() => { setTxError(null); setTxStatus('idle'); }}
+                                className="btn-secondary px-3 py-1 text-xs rounded"
+                                data-testid="btn-retry"
+                            >
+                                Retry
+                            </button>
+                        </div>
                     )}
 
                     {txStatus === 'done' && txId && (
-                        <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono">
-                            <p className="text-green-300 mb-1">Batch settlement broadcast!</p>
-                            <p className="text-terminal-text-muted break-all">{txId}</p>
-                            <p className="text-terminal-text-muted mt-1.5">
-                                Confirms in next block (~10 min). You can close this — check the transaction pill for updates.
-                            </p>
-                            <button className="mt-2 btn-primary px-3 py-1 text-xs rounded" onClick={onSuccess}>
-                                Done
-                            </button>
-                        </div>
+                        <TransactionReceipt
+                            type="batchSettle"
+                            txId={txId}
+                            movements={[
+                                { direction: 'credit', amount: fmt(totalCollateral), token: '', label: 'Total collateral returned' },
+                            ]}
+                            onDone={onSuccess}
+                        />
                     )}
 
                     {txStatus !== 'done' && (

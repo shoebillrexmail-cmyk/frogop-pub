@@ -93,7 +93,7 @@ export function CollarModal({
             data-testid="collar-modal-backdrop"
         >
             <div
-                className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl w-full max-w-md shadow-2xl"
+                className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
                 data-testid="collar-modal"
                 onClick={(e) => e.stopPropagation()}
             >

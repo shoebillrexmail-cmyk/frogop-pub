@@ -3,7 +3,7 @@
  *
  * Requires wallet connection. Uses the same pool data as PoolsPage.
  */
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { usePool } from '../hooks/usePool.ts';
@@ -17,10 +17,19 @@ import { usePnL } from '../hooks/usePnL.ts';
 import { PortfolioSkeleton } from '../components/LoadingSkeletons.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
 import { BalancesCard } from '../components/BalancesCard.tsx';
+import { PortfolioSummaryCard } from '../components/PortfolioSummaryCard.tsx';
+import { getUserStatusLabel } from '../utils/statusLabels.ts';
 import { CancelModal } from '../components/CancelModal.tsx';
 import { ExerciseModal } from '../components/ExerciseModal.tsx';
 import { SettleModal } from '../components/SettleModal.tsx';
+import { RollModal } from '../components/RollModal.tsx';
+import { TransferModal } from '../components/TransferModal.tsx';
 import { CONTRACT_ADDRESSES } from '../config/index.ts';
+import { NotificationBanner } from '../components/NotificationBanner.tsx';
+import { ExpiryAlertBanner } from '../components/ExpiryAlertBanner.tsx';
+import { useExpiryAlerts } from '../hooks/useExpiryAlerts.ts';
+import { useNotifications } from '../hooks/useNotifications.ts';
+import { useStatusChangeDetector, describeChange } from '../hooks/useStatusChangeDetector.ts';
 import { OptionStatus } from '../services/types.ts';
 import type { OptionData } from '../services/types.ts';
 import type { ResumeRequest } from '../contexts/flowDefs.ts';
@@ -88,10 +97,40 @@ export function PortfolioPage() {
         purchasedOptions, motoPillRatio, currentBlock ?? undefined,
     );
 
+    // Status change notifications
+    const { notifications, addNotification, dismissNotification } = useNotifications();
+    const allOptions = [...writtenOptions, ...purchasedOptions];
+    useStatusChangeDetector(allOptions, useCallback((changes) => {
+        for (const change of changes) {
+            addNotification(describeChange(change, walletHex), 'info');
+        }
+    }, [addNotification, walletHex]));
+
+    // Read collar strategy progress from localStorage
+    const collarStatus = useMemo(() => {
+        if (!walletAddress) return null;
+        try {
+            const raw = localStorage.getItem(`frogop_collar_${walletAddress}`);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw) as { callDone?: boolean; putDone?: boolean };
+            if (!parsed.callDone && !parsed.putDone) return null;
+            if (parsed.callDone && parsed.putDone) return null; // complete → hide
+            return { callDone: !!parsed.callDone, putDone: !!parsed.putDone };
+        } catch { return null; }
+    }, [walletAddress]);
+
+    // Expiry alerts for purchased options
+    const expiryAlerts = useExpiryAlerts(
+        purchasedOptions, currentBlock ?? undefined,
+        poolInfo?.gracePeriodBlocks, walletHex,
+    );
+
     // Modal targets — must be declared before any early returns (Rules of Hooks)
     const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
     const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
     const [settleTarget, setSettleTarget] = useState<OptionData | null>(null);
+    const [rollTarget, setRollTarget] = useState<OptionData | null>(null);
+    const [transferTarget, setTransferTarget] = useState<OptionData | null>(null);
 
     // Apply exercise resume — extracted to avoid direct setState in the effect body.
     const applyResume = useCallback((req: ResumeRequest) => {
@@ -166,6 +205,14 @@ export function PortfolioPage() {
         if (provider) setSettleTarget(option);
     }
 
+    function handleRoll(option: OptionData) {
+        if (provider) setRollTarget(option);
+    }
+
+    function handleTransfer(option: OptionData) {
+        if (provider) setTransferTarget(option);
+    }
+
     // -------------------------------------------------------------------------
     // Render
     // -------------------------------------------------------------------------
@@ -173,6 +220,9 @@ export function PortfolioPage() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+            <NotificationBanner notifications={notifications} onDismiss={dismissNotification} />
+            <ExpiryAlertBanner alerts={expiryAlerts} />
+
             {/* Grace period warning banner */}
             {activePurchased.length > 0 && (
                 <div
@@ -223,6 +273,40 @@ export function PortfolioPage() {
                         loading={motoLoading || pillLoading}
                     />
 
+                    {/* Portfolio summary */}
+                    <PortfolioSummaryCard
+                        writtenOptions={writtenOptions}
+                        purchasedOptions={purchasedOptions}
+                        poolInfo={poolInfo}
+                    />
+
+                    {/* Active strategy status (collar) */}
+                    {collarStatus && (
+                        <div
+                            className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-4"
+                            data-testid="active-strategy-banner"
+                        >
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <span className="text-xs font-bold text-terminal-text-muted font-mono uppercase tracking-wider">
+                                        Active Strategy: Collar
+                                    </span>
+                                    <div className="flex items-center gap-3 mt-1 text-xs font-mono">
+                                        <span className={collarStatus.callDone ? 'text-green-400' : 'text-terminal-text-muted'}>
+                                            {collarStatus.callDone ? '\u2713' : '\u25CB'} Write CALL
+                                        </span>
+                                        <span className={collarStatus.putDone ? 'text-green-400' : 'text-terminal-text-muted'}>
+                                            {collarStatus.putDone ? '\u2713' : '\u25CB'} Buy PUT
+                                        </span>
+                                    </div>
+                                </div>
+                                <Link to="/pools" className="btn-secondary px-3 py-1 text-xs rounded">
+                                    Continue
+                                </Link>
+                            </div>
+                        </div>
+                    )}
+
                     {/* My Written Options */}
                     <section data-testid="written-section">
                         <h2 className="text-xs font-bold text-terminal-text-muted font-mono uppercase tracking-wider mb-3">
@@ -251,10 +335,13 @@ export function PortfolioPage() {
                                 currentBlock={currentBlock ?? undefined}
                                 gracePeriodBlocks={poolInfo?.gracePeriodBlocks}
                                 showFilter={false}
+                                userStatusLabel={(opt) => getUserStatusLabel(opt, walletHex)}
+                                poolAddress={POOL_ADDRESS ?? undefined}
                                 onBuy={() => {}}
                                 onCancel={handleCancel}
                                 onExercise={handleExercise}
                                 onSettle={handleSettle}
+                                onRoll={handleRoll}
                             />
                         )}
                     </section>
@@ -308,10 +395,13 @@ export function PortfolioPage() {
                                 gracePeriodBlocks={poolInfo?.gracePeriodBlocks}
                                 pnlMap={pnlMap.size > 0 ? pnlMap : undefined}
                                 showFilter={false}
+                                userStatusLabel={(opt) => getUserStatusLabel(opt, walletHex)}
+                                poolAddress={POOL_ADDRESS ?? undefined}
                                 onBuy={() => {}}
                                 onCancel={handleCancel}
                                 onExercise={handleExercise}
                                 onSettle={handleSettle}
+                                onTransfer={handleTransfer}
                             />
                         )}
                     </section>
@@ -366,6 +456,41 @@ export function PortfolioPage() {
                     onClose={() => setSettleTarget(null)}
                     onSuccess={() => {
                         setSettleTarget(null);
+                        refetch();
+                    }}
+                />
+            )}
+
+            {/* Roll Option modal */}
+            {rollTarget && poolInfo && provider && network && (
+                <RollModal
+                    option={rollTarget}
+                    poolInfo={poolInfo}
+                    poolAddress={POOL_ADDRESS!}
+                    walletAddress={walletAddress}
+                    address={address}
+                    provider={provider}
+                    network={network}
+                    onClose={() => setRollTarget(null)}
+                    onSuccess={() => {
+                        setRollTarget(null);
+                        refetch();
+                    }}
+                />
+            )}
+
+            {/* Transfer Option modal */}
+            {transferTarget && provider && network && (
+                <TransferModal
+                    option={transferTarget}
+                    poolAddress={POOL_ADDRESS!}
+                    walletAddress={walletAddress}
+                    address={address}
+                    provider={provider}
+                    network={network}
+                    onClose={() => setTransferTarget(null)}
+                    onSuccess={() => {
+                        setTransferTarget(null);
                         refetch();
                     }}
                 />

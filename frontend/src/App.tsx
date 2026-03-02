@@ -3,6 +3,8 @@ import { Layout } from './components/Layout';
 import { LandingPage } from './pages/LandingPage';
 import { PoolsPage } from './pages/PoolsPage';
 import { PortfolioPage } from './pages/PortfolioPage';
+import { OptionDetailPage } from './pages/OptionDetailPage';
+import { TransactionHistoryPage } from './pages/TransactionHistoryPage';
 import { AboutPage } from './pages/AboutPage';
 import { TransactionProvider } from './contexts/TransactionContext';
 
@@ -14,7 +16,9 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<LandingPage />} />
             <Route path="pools" element={<PoolsPage />} />
+            <Route path="pools/:addr/options/:id" element={<OptionDetailPage />} />
             <Route path="portfolio" element={<PortfolioPage />} />
+            <Route path="transactions" element={<TransactionHistoryPage />} />
             <Route path="about" element={<AboutPage />} />
           </Route>
         </Routes>

@@ -6,6 +6,7 @@
  * Auto-dismisses confirmed notifications after 10s.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import type { TrackedTransaction, TxStatus } from '../contexts/TransactionContext.tsx';
 import { FlowResumeCard } from './FlowResumeCard.tsx';
@@ -74,7 +75,7 @@ export function TransactionToast() {
     if (visible.length === 0 && pendingCount === 0 && !hasFlows) return null;
 
     return (
-        <div className="fixed bottom-4 right-4 z-50 font-mono">
+        <div className="fixed bottom-4 right-4 z-50 font-mono" role="status" aria-live="polite">
             {/* Expanded dropdown */}
             {expanded && (visible.length > 0 || hasFlows) && (
                 <div className="mb-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl shadow-lg overflow-hidden max-w-xs w-72">
@@ -115,6 +116,13 @@ export function TransactionToast() {
                             </div>
                         ))}
                     </div>
+                    <Link
+                        to="/transactions"
+                        className="block px-3 py-2 text-center text-xs text-accent hover:underline border-t border-terminal-border-subtle"
+                        onClick={() => setExpanded(false)}
+                    >
+                        View All Transactions
+                    </Link>
                 </div>
             )}
 
@@ -123,12 +131,13 @@ export function TransactionToast() {
                 <button
                     onClick={toggle}
                     className="flex items-center gap-2 px-4 py-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-full shadow-lg hover:border-accent transition-colors"
+                    aria-label={pendingCount > 0 ? `${pendingCount} pending transactions` : `${visible.length} recent transactions`}
                 >
                     {pendingCount > 0 && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-orange-400 pulse-orange" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-orange-400 pulse-orange" aria-hidden="true" />
                     )}
                     {pendingCount === 0 && visible.length > 0 && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-green-400" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-green-400" aria-hidden="true" />
                     )}
                     <span className="text-xs text-terminal-text-primary">
                         {pendingCount > 0

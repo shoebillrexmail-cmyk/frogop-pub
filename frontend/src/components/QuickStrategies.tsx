@@ -34,6 +34,7 @@ interface QuickStrategiesProps {
 function StrategyCard({
     title,
     tagline,
+    tooltip,
     disabled,
     testId,
     children,
@@ -41,6 +42,7 @@ function StrategyCard({
 }: {
     title: string;
     tagline: string;
+    tooltip?: string;
     disabled: boolean;
     testId: string;
     children: React.ReactNode;
@@ -56,7 +58,18 @@ function StrategyCard({
             data-testid={testId}
         >
             <div>
-                <h4 className="text-sm font-bold text-terminal-text-primary font-mono">{title}</h4>
+                <div className="flex items-center gap-1">
+                    <h4 className="text-sm font-bold text-terminal-text-primary font-mono">{title}</h4>
+                    {tooltip && (
+                        <span
+                            className="text-terminal-text-muted text-xs cursor-help"
+                            title={tooltip}
+                            aria-label={tooltip}
+                        >
+                            ?
+                        </span>
+                    )}
+                </div>
                 <p className="text-xs text-terminal-text-muted font-mono">{tagline}</p>
             </div>
             <div className="flex-1">{children}</div>
@@ -102,6 +115,7 @@ export function QuickStrategies({
             <StrategyCard
                 title="Covered Call"
                 tagline="Earn yield on MOTO"
+                tooltip="Write a CALL above the current price. You earn premium upfront but cap your upside if the price rises past the strike."
                 disabled={noPrice}
                 testId="strategy-covered-call"
                 action={
@@ -141,6 +155,7 @@ export function QuickStrategies({
             <StrategyCard
                 title="Protective Put"
                 tagline="Insure your MOTO"
+                tooltip="Buy a PUT below the current price. If the price drops below the strike, you can exercise for guaranteed value. Cost: premium paid."
                 disabled={noPrice}
                 testId="strategy-protective-put"
                 action={
@@ -200,6 +215,7 @@ export function QuickStrategies({
             <StrategyCard
                 title="Collar"
                 tagline="Lock in a price range"
+                tooltip="Combine a Covered Call (earn premium) and Protective Put (buy protection). Limits both upside and downside — often zero or near-zero net cost."
                 disabled={noPrice}
                 testId="strategy-collar"
                 action={

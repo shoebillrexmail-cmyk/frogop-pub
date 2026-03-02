@@ -21,10 +21,11 @@ export function Layout() {
   useTransactionPoller(provider ?? null, wsBlock);
 
   const navLinks = [
-    { path: '/', label: 'Home' },
-    { path: '/pools', label: 'Pools' },
-    { path: '/portfolio', label: 'Portfolio' },
-    { path: '/about', label: 'About' },
+    { path: '/', label: 'Home', testId: 'nav-home' },
+    { path: '/pools', label: 'Pools', testId: 'nav-pools' },
+    { path: '/portfolio', label: 'Portfolio', testId: 'nav-portfolio' },
+    { path: '/transactions', label: 'History', testId: 'nav-history' },
+    { path: '/about', label: 'About', testId: 'nav-about' },
   ];
 
   return (
@@ -42,6 +43,7 @@ export function Layout() {
               <Link
                 key={link.path}
                 to={link.path}
+                data-testid={link.testId}
                 className={`text-sm font-medium transition-colors font-mono ${
                   location.pathname === link.path
                     ? 'text-accent'
@@ -100,6 +102,7 @@ export function Layout() {
               <Link
                 key={link.path}
                 to={link.path}
+                data-testid={`mobile-${link.testId}`}
                 onClick={() => setMenuOpen(false)}
                 className={`py-2 text-sm font-medium font-mono transition-colors ${
                   location.pathname === link.path
@@ -150,6 +153,16 @@ export function Layout() {
               >
                 X / Twitter
               </a>
+              <button
+                onClick={() => {
+                  try { localStorage.removeItem('frogop_onboarding_complete'); } catch { /* noop */ }
+                  window.location.href = '/pools';
+                }}
+                className="hover:text-terminal-text-primary transition-colors"
+                data-testid="show-tutorial"
+              >
+                Show Tutorial
+              </button>
               <span className="flex items-center gap-1.5 font-mono">
                 Built on <img src="/opnet_logo.svg" alt="OPNet" className="h-4 inline-block" />
               </span>

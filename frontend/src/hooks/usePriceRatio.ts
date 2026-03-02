@@ -18,6 +18,7 @@ import { getLatestPrice } from '../services/priceService.ts';
 
 export interface UsePriceRatioResult {
     motoPillRatio: number | null;
+    lastUpdated: Date | null;
     loading: boolean;
     error: string | null;
 }
@@ -43,6 +44,7 @@ export function usePriceRatio(
     network: WalletConnectNetwork | null,
 ): UsePriceRatioResult {
     const [motoPillRatio, setMotoPillRatio] = useState<number | null>(null);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [tick, setTick] = useState(0);
@@ -62,6 +64,7 @@ export function usePriceRatio(
                     const ratio = priceToFloat(snapshot.price);
                     if (ratio > 0) {
                         setMotoPillRatio(ratio);
+                        setLastUpdated(new Date());
                         setError(null);
                         setLoading(false);
                         return;
@@ -103,6 +106,7 @@ export function usePriceRatio(
                 if (motoOut > 0n) {
                     const ratio = Number(pillOut) / Number(motoOut);
                     setMotoPillRatio(ratio);
+                    setLastUpdated(new Date());
                     setError(null);
                 } else {
                     setMotoPillRatio(null);
@@ -129,5 +133,5 @@ export function usePriceRatio(
         };
     }, [nativeSwapAddress, motoAddress, pillAddress, provider, network, tick, refresh]);
 
-    return { motoPillRatio, loading, error };
+    return { motoPillRatio, lastUpdated, loading, error };
 }

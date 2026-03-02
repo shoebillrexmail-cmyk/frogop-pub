@@ -25,6 +25,11 @@ import { QuickStrategies } from '../components/QuickStrategies.tsx';
 import { CollarModal } from '../components/CollarModal.tsx';
 import { CONTRACT_ADDRESSES, currentNetwork, formatAddress } from '../config/index.ts';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
+import { NotificationBanner } from '../components/NotificationBanner.tsx';
+import { useNotifications } from '../hooks/useNotifications.ts';
+import { useStatusChangeDetector, describeChange } from '../hooks/useStatusChangeDetector.ts';
+import { OnboardingOverlay } from '../components/OnboardingOverlay.tsx';
+import { useOnboardingState } from '../hooks/useOnboardingState.ts';
 import type { OptionData } from '../services/types.ts';
 import type { ResumeRequest } from '../contexts/flowDefs.ts';
 
@@ -35,6 +40,7 @@ export function PoolsPage() {
     const { walletAddress, address, provider, network } = useWalletConnect();
     const readProvider = useFallbackProvider();
     const walletConnected = provider !== null && provider !== undefined;
+    const { showOnboarding, completeOnboarding } = useOnboardingState(walletConnected);
     const {
         pools,
         loading: discoveryLoading,
@@ -43,7 +49,9 @@ export function PoolsPage() {
         refetch: refetchPools,
     } = useDiscoverPools(readProvider);
 
-    const [userSelectedPool, setUserSelectedPool] = useState<string | null>(null);
+    const [userSelectedPool, setUserSelectedPool] = useState<string | null>(() => {
+        try { return sessionStorage.getItem('frogop_selected_pool'); } catch { return null; }
+    });
 
     // Derive effective selected pool: user choice if valid, else first pool
     const selectedPoolAddr = useMemo(() => {
@@ -54,12 +62,19 @@ export function PoolsPage() {
         return pools[0].address;
     }, [pools, userSelectedPool]);
 
+    // Persist pool selection to sessionStorage
+    useEffect(() => {
+        if (selectedPoolAddr) {
+            try { sessionStorage.setItem('frogop_selected_pool', selectedPoolAddr); } catch { /* noop */ }
+        }
+    }, [selectedPoolAddr]);
+
     const { poolInfo, options, loading: poolLoading, error: poolError, refetch: refetchPool } =
         usePool(selectedPoolAddr, readProvider);
 
     const { currentBlock } = useBlockTracker(readProvider, wsBlock);
 
-    const { motoPillRatio } = usePriceRatio(
+    const { motoPillRatio, lastUpdated: priceLastUpdated } = usePriceRatio(
         NATIVESWAP_ADDRESS || null,
         poolInfo?.underlying ?? null,
         poolInfo?.premiumToken ?? null,
@@ -146,6 +161,18 @@ export function PoolsPage() {
     // address.toString() = 0x-prefixed MLDSA hash; used for action visibility
     const walletHex = address ? address.toString() : null;
 
+    // Status change notifications
+    const { notifications, addNotification, dismissNotification, requestPermission } = useNotifications();
+    useStatusChangeDetector(options, useCallback((changes) => {
+        for (const change of changes) {
+            addNotification(describeChange(change, walletHex), 'info');
+        }
+    }, [addNotification, walletHex]));
+    // Request browser notification permission on first wallet connect
+    useEffect(() => {
+        if (walletConnected) requestPermission();
+    }, [walletConnected, requestPermission]);
+
     const loading = discoveryLoading || poolLoading;
     const error = discoveryError || poolError;
 
@@ -218,6 +245,7 @@ export function PoolsPage() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 py-8">
+            <NotificationBanner notifications={notifications} onDismiss={dismissNotification} />
             {/* Error state */}
             {error && (
                 <div className="bg-terminal-bg-elevated border border-rose-700 rounded-xl p-6 text-center">
@@ -256,6 +284,7 @@ export function PoolsPage() {
                         poolInfo={poolInfo}
                         poolAddress={selectedPoolAddr}
                         motoPillRatio={motoPillRatio}
+                        priceLastUpdated={priceLastUpdated}
                         onWriteOption={walletConnected ? () => setWriteOpen(true) : undefined}
                     />
                     <QuickStrategies
@@ -285,6 +314,7 @@ export function PoolsPage() {
                         currentBlock={currentBlock ?? undefined}
                         gracePeriodBlocks={poolInfo.gracePeriodBlocks}
                         motoPillRatio={motoPillRatio}
+                        poolAddress={selectedPoolAddr}
                         onBuy={handleBuy}
                         onCancel={handleCancel}
                         onExercise={handleExercise}
@@ -426,6 +456,9 @@ export function PoolsPage() {
                     </p>
                 </div>
             )}
+
+            {/* Onboarding overlay for first-time users */}
+            {showOnboarding && <OnboardingOverlay onComplete={completeOnboarding} />}
         </div>
     );
 }

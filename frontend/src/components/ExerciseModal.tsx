@@ -19,6 +19,10 @@ import { formatTokenAmount } from '../config/index.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import { useActiveFlow } from '../hooks/useActiveFlow.ts';
 import { calcExercisePnl } from '../utils/optionMath.js';
+import { StepIndicator } from './StepIndicator.tsx';
+import type { StepStatus } from './StepIndicator.tsx';
+import { TransactionReceipt } from './TransactionReceipt.tsx';
+import { formatTxError } from '../utils/formatTxError.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface ExerciseModalProps {
@@ -195,6 +199,17 @@ export function ExerciseModal({
         }
     }
 
+    // Step indicator state derivation
+    const step1Status: StepStatus =
+        txStatus === 'approving' ? 'active' :
+        (!needsApproval || approvalConfirmed || approvalReady) ? 'done' :
+        txStatus === 'error' && !txId ? 'failed' : 'pending';
+    const step2Status: StepStatus =
+        txStatus === 'exercising' ? 'active' :
+        txStatus === 'done' ? 'done' :
+        txStatus === 'error' && (approvalConfirmed || approvalReady || !needsApproval) ? 'failed' : 'pending';
+    const currentStep: 1 | 2 = needsApproval && step1Status !== 'done' ? 1 : 2;
+
     const typeLabel = isCall ? 'CALL' : 'PUT';
     const typeColor = isCall ? 'text-green-400' : 'text-rose-400';
 
@@ -204,7 +219,7 @@ export function ExerciseModal({
             data-testid="exercise-modal-backdrop"
         >
             <div
-                className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl w-full max-w-sm shadow-2xl"
+                className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl w-full max-w-sm shadow-2xl max-h-[90vh] overflow-y-auto"
                 data-testid="exercise-option-modal"
                 onClick={(e) => e.stopPropagation()}
             >
@@ -223,6 +238,15 @@ export function ExerciseModal({
                             ✕
                         </button>
                     </div>
+
+                    {/* Step progress */}
+                    <StepIndicator
+                        currentStep={currentStep}
+                        step1Label={`Approve ${payToken}`}
+                        step2Label="Exercise"
+                        step1Status={step1Status}
+                        step2Status={step2Status}
+                    />
 
                     <hr className="border-terminal-border-subtle" />
 
@@ -335,25 +359,33 @@ export function ExerciseModal({
                         </div>
                     )}
 
-                    {/* TX error */}
+                    {/* TX error with retry */}
                     {txError && (
-                        <p className="text-rose-400 text-xs font-mono" data-testid="tx-error">
-                            {txError}
-                        </p>
-                    )}
-
-                    {/* Success */}
-                    {txStatus === 'done' && txId && (
-                        <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono">
-                            <p className="text-green-300 mb-1">Exercise broadcast!</p>
-                            <p className="text-terminal-text-muted break-all">{txId}</p>
-                            <p className="text-terminal-text-muted mt-1.5">
-                                Confirms in next block (~10 min). You can close this — check the transaction pill for updates.
-                            </p>
-                            <button className="mt-2 btn-primary px-3 py-1 text-xs rounded" onClick={onSuccess}>
-                                Done
+                        <div className="bg-rose-900/10 border border-rose-800 rounded p-3 text-xs font-mono space-y-2" data-testid="tx-error">
+                            <p className="text-rose-400">{formatTxError(txError).message}</p>
+                            <p className="text-terminal-text-muted">{formatTxError(txError).guidance}</p>
+                            <button
+                                onClick={() => { setTxError(null); setTxStatus('idle'); }}
+                                className="btn-secondary px-3 py-1 text-xs rounded"
+                                data-testid="btn-retry"
+                            >
+                                Retry
                             </button>
                         </div>
+                    )}
+
+                    {/* Success receipt */}
+                    {txStatus === 'done' && txId && (
+                        <TransactionReceipt
+                            type="exercise"
+                            txId={txId}
+                            movements={[
+                                { direction: 'debit', amount: `${fmt(payAmount)} ${payToken}`, token: '', label: `You pay (${payToken})` },
+                                { direction: 'credit', amount: `${fmt(receiveAmount)} ${receiveToken}`, token: '', label: `You receive (${receiveToken})` },
+                            ]}
+                            fee={{ amount: `${fmt(exerciseFee)}`, token: receiveToken }}
+                            onDone={onSuccess}
+                        />
                     )}
 
                     {/* Action buttons */}

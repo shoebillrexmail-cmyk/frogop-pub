@@ -242,3 +242,12 @@ a:where(:not([class])):hover {
 .pulse-orange {
   animation: pulse-orange 2s ease-in-out infinite;
 }
+
+/* Onboarding highlight */
+.onboarding-highlight {
+  position: relative;
+  z-index: 101;
+  box-shadow: 0 0 0 4px #F7931A, 0 0 20px #F7931A40;
+  border-radius: 8px;
+  transition: box-shadow 0.3s ease;
+}

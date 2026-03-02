@@ -103,6 +103,7 @@ export function FlowResumeCard({ flow, onResume, onAbandon }: FlowResumeCardProp
                         onClick={onResume}
                         className="flex-1 text-[10px] font-mono py-1 rounded bg-cyan-900/40 border border-cyan-700 text-cyan-300 hover:bg-cyan-900/60 transition-colors"
                         data-testid="flow-resume-btn"
+                        title="Reopens modal to complete step 2"
                     >
                         Resume
                     </button>
