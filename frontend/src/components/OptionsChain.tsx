@@ -117,13 +117,19 @@ function ChainCellDisplay({
     side,
     isItm,
     isExpanded,
+    isWriter,
+    walletConnected,
     onClick,
+    onBuy,
 }: {
     cell: ChainCell | null;
     side: 'call' | 'put';
     isItm: boolean;
     isExpanded: boolean;
+    isWriter: boolean;
+    walletConnected: boolean;
     onClick: () => void;
+    onBuy?: (option: OptionData) => void;
 }) {
     if (!cell) {
         return (
@@ -138,15 +144,25 @@ function ChainCellDisplay({
         );
     }
 
+    const isSingle = cell.depth === 1;
     const itmBg = isItm
         ? side === 'call' ? 'bg-green-900/10' : 'bg-rose-900/10'
         : '';
     const premColor = side === 'call' ? 'text-green-400' : 'text-rose-400';
     const selectedBorder = isExpanded ? 'ring-1 ring-accent/50' : '';
 
+    // Chevron for multi-option cells
+    const chevron = !isSingle ? (
+        <span className={`text-[10px] text-terminal-text-muted transition-transform inline-block ${isExpanded ? 'rotate-90' : ''}`}>
+            &#9654;
+        </span>
+    ) : null;
+
     const depthEl = (
-        <span className="text-terminal-text-muted">
-            {cell.depth > 1 ? `×${cell.depth}` : '×1'}
+        <span className="text-terminal-text-muted inline-flex items-center gap-0.5">
+            {side === 'call' && chevron}
+            {isSingle ? '' : `×${cell.depth}`}
+            {side === 'put' && chevron}
         </span>
     );
     const amountEl = (
@@ -160,18 +176,40 @@ function ChainCellDisplay({
         </span>
     );
 
+    // Single-option cell: show inline Buy button instead of depth
+    const actionEl = isSingle ? (
+        isWriter ? (
+            <span className="text-terminal-text-muted text-[10px]">Yours</span>
+        ) : (
+            <button
+                className={`px-1.5 py-0.5 text-[10px] rounded ${
+                    walletConnected ? 'btn-primary' : 'btn-secondary opacity-60'
+                }`}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    if (walletConnected) onBuy?.(cell.options[0]);
+                }}
+                disabled={!walletConnected}
+                title={walletConnected ? 'Buy this option' : 'Connect wallet'}
+                data-testid={`chain-buy-${cell.options[0].id}`}
+            >
+                Buy
+            </button>
+        )
+    ) : depthEl;
+
     const cells = side === 'call'
-        ? [depthEl, amountEl, premiumEl]
-        : [premiumEl, amountEl, depthEl];
+        ? [actionEl, amountEl, premiumEl]
+        : [premiumEl, amountEl, actionEl];
 
     return (
         <div
-            className={`grid grid-cols-3 gap-2 py-2 px-1 cursor-pointer rounded transition-colors hover:bg-terminal-bg-primary/50 ${itmBg} ${selectedBorder} ${side === 'call' ? 'text-right' : ''}`}
-            onClick={onClick}
+            className={`grid grid-cols-3 gap-2 py-2 px-1 ${isSingle ? '' : 'cursor-pointer'} rounded transition-colors hover:bg-terminal-bg-primary/50 ${itmBg} ${selectedBorder} ${side === 'call' ? 'text-right' : ''}`}
+            onClick={isSingle ? undefined : onClick}
             data-testid={`chain-cell-${side}`}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
+            role={isSingle ? undefined : 'button'}
+            tabIndex={isSingle ? undefined : 0}
+            onKeyDown={isSingle ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
         >
             {cells.map((el, i) => <div key={i}>{el}</div>)}
         </div>
@@ -305,6 +343,7 @@ export function OptionsChain({
     const [activeBucket, setActiveBucket] = useState<ExpiryBucket | 'all'>('all');
     const [expandedKey, setExpandedKey] = useState<string | null>(null);
     const [mobileType, setMobileType] = useState<'BOTH' | 'CALL' | 'PUT'>('BOTH');
+    const [hintDismissed, setHintDismissed] = useState(false);
 
     const chain = useMemo(
         () => buildChain(options, currentBlock),
@@ -329,6 +368,7 @@ export function OptionsChain({
     const toggleCell = useCallback((strike: bigint, type: 'call' | 'put') => {
         const key = `${strike}_${type}`;
         setExpandedKey((prev) => (prev === key ? null : key));
+        setHintDismissed(true);
     }, []);
 
     const showCalls = mobileType !== 'PUT';
@@ -352,6 +392,13 @@ export function OptionsChain({
 
             <hr className="border-terminal-border-subtle mb-3" />
 
+            {/* Hint for multi-option cells — hides after first expand */}
+            {rows.length > 0 && !hintDismissed && rows.some((r) => (r.call && r.call.depth > 1) || (r.put && r.put.depth > 1)) && (
+                <p className="text-terminal-text-muted text-[11px] font-mono mb-2 text-center" data-testid="chain-hint">
+                    Click a cell with multiple listings to expand and buy
+                </p>
+            )}
+
             {rows.length === 0 ? (
                 <p
                     className="text-terminal-text-muted font-mono text-sm py-6 text-center"
@@ -369,6 +416,10 @@ export function OptionsChain({
                         const callExpanded = expandedKey === `${row.strikePrice}_call`;
                         const putExpanded = expandedKey === `${row.strikePrice}_put`;
                         const showAtm = atmIndex !== null && idx === atmIndex;
+                        const callIsWriter = walletHex !== null && row.call !== null &&
+                            row.call.options[0].writer.toLowerCase() === walletHex.toLowerCase();
+                        const putIsWriter = walletHex !== null && row.put !== null &&
+                            row.put.options[0].writer.toLowerCase() === walletHex.toLowerCase();
 
                         return (
                             <div key={row.strikePrice.toString()}>
@@ -386,7 +437,10 @@ export function OptionsChain({
                                             side="call"
                                             isItm={callItm}
                                             isExpanded={callExpanded}
+                                            isWriter={callIsWriter}
+                                            walletConnected={walletConnected}
                                             onClick={() => row.call && toggleCell(row.strikePrice, 'call')}
+                                            onBuy={onBuy}
                                         />
                                     ) : <div />}
 
@@ -404,7 +458,10 @@ export function OptionsChain({
                                             side="put"
                                             isItm={putItm}
                                             isExpanded={putExpanded}
+                                            isWriter={putIsWriter}
+                                            walletConnected={walletConnected}
                                             onClick={() => row.put && toggleCell(row.strikePrice, 'put')}
+                                            onBuy={onBuy}
                                         />
                                     ) : <div />}
                                 </div>

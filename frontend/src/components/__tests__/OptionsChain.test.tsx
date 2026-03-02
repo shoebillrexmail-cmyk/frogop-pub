@@ -96,14 +96,40 @@ describe('OptionsChain', () => {
         expect(callCell.textContent).toContain('3.0000'); // best premium = 3
     });
 
-    it('click cell to expand, click again to collapse', () => {
+    it('single-option cell shows inline Buy (no expand needed)', () => {
+        const onBuy = vi.fn();
         const opt = makeOption({ expiryBlock: 700n });
-        render(<OptionsChain {...DEFAULT_PROPS} options={[opt]} />);
+        render(
+            <OptionsChain
+                {...DEFAULT_PROPS}
+                options={[opt]}
+                walletConnected={true}
+                walletHex={'0x' + 'cc'.repeat(32)}
+                onBuy={onBuy}
+            />,
+        );
+
+        // Buy button visible directly on cell — no expand step
+        const buyBtn = screen.getByTestId('chain-buy-1');
+        fireEvent.click(buyBtn);
+        expect(onBuy).toHaveBeenCalledTimes(1);
+        expect(onBuy).toHaveBeenCalledWith(expect.objectContaining({ id: 1n }));
+
+        // Should NOT expand
+        expect(screen.queryByTestId('expanded-listings')).not.toBeInTheDocument();
+    });
+
+    it('multi-option cell expands on click, collapses on second click', () => {
+        const opts = [
+            makeOption({ id: 1n, premium: 10n * e18, expiryBlock: 700n }),
+            makeOption({ id: 2n, premium: 3n * e18, expiryBlock: 700n }),
+        ];
+        render(<OptionsChain {...DEFAULT_PROPS} options={opts} />);
 
         // No expanded listings initially
         expect(screen.queryByTestId('expanded-listings')).not.toBeInTheDocument();
 
-        // Click the call cell
+        // Click the multi-option call cell
         fireEvent.click(screen.getByTestId('chain-cell-call'));
         expect(screen.getByTestId('expanded-listings')).toBeInTheDocument();
 
@@ -112,28 +138,31 @@ describe('OptionsChain', () => {
         expect(screen.queryByTestId('expanded-listings')).not.toBeInTheDocument();
     });
 
-    it('Buy button calls onBuy with correct option', () => {
+    it('Buy button in expanded listing calls onBuy', () => {
         const onBuy = vi.fn();
-        const opt = makeOption({ expiryBlock: 700n });
+        const opts = [
+            makeOption({ id: 1n, premium: 10n * e18, expiryBlock: 700n }),
+            makeOption({ id: 2n, premium: 3n * e18, expiryBlock: 700n }),
+        ];
         render(
             <OptionsChain
                 {...DEFAULT_PROPS}
-                options={[opt]}
+                options={opts}
                 walletConnected={true}
-                walletHex={'0x' + 'cc'.repeat(32)} // different from writer
+                walletHex={'0x' + 'cc'.repeat(32)}
                 onBuy={onBuy}
             />,
         );
 
-        // Expand the cell
+        // Expand multi-option cell
         fireEvent.click(screen.getByTestId('chain-cell-call'));
 
-        // Click Buy
-        const buyBtn = screen.getByTestId('chain-buy-1');
+        // Click Buy on the first listing (sorted by premium: id=2 is first at 3 PILL)
+        const buyBtn = screen.getByTestId('chain-buy-2');
         fireEvent.click(buyBtn);
 
         expect(onBuy).toHaveBeenCalledTimes(1);
-        expect(onBuy).toHaveBeenCalledWith(expect.objectContaining({ id: 1n }));
+        expect(onBuy).toHaveBeenCalledWith(expect.objectContaining({ id: 2n }));
     });
 
     it('ATM divider present when spot provided, absent otherwise', () => {
@@ -151,7 +180,7 @@ describe('OptionsChain', () => {
         expect(screen.queryByTestId('atm-divider')).not.toBeInTheDocument();
     });
 
-    it('walletConnected=false disables buy buttons', () => {
+    it('walletConnected=false disables inline buy button', () => {
         const opt = makeOption({ expiryBlock: 700n });
         render(
             <OptionsChain
@@ -162,14 +191,12 @@ describe('OptionsChain', () => {
             />,
         );
 
-        // Expand
-        fireEvent.click(screen.getByTestId('chain-cell-call'));
-
+        // Single-option cell: Buy button shown inline (no expand)
         const buyBtn = screen.getByTestId('chain-buy-1');
         expect(buyBtn).toBeDisabled();
     });
 
-    it('writer sees "Your listing" instead of Buy', () => {
+    it('writer sees "Yours" inline instead of Buy for single-option cell', () => {
         const writerHex = '0x' + 'aa'.repeat(32);
         const opt = makeOption({ expiryBlock: 700n, writer: writerHex });
         render(
@@ -181,10 +208,25 @@ describe('OptionsChain', () => {
             />,
         );
 
-        // Expand
+        // Single-option cell: "Yours" shown inline
+        expect(screen.getByText('Yours')).toBeInTheDocument();
+        expect(screen.queryByTestId('chain-buy-1')).not.toBeInTheDocument();
+    });
+
+    it('hint text shows for multi-option cells and hides after expand', () => {
+        const opts = [
+            makeOption({ id: 1n, premium: 10n * e18, expiryBlock: 700n }),
+            makeOption({ id: 2n, premium: 3n * e18, expiryBlock: 700n }),
+        ];
+        render(<OptionsChain {...DEFAULT_PROPS} options={opts} />);
+
+        // Hint visible
+        expect(screen.getByTestId('chain-hint')).toBeInTheDocument();
+
+        // Expand a cell
         fireEvent.click(screen.getByTestId('chain-cell-call'));
 
-        expect(screen.getByText('Your listing')).toBeInTheDocument();
-        expect(screen.queryByTestId('chain-buy-1')).not.toBeInTheDocument();
+        // Hint dismissed
+        expect(screen.queryByTestId('chain-hint')).not.toBeInTheDocument();
     });
 });
