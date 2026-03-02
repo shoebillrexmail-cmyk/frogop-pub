@@ -57,6 +57,9 @@ export function Layout() {
           </nav>
 
           <div className="flex items-center gap-3">
+            {/* Transaction pill — inline, left of wallet */}
+            <TransactionToast />
+
             {/* Wallet button */}
             {connected && walletAddress ? (
               <div className="flex items-center gap-2">
@@ -114,9 +117,6 @@ export function Layout() {
           </nav>
         )}
       </header>
-
-      {/* Floating pill — fixed above all layers including modal backdrops (z-50) */}
-      <TransactionToast />
 
       <main className="flex-1">
         <WsBlockContext.Provider value={wsBlock}>

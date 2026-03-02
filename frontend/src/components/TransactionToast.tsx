@@ -5,10 +5,12 @@
  * Shows one FlowResumeCard per active two-step flow (parallel flows supported).
  * Auto-dismisses confirmed notifications after 10s.
  *
- * Rendered as a fixed floating element above all layers (z-[70]),
- * independent of the header, so it stays visible above modal backdrops (z-50).
+ * Pill button lives inline in the header flex (no fixed positioning).
+ * Dropdown renders via React portal at document.body with z-[70] to float above
+ * modal backdrops (z-50) without header stacking context clipping.
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
@@ -56,7 +58,9 @@ export function TransactionToast() {
     const [expanded, setExpanded] = useState(false);
     const [, setTick] = useState(0);
     const [collarDismissed, setCollarDismissed] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
+    const pillRef = useRef<HTMLButtonElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
 
     // Update elapsed times every 15s
     useEffect(() => {
@@ -77,7 +81,11 @@ export function TransactionToast() {
     useEffect(() => {
         if (!expanded) return;
         const handler = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+            const target = e.target as Node;
+            if (
+                pillRef.current && !pillRef.current.contains(target) &&
+                dropdownRef.current && !dropdownRef.current.contains(target)
+            ) {
                 setExpanded(false);
             }
         };
@@ -85,7 +93,18 @@ export function TransactionToast() {
         return () => document.removeEventListener('mousedown', handler);
     }, [expanded]);
 
-    const toggle = useCallback(() => setExpanded((v) => !v), []);
+    const toggle = useCallback(() => {
+        setExpanded((v) => {
+            if (!v && pillRef.current) {
+                const rect = pillRef.current.getBoundingClientRect();
+                setDropdownPos({
+                    top: rect.bottom + 8,
+                    right: window.innerWidth - rect.right,
+                });
+            }
+            return !v;
+        });
+    }, []);
 
     // Show pending/broadcast + failed TXs — confirmed belong in history only
     const visible = recentTransactions.filter(
@@ -107,15 +126,21 @@ export function TransactionToast() {
 
     if (visible.length === 0 && pendingCount === 0 && !hasFlows && !collarInProgress) return null;
 
+    const showPill = pendingCount > 0 || failedCount > 0 || hasFlows || collarInProgress;
+    const showDropdown = expanded && (visible.length > 0 || hasFlows || collarInProgress);
+
     return (
-        <div className="fixed top-4 right-48 z-[70] font-mono" ref={containerRef} role="status" aria-live="polite">
-            {/* Pill button (inline in header) */}
-            {(pendingCount > 0 || failedCount > 0 || hasFlows || collarInProgress) && (
+        <>
+            {/* Pill button — rendered inline in header flex via Layout.tsx */}
+            {showPill && (
                 <button
+                    ref={pillRef}
                     onClick={toggle}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-terminal-bg-primary border border-terminal-border-subtle rounded-full hover:border-accent transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-terminal-bg-primary border border-terminal-border-subtle rounded-full hover:border-accent transition-colors font-mono"
                     aria-label={pendingCount > 0 ? `${pendingCount} pending transactions` : failedCount > 0 ? `${failedCount} failed` : hasFlows ? `${activeFlows.length} active flow(s)` : ''}
                     data-testid="tx-pill"
+                    role="status"
+                    aria-live="polite"
                 >
                     {pendingCount > 0 && (
                         <span className="w-2 h-2 rounded-full bg-orange-400 pulse-orange" aria-hidden="true" />
@@ -138,9 +163,14 @@ export function TransactionToast() {
                 </button>
             )}
 
-            {/* Dropdown (opens below pill) */}
-            {expanded && (visible.length > 0 || hasFlows || collarInProgress) && (
-                <div className="absolute top-full right-0 mt-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl shadow-lg overflow-hidden w-72 z-[71]">
+            {/* Dropdown — portal to document.body so it escapes header stacking context */}
+            {showDropdown && createPortal(
+                <div
+                    ref={dropdownRef}
+                    className="fixed bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl shadow-lg overflow-hidden w-72 z-[70] font-mono"
+                    style={{ top: dropdownPos.top, right: dropdownPos.right }}
+                    data-testid="tx-pill-dropdown"
+                >
                     <div className="px-3 py-2 border-b border-terminal-border-subtle text-xs text-terminal-text-muted">
                         Transactions
                         {activeFlows.length > 0 && (
@@ -209,8 +239,9 @@ export function TransactionToast() {
                     >
                         View All Transactions
                     </Link>
-                </div>
+                </div>,
+                document.body,
             )}
-        </div>
+        </>
     );
 }
