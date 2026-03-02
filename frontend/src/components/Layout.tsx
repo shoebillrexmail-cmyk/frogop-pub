@@ -31,7 +31,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-terminal-bg-primary font-sans">
-      <header className="bg-terminal-bg-elevated border-b border-terminal-border-subtle relative z-[60]">
+      <header className="bg-terminal-bg-elevated border-b border-terminal-border-subtle relative">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <img src="/frogop_512.png" alt="FroGop" className="h-20 w-20" />
@@ -57,9 +57,6 @@ export function Layout() {
           </nav>
 
           <div className="flex items-center gap-3">
-            {/* Transaction pill — always visible in header */}
-            <TransactionToast />
-
             {/* Wallet button */}
             {connected && walletAddress ? (
               <div className="flex items-center gap-2">
@@ -117,6 +114,9 @@ export function Layout() {
           </nav>
         )}
       </header>
+
+      {/* Floating pill — fixed above all layers including modal backdrops (z-50) */}
+      <TransactionToast />
 
       <main className="flex-1">
         <WsBlockContext.Provider value={wsBlock}>

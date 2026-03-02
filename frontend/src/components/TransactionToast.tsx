@@ -5,7 +5,8 @@
  * Shows one FlowResumeCard per active two-step flow (parallel flows supported).
  * Auto-dismisses confirmed notifications after 10s.
  *
- * Rendered inside the header bar so it stays visible above modal backdrops.
+ * Rendered as a fixed floating element above all layers (z-[70]),
+ * independent of the header, so it stays visible above modal backdrops (z-50).
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -107,7 +108,7 @@ export function TransactionToast() {
     if (visible.length === 0 && pendingCount === 0 && !hasFlows && !collarInProgress) return null;
 
     return (
-        <div className="relative font-mono" ref={containerRef} role="status" aria-live="polite">
+        <div className="fixed top-4 right-48 z-[70] font-mono" ref={containerRef} role="status" aria-live="polite">
             {/* Pill button (inline in header) */}
             {(pendingCount > 0 || failedCount > 0 || hasFlows || collarInProgress) && (
                 <button
@@ -139,7 +140,7 @@ export function TransactionToast() {
 
             {/* Dropdown (opens below pill) */}
             {expanded && (visible.length > 0 || hasFlows || collarInProgress) && (
-                <div className="absolute top-full right-0 mt-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl shadow-lg overflow-hidden w-72 z-[61]">
+                <div className="absolute top-full right-0 mt-2 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl shadow-lg overflow-hidden w-72 z-[71]">
                     <div className="px-3 py-2 border-b border-terminal-border-subtle text-xs text-terminal-text-muted">
                         Transactions
                         {activeFlows.length > 0 && (
