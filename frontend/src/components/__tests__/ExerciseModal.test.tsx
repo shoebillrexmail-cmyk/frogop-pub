@@ -201,7 +201,7 @@ describe('ExerciseModal', () => {
         fireEvent.click(screen.getByTestId('btn-exercise'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Exercise broadcast/i)).toBeInTheDocument();
+            expect(screen.getByTestId('transaction-receipt')).toBeInTheDocument();
         });
     });
 

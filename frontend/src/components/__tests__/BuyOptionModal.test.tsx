@@ -175,7 +175,7 @@ describe('BuyOptionModal', () => {
         fireEvent.click(screen.getByTestId('btn-buy'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Purchase broadcast/i)).toBeInTheDocument();
+            expect(screen.getByTestId('transaction-receipt')).toBeInTheDocument();
         });
     });
 

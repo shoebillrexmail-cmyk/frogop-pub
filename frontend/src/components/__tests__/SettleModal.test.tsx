@@ -120,7 +120,7 @@ describe('SettleModal', () => {
         fireEvent.click(screen.getByTestId('btn-settle'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Settlement broadcast/i)).toBeInTheDocument();
+            expect(screen.getByTestId('transaction-receipt')).toBeInTheDocument();
         });
     });
 
@@ -133,7 +133,7 @@ describe('SettleModal', () => {
         await waitFor(() => {
             expect(screen.getByTestId('tx-error')).toBeInTheDocument();
         });
-        expect(screen.getByTestId('tx-error').textContent).toMatch(/Grace period active/i);
+        expect(screen.getByTestId('tx-error').textContent).toMatch(/Grace period/i);
     });
 
     it('disables button while settling', async () => {

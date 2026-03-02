@@ -136,7 +136,7 @@ describe('BatchCancelModal', () => {
         fireEvent.click(screen.getByTestId('btn-batch-cancel'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Batch cancellation broadcast/i)).toBeInTheDocument();
+            expect(screen.getByTestId('transaction-receipt')).toBeInTheDocument();
         });
     });
 

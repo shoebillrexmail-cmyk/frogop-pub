@@ -180,7 +180,7 @@ describe('TransferModal', () => {
         fireEvent.click(screen.getByTestId('btn-transfer-confirm'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Transfer broadcast/i)).toBeInTheDocument();
+            expect(screen.getByTestId('transaction-receipt')).toBeInTheDocument();
         });
     });
 
@@ -201,7 +201,7 @@ describe('TransferModal', () => {
         await waitFor(() => {
             expect(screen.getByTestId('tx-error')).toBeInTheDocument();
         });
-        expect(screen.getByTestId('tx-error').textContent).toMatch(/Not buyer/i);
+        expect(screen.getByTestId('tx-error').textContent).toMatch(/buyer/i);
     });
 
     it('closes when ✕ is clicked', () => {

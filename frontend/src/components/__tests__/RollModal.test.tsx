@@ -145,7 +145,7 @@ describe('RollModal', () => {
         fireEvent.click(screen.getByTestId('btn-roll-confirm'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Roll broadcast/i)).toBeInTheDocument();
+            expect(screen.getByTestId('transaction-receipt')).toBeInTheDocument();
         });
     });
 

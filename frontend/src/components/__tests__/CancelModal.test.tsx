@@ -145,7 +145,7 @@ describe('CancelModal', () => {
         fireEvent.click(screen.getByTestId('btn-cancel-confirm'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Cancellation broadcast/i)).toBeInTheDocument();
+            expect(screen.getByTestId('transaction-receipt')).toBeInTheDocument();
         });
     });
 

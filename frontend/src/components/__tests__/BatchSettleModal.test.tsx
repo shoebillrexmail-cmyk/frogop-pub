@@ -124,7 +124,7 @@ describe('BatchSettleModal', () => {
         fireEvent.click(screen.getByTestId('btn-batch-settle'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Batch settlement broadcast/i)).toBeInTheDocument();
+            expect(screen.getByTestId('transaction-receipt')).toBeInTheDocument();
         });
     });
 
