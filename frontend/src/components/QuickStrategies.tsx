@@ -1,14 +1,15 @@
 /**
- * QuickStrategies — three writer-focused strategy template cards for the Write tab.
+ * QuickStrategies — four writer-focused strategy template cards for the Write tab.
  *
- * Covered Call, Collar, and Write Custom. Each drives existing modals.
- * Protective Put has been moved to the Buy tab as an inline card.
+ * Covered Call, Collar, Write Protective Put, and Write Custom. Each drives existing modals.
+ * Protective Put (buy-side) has been moved to the Buy tab as an inline card.
  */
 import { useMemo } from 'react';
 import type { PoolInfo } from '../services/types.ts';
 import {
     calcCoveredCallParams,
     calcCollarParams,
+    calcWritePutParams,
     type WriteOptionInitialValues,
 } from '../utils/strategyMath.js';
 
@@ -18,6 +19,7 @@ interface QuickStrategiesProps {
     motoBal: number | null;
     walletConnected?: boolean;
     onCoveredCall: (values: WriteOptionInitialValues) => void;
+    onWritePut: (values: WriteOptionInitialValues) => void;
     onCollar: () => void;
     onWriteCustom: () => void;
 }
@@ -82,6 +84,7 @@ export function QuickStrategies({
     motoBal,
     walletConnected = true,
     onCoveredCall,
+    onWritePut,
     onCollar,
     onWriteCustom,
 }: QuickStrategiesProps) {
@@ -97,8 +100,13 @@ export function QuickStrategies({
         [noPrice, motoPillRatio, motoBal],
     );
 
+    const writePut = useMemo(
+        () => (noPrice ? null : calcWritePutParams(motoPillRatio, motoBal)),
+        [noPrice, motoPillRatio, motoBal],
+    );
+
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Covered Call */}
             <StrategyCard
                 title="Covered Call"
@@ -175,6 +183,45 @@ export function QuickStrategies({
                             <span className={collar.netPremiumDisplay.startsWith('+') ? 'text-green-400' : 'text-amber-400'}>
                                 {collar.netPremiumDisplay} PILL
                             </span>
+                        </div>
+                    </div>
+                ) : null}
+            </StrategyCard>
+
+            {/* Write Protective Put */}
+            <StrategyCard
+                title="Write Protective Put"
+                tagline="Supply downside protection"
+                tooltip="Write a PUT at 87.5% of spot. Earn premium from buyers hedging their MOTO. Your collateral (PILL) is locked until expiry."
+                disabled={noPrice}
+                testId="strategy-write-put"
+                action={
+                    <button
+                        onClick={() => writePut && onWritePut(writePut)}
+                        disabled={noPrice || !writePut || !walletConnected}
+                        className="w-full btn-primary py-2 text-xs font-mono rounded disabled:opacity-50"
+                        data-testid="strategy-write-put-btn"
+                    >
+                        {walletConnected ? 'Write Put' : 'Connect wallet to trade'}
+                    </button>
+                }
+            >
+                <p className="text-[10px] text-gray-500 font-mono">87.5% of spot (OTM)</p>
+                {noPrice ? (
+                    <p className="text-xs text-terminal-text-muted font-mono">Price data unavailable</p>
+                ) : writePut ? (
+                    <div className="text-xs font-mono space-y-1">
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">Strike</span>
+                            <span className="text-terminal-text-secondary">{writePut.strikeStr} PILL (87.5%)</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">Est. premium</span>
+                            <span className="text-green-400">{writePut.premiumStr} PILL</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">Duration</span>
+                            <span className="text-terminal-text-secondary">30 days</span>
                         </div>
                     </div>
                 ) : null}

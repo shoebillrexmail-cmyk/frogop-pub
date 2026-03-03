@@ -114,7 +114,7 @@ export function PoolsPage() {
     const [chartToken, setChartToken] = useState('MOTO_PILL');
     const [chartInterval, setChartInterval] = useState('1d');
     const { candles } = usePriceCandles(chartToken, chartInterval);
-    const [chartOpen, setChartOpen] = useState(false);
+    const [chartOpen, setChartOpen] = useState(true);
 
     // Resume flow routing
     const { transactions, resumeRequest, clearResumeRequest, abandonFlow: abandonFlowById } = useTransactionContext();
@@ -282,6 +282,13 @@ export function PoolsPage() {
         setBuyTarget(option);
     }
 
+    function handleWritePut(values: WriteOptionInitialValues) {
+        if (!walletConnected) return;
+        setWriteStrategyLabel('Write Protective Put');
+        setWriteInitialValues(values);
+        setWriteOpen(true);
+    }
+
     function handleCollarWriteCall(values: WriteOptionInitialValues) {
         setCollarOpen(false);
         setWriteStrategyLabel('Collar: Write CALL');
@@ -384,29 +391,6 @@ export function PoolsPage() {
                                 Capped risk &middot; Leveraged exposure &middot; No liquidation
                             </p>
 
-                            {/* Collapsible PriceChart */}
-                            {candles.length > 0 && (
-                                <div>
-                                    <button
-                                        onClick={() => setChartOpen((v) => !v)}
-                                        className="text-xs font-mono text-terminal-text-muted hover:text-terminal-text-primary transition-colors flex items-center gap-1 mb-2"
-                                        data-testid="toggle-chart"
-                                    >
-                                        <span className={`transition-transform ${chartOpen ? 'rotate-90' : ''}`}>&#9654;</span>
-                                        Price Chart
-                                    </button>
-                                    {chartOpen && (
-                                        <PriceChart
-                                            candles={candles}
-                                            token={chartToken}
-                                            interval={chartInterval}
-                                            onIntervalChange={setChartInterval}
-                                            onTokenChange={setChartToken}
-                                        />
-                                    )}
-                                </div>
-                            )}
-
                             {/* View toggle: Chain / List */}
                             <div className="flex items-center gap-2">
                                 <span className="text-xs text-terminal-text-muted font-mono">View:</span>
@@ -490,6 +474,29 @@ export function PoolsPage() {
                                     {walletConnected ? (bestProtectivePut ? 'Buy Put' : 'No puts available') : 'Connect wallet'}
                                 </button>
                             </div>
+
+                            {/* Collapsible PriceChart */}
+                            {candles.length > 0 && (
+                                <div>
+                                    <button
+                                        onClick={() => setChartOpen((v) => !v)}
+                                        className="text-xs font-mono text-terminal-text-muted hover:text-terminal-text-primary transition-colors flex items-center gap-1 mb-2"
+                                        data-testid="toggle-chart"
+                                    >
+                                        <span className={`transition-transform ${chartOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+                                        Price Chart
+                                    </button>
+                                    {chartOpen && (
+                                        <PriceChart
+                                            candles={candles}
+                                            token={chartToken}
+                                            interval={chartInterval}
+                                            onIntervalChange={setChartInterval}
+                                            onTokenChange={setChartToken}
+                                        />
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -515,6 +522,7 @@ export function PoolsPage() {
                                 motoBal={null}
                                 walletConnected={walletConnected}
                                 onCoveredCall={handleCoveredCall}
+                                onWritePut={handleWritePut}
                                 onCollar={() => setCollarOpen(true)}
                                 onWriteCustom={() => setWriteOpen(true)}
                             />

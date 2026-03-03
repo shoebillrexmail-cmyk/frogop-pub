@@ -22,6 +22,7 @@ const DEFAULT_PROPS = {
     motoPillRatio: 50 as number | null,
     motoBal: null as number | null,
     onCoveredCall: vi.fn(),
+    onWritePut: vi.fn(),
     onCollar: vi.fn(),
     onWriteCustom: vi.fn(),
 };
@@ -31,16 +32,12 @@ describe('QuickStrategies', () => {
         vi.clearAllMocks();
     });
 
-    it('renders Covered Call, Collar, and Write Custom cards', () => {
+    it('renders Covered Call, Collar, Write Protective Put, and Write Custom cards', () => {
         render(<QuickStrategies {...DEFAULT_PROPS} />);
         expect(screen.getByTestId('strategy-covered-call')).toBeInTheDocument();
         expect(screen.getByTestId('strategy-collar')).toBeInTheDocument();
+        expect(screen.getByTestId('strategy-write-put')).toBeInTheDocument();
         expect(screen.getByTestId('strategy-write-custom')).toBeInTheDocument();
-    });
-
-    it('does NOT render Protective Put card', () => {
-        render(<QuickStrategies {...DEFAULT_PROPS} />);
-        expect(screen.queryByTestId('strategy-protective-put')).not.toBeInTheDocument();
     });
 
     // -----------------------------------------------------------------------
@@ -48,16 +45,17 @@ describe('QuickStrategies', () => {
     // -----------------------------------------------------------------------
 
     describe('when motoPillRatio is null', () => {
-        it('Covered Call and Collar buttons are disabled', () => {
+        it('Covered Call, Collar, and Write Put buttons are disabled', () => {
             render(<QuickStrategies {...DEFAULT_PROPS} motoPillRatio={null} />);
             expect(screen.getByTestId('strategy-covered-call-btn')).toBeDisabled();
             expect(screen.getByTestId('strategy-collar-btn')).toBeDisabled();
+            expect(screen.getByTestId('strategy-write-put-btn')).toBeDisabled();
         });
 
-        it('shows price unavailable message for Covered Call and Collar', () => {
+        it('shows price unavailable message for Covered Call, Collar, and Write Put', () => {
             render(<QuickStrategies {...DEFAULT_PROPS} motoPillRatio={null} />);
             const msgs = screen.getAllByText(/price data unavailable/i);
-            expect(msgs.length).toBe(2); // Covered Call + Collar
+            expect(msgs.length).toBe(3); // Covered Call + Collar + Write Put
         });
     });
 
@@ -100,6 +98,28 @@ describe('QuickStrategies', () => {
             render(<QuickStrategies {...DEFAULT_PROPS} onCollar={onCollar} />);
             fireEvent.click(screen.getByTestId('strategy-collar-btn'));
             expect(onCollar).toHaveBeenCalledOnce();
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // Write Protective Put card
+    // -----------------------------------------------------------------------
+
+    describe('Write Protective Put card', () => {
+        it('shows computed strike at 87.5% of spot', () => {
+            render(<QuickStrategies {...DEFAULT_PROPS} motoPillRatio={50} />);
+            expect(screen.getByTestId('strategy-write-put')).toHaveTextContent('43.7500');
+        });
+
+        it('calls onWritePut with initialValues on button click', () => {
+            const onWritePut = vi.fn();
+            render(<QuickStrategies {...DEFAULT_PROPS} onWritePut={onWritePut} />);
+            fireEvent.click(screen.getByTestId('strategy-write-put-btn'));
+            expect(onWritePut).toHaveBeenCalledOnce();
+            const args = onWritePut.mock.calls[0][0];
+            expect(args.optionType).toBe(OptionType.PUT);
+            expect(args.strikeStr).toBe('43.7500');
+            expect(args.selectedDays).toBe(30);
         });
     });
 
