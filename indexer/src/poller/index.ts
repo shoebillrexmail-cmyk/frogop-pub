@@ -96,7 +96,15 @@ export async function pollNewBlocks(env: Env): Promise<void> {
 
     // Only roll up candles + prune when near tip (saves ~20 D1 subrequests during catch-up)
     if (!catching_up) {
-        await rollUpAllCandles(env.DB);
+        const tokenLabels = swapConfig
+            ? [...swapConfig.tokenMap.values()]
+            : ['MOTO', 'PILL'];
+        // Add cross-rate pairs for all combinations
+        const allTokens = [...tokenLabels];
+        if (tokenLabels.length >= 2) {
+            allTokens.push(`${tokenLabels[0]}_${tokenLabels[1]}`);
+        }
+        await rollUpAllCandles(env.DB, allTokens);
         await pruneOldData(env.DB, latestBlock);
     }
 }
@@ -297,21 +305,27 @@ export async function pollPrices(
         }
     }
 
-    // Compute MOTO_PILL cross-rate if both prices available
-    if (prices['MOTO'] && prices['PILL']) {
-        const motoTokens = BigInt(prices['MOTO']);
-        const pillTokens = BigInt(prices['PILL']);
-        if (motoTokens > 0n) {
-            // Cross-rate: how many PILL per MOTO = pillTokens / motoTokens
-            // Store with 18 decimal precision to avoid losing precision
-            const precision = 10n ** 18n;
-            const crossRate = (pillTokens * precision) / motoTokens;
-            stmts.push(stmtInsertPriceSnapshot(env.DB, {
-                token: 'MOTO_PILL',
-                block_number: currentBlock,
-                timestamp,
-                price: crossRate.toString(),
-            }));
+    // Compute cross-rate for all pairs of tracked tokens
+    const labels = [...swapConfig.tokenMap.values()];
+    if (labels.length >= 2) {
+        const labelA = labels[0]!;
+        const labelB = labels[1]!;
+        const priceA = prices[labelA];
+        const priceB = prices[labelB];
+        if (priceA && priceB) {
+            const tokensA = BigInt(priceA);
+            const tokensB = BigInt(priceB);
+            if (tokensA > 0n) {
+                const precision = 10n ** 18n;
+                const crossRate = (tokensB * precision) / tokensA;
+                const pairKey = `${labelA}_${labelB}`;
+                stmts.push(stmtInsertPriceSnapshot(env.DB, {
+                    token: pairKey,
+                    block_number: currentBlock,
+                    timestamp,
+                    price: crossRate.toString(),
+                }));
+            }
         }
     }
 
@@ -332,17 +346,15 @@ const INTERVALS: Array<{ key: string; ms: number }> = [
     { key: '1w', ms: 604_800_000 },
 ];
 
-const TOKENS = ['MOTO', 'PILL', 'MOTO_PILL'];
-
 function floorToInterval(date: Date, intervalMs: number): Date {
     return new Date(Math.floor(date.getTime() / intervalMs) * intervalMs);
 }
 
-export async function rollUpAllCandles(db: D1Database): Promise<void> {
+export async function rollUpAllCandles(db: D1Database, tokens: string[] = ['MOTO', 'PILL', 'MOTO_PILL']): Promise<void> {
     const now = new Date();
     const stmts: D1PreparedStatement[] = [];
 
-    for (const token of TOKENS) {
+    for (const token of tokens) {
         for (const { key, ms } of INTERVALS) {
             const bucketStart = floorToInterval(now, ms);
             const bucketEnd   = new Date(bucketStart.getTime() + ms);

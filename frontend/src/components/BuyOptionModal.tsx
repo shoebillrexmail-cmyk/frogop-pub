@@ -35,12 +35,16 @@ interface BuyOptionModalProps {
     address: Address | null;
     provider: AbstractRpcProvider;
     network: WalletConnectNetwork;
-    /** MOTO/PILL spot ratio for PnL chart and Greeks */
+    /** Underlying/premium spot ratio for PnL chart and Greeks */
     motoPillRatio?: number | null;
     /** Current block for time-to-expiry calculation */
     currentBlock?: bigint;
     /** Strategy label for pill display (e.g. 'Protective Put') */
     strategyLabel?: string;
+    /** Display symbol for the underlying token (default: 'MOTO') */
+    underlyingSymbol?: string;
+    /** Display symbol for the premium token (default: 'PILL') */
+    premiumSymbol?: string;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -63,6 +67,8 @@ export function BuyOptionModal({
     motoPillRatio,
     currentBlock,
     strategyLabel,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
     onClose,
     onSuccess,
 }: BuyOptionModalProps) {
@@ -187,7 +193,7 @@ export function BuyOptionModal({
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
             const typeLabel_ = option.optionType === OptionType.CALL ? 'CALL' : 'PUT';
-            trackApproval(receipt.transactionId, `Approve ${fmt(buyerPays)} PILL to Buy ${typeLabel_} #${option.id}`, {
+            trackApproval(receipt.transactionId, `Approve ${fmt(buyerPays)} ${premiumSymbol} to Buy ${typeLabel_} #${option.id}`, {
                 optionType: typeLabel_,
                 premium: fmt(option.premium),
                 fee: fmt(fee),
@@ -232,7 +238,7 @@ export function BuyOptionModal({
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
             const typeLabel_ = option.optionType === OptionType.CALL ? 'CALL' : 'PUT';
-            trackAction(receipt.transactionId, 'buyOption', `Buy ${typeLabel_} #${option.id} — ${fmt(buyerPays)} PILL`, {
+            trackAction(receipt.transactionId, 'buyOption', `Buy ${typeLabel_} #${option.id} — ${fmt(buyerPays)} ${premiumSymbol}`, {
                 optionType: typeLabel_,
                 premium: fmt(option.premium),
                 fee: fmt(fee),
@@ -311,7 +317,7 @@ export function BuyOptionModal({
                     {/* Step progress */}
                     <StepIndicator
                         currentStep={currentStep}
-                        step1Label="Approve PILL"
+                        step1Label={`Approve ${premiumSymbol}`}
                         step2Label="Buy Option"
                         step1Status={step1Status}
                         step2Status={step2Status}
@@ -328,13 +334,13 @@ export function BuyOptionModal({
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Strike</span>
                             <span className="text-terminal-text-secondary">
-                                {fmt(option.strikePrice)} PILL
+                                {fmt(option.strikePrice)} {premiumSymbol}
                             </span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Amount</span>
                             <span className="text-terminal-text-secondary">
-                                {fmt(option.underlyingAmount)} MOTO
+                                {fmt(option.underlyingAmount)} {underlyingSymbol}
                             </span>
                         </div>
                         <div className="flex justify-between">
@@ -346,7 +352,7 @@ export function BuyOptionModal({
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Breakeven</span>
                             <span className="text-cyan-300 text-xs">
-                                {fmt(calcBreakeven(option) ?? 0n)} PILL
+                                {fmt(calcBreakeven(option) ?? 0n)} {premiumSymbol}
                             </span>
                         </div>
                     </div>
@@ -357,21 +363,21 @@ export function BuyOptionModal({
                     <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 text-xs font-mono space-y-1.5">
                         <div className="flex justify-between font-semibold">
                             <span className="text-terminal-text-muted">You pay</span>
-                            <span className="text-terminal-text-primary">{fmt(buyerPays)} PILL</span>
+                            <span className="text-terminal-text-primary">{fmt(buyerPays)} {premiumSymbol}</span>
                         </div>
                         <div className="flex justify-between text-terminal-text-muted">
                             <span>Writer receives</span>
-                            <span className="text-terminal-text-secondary">{fmt(writerReceives)} PILL</span>
+                            <span className="text-terminal-text-secondary">{fmt(writerReceives)} {premiumSymbol}</span>
                         </div>
                         <div className="flex justify-between text-terminal-text-muted">
                             <span>Protocol fee ({Number(poolInfo.buyFeeBps) / 100}%)</span>
-                            <span className="text-terminal-text-secondary">{fmt(fee)} PILL</span>
+                            <span className="text-terminal-text-secondary">{fmt(fee)} {premiumSymbol}</span>
                         </div>
                         <hr className="border-terminal-border-subtle" />
                         <div className="flex justify-between mt-1">
-                            <span className="text-terminal-text-muted">Your PILL balance</span>
+                            <span className="text-terminal-text-muted">Your {premiumSymbol} balance</span>
                             <span className={hasBalance ? 'text-green-400' : 'text-rose-400'}>
-                                {tokenLoading ? '…' : pillBalance !== null ? `${fmt(pillBalance)} PILL` : '—'}
+                                {tokenLoading ? '…' : pillBalance !== null ? `${fmt(pillBalance)} ${premiumSymbol}` : '—'}
                                 {hasBalance ? ' ✓' : pillBalance !== null && !hasBalance ? ' ✗' : ''}
                             </span>
                         </div>
@@ -379,7 +385,7 @@ export function BuyOptionModal({
                             <div className="flex justify-between">
                                 <span className="text-terminal-text-muted">Allowance</span>
                                 <span className={needsApproval ? 'text-yellow-400' : 'text-terminal-text-secondary'}>
-                                    {fmt(allowance)} PILL{needsApproval ? ' — needs approval' : ''}
+                                    {fmt(allowance)} {premiumSymbol}{needsApproval ? ' — needs approval' : ''}
                                 </span>
                             </div>
                         )}
@@ -423,7 +429,7 @@ export function BuyOptionModal({
                     {/* Insufficient balance warning */}
                     {!tokenLoading && pillBalance !== null && !hasBalance && (
                         <p className="text-rose-400 text-xs font-mono" data-testid="balance-error">
-                            Insufficient PILL balance.
+                            Insufficient {premiumSymbol} balance.
                         </p>
                     )}
 
@@ -451,10 +457,10 @@ export function BuyOptionModal({
                             type="buy"
                             txId={txId}
                             movements={[
-                                { direction: 'debit', amount: fmt(buyerPays), token: 'PILL', label: 'Premium paid' },
+                                { direction: 'debit', amount: fmt(buyerPays), token: premiumSymbol, label: 'Premium paid' },
                                 { direction: 'credit', amount: `Option #${option.id}`, token: typeLabel, label: 'You receive' },
                             ]}
-                            fee={{ amount: fmt(fee), token: 'PILL' }}
+                            fee={{ amount: fmt(fee), token: premiumSymbol }}
                             onDone={onSuccess}
                         />
                     )}
@@ -472,7 +478,7 @@ export function BuyOptionModal({
                                     className="w-full btn-primary py-2.5 text-sm rounded disabled:opacity-50"
                                     data-testid="btn-approve"
                                 >
-                                    {txStatus === 'approving' ? 'Approving…' : txId && txStatus === 'idle' ? 'Waiting for approval' : 'Approve PILL'}
+                                    {txStatus === 'approving' ? 'Approving…' : txId && txStatus === 'idle' ? 'Waiting for approval' : `Approve ${premiumSymbol}`}
                                 </button>
                             ) : (
                                 <button

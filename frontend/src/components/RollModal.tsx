@@ -33,6 +33,8 @@ interface RollModalProps {
     network: WalletConnectNetwork;
     onClose: () => void;
     onSuccess: () => void;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
 }
 
 const MAX_SAT = 10_000_000n;
@@ -51,6 +53,8 @@ export function RollModal({
     network,
     onClose,
     onSuccess,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
 }: RollModalProps) {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
@@ -73,7 +77,7 @@ export function RollModal({
     }, [provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const isCall = option.optionType === OptionType.CALL;
-    const collateralToken = isCall ? 'MOTO' : 'PILL';
+    const collateralToken = isCall ? underlyingSymbol : premiumSymbol;
 
     // Fixed-point: (strike * amount) / 1e18 — both are 18-decimal
     const oldCollateral = isCall
@@ -208,11 +212,11 @@ export function RollModal({
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Strike</span>
-                            <span className="text-terminal-text-secondary">{fmt(option.strikePrice)} PILL</span>
+                            <span className="text-terminal-text-secondary">{fmt(option.strikePrice)} {premiumSymbol}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Premium</span>
-                            <span className="text-terminal-text-secondary">{fmt(option.premium)} PILL</span>
+                            <span className="text-terminal-text-secondary">{fmt(option.premium)} {premiumSymbol}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Expiry</span>
@@ -220,7 +224,7 @@ export function RollModal({
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Amount</span>
-                            <span className="text-terminal-text-secondary">{fmt(option.underlyingAmount)} MOTO</span>
+                            <span className="text-terminal-text-secondary">{fmt(option.underlyingAmount)} {underlyingSymbol}</span>
                         </div>
                     </div>
 

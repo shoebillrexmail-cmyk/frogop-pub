@@ -37,6 +37,8 @@ interface ExerciseModalProps {
     provider: AbstractRpcProvider;
     network: WalletConnectNetwork;
     motoPillRatio?: number | null;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -56,6 +58,8 @@ export function ExerciseModal({
     provider,
     network,
     motoPillRatio,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
     onClose,
     onSuccess,
 }: ExerciseModalProps) {
@@ -117,10 +121,10 @@ export function ExerciseModal({
 
     // What the buyer pays to the writer
     const payAmount = isCall ? strikeValue : option.underlyingAmount;
-    const payToken = isCall ? 'PILL' : 'MOTO';
+    const payToken = isCall ? premiumSymbol : underlyingSymbol;
     // What the buyer receives (minus fee)
     const receiveAmount = feeBase - exerciseFee;
-    const receiveToken = isCall ? 'MOTO' : 'PILL';
+    const receiveToken = isCall ? underlyingSymbol : premiumSymbol;
 
     // Approval: CALL needs PILL allowance for strikeValue; PUT needs MOTO allowance for underlyingAmount
     const approvalTokenAddress = isCall ? poolInfo.premiumToken : poolInfo.underlying;
@@ -342,7 +346,7 @@ export function ExerciseModal({
                         <p className="text-terminal-text-muted font-semibold mb-1">PnL Estimate</p>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Premium paid</span>
-                            <span className="text-terminal-text-secondary">{fmt(option.premium)} PILL</span>
+                            <span className="text-terminal-text-secondary">{fmt(option.premium)} {premiumSymbol}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Exercise cost</span>
@@ -359,7 +363,7 @@ export function ExerciseModal({
                                 {fmt(receiveAmount)} {receiveToken}
                                 {motoPillRatio && isCall && (
                                     <span className="text-terminal-text-muted font-normal ml-1">
-                                        (~{(Number(receiveAmount) / 1e18 * motoPillRatio).toFixed(2)} PILL eq.)
+                                        (~{(Number(receiveAmount) / 1e18 * motoPillRatio).toFixed(2)} {premiumSymbol} eq.)
                                     </span>
                                 )}
                             </span>
@@ -371,7 +375,7 @@ export function ExerciseModal({
                                 <div className="flex justify-between">
                                     <span className="text-terminal-text-muted">Est. PnL</span>
                                     <span className={pnl >= 0 ? 'text-green-400 font-semibold' : 'text-rose-400 font-semibold'}>
-                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(4)} PILL
+                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(4)} {premiumSymbol}
                                     </span>
                                 </div>
                             );

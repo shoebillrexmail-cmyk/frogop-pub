@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { AbstractRpcProvider } from 'opnet';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { FactoryService } from '../services/factory.ts';
-import { CONTRACT_ADDRESSES } from '../config/index.ts';
+import { CONTRACT_ADDRESSES, findPoolConfig, findPoolConfigByAddress } from '../config/index.ts';
 import type { PoolEntry } from '../services/types.ts';
 
 export type PoolSource = 'factory' | 'env' | null;
@@ -19,6 +19,21 @@ export interface UseDiscoverPoolsResult {
     source: PoolSource;
     /** Re-fetch pools from the factory / env */
     refetch: () => void;
+}
+
+/** Enrich a pool entry with token metadata from pools.config.json. */
+function enrichPool(pool: PoolEntry): PoolEntry {
+    // Try by token addresses first (most reliable), then by pool address
+    const config = (pool.underlying && pool.premiumToken)
+        ? findPoolConfig(pool.underlying, pool.premiumToken)
+        : findPoolConfigByAddress(pool.address);
+    if (!config) return pool;
+    return {
+        ...pool,
+        poolId: config.id,
+        underlyingSymbol: config.underlying.symbol,
+        premiumSymbol: config.premium.symbol,
+    };
 }
 
 export function useDiscoverPools(providerOverride?: AbstractRpcProvider | null): UseDiscoverPoolsResult {
@@ -52,7 +67,7 @@ export function useDiscoverPools(providerOverride?: AbstractRpcProvider | null):
                     const svc = new FactoryService(provider!, factoryAddr);
                     const discovered = await svc.getAllPools();
                     if (!cancelled && discovered.length > 0) {
-                        setPools(discovered);
+                        setPools(discovered.map(enrichPool));
                         setSource('factory');
                         setLoading(false);
                         return;
@@ -65,7 +80,7 @@ export function useDiscoverPools(providerOverride?: AbstractRpcProvider | null):
             // Strategy 2: fall back to single env pool
             const envPool = CONTRACT_ADDRESSES.pool;
             if (!cancelled && envPool) {
-                setPools([{ address: envPool, underlying: '', premiumToken: '' }]);
+                setPools([enrichPool({ address: envPool, underlying: '', premiumToken: '' })]);
                 setSource('env');
             } else if (!cancelled) {
                 setPools([]);

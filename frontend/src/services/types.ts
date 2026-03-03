@@ -40,6 +40,12 @@ export interface PoolEntry {
     underlying: string;
     /** Hex address of the premium token */
     premiumToken: string;
+    /** Pool config ID from pools.config.json (e.g. "moto-pill") */
+    poolId?: string;
+    /** Display symbol for the underlying token (e.g. "MOTO") */
+    underlyingSymbol?: string;
+    /** Display symbol for the premium token (e.g. "PILL") */
+    premiumSymbol?: string;
 }
 
 /** Pool-level configuration read from on-chain view methods */

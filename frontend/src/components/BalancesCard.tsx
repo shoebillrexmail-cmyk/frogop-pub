@@ -1,5 +1,5 @@
 /**
- * BalancesCard — shows MOTO and PILL token balances for the connected wallet.
+ * BalancesCard — shows underlying and premium token balances for the connected wallet.
  */
 import { formatTokenAmount } from '../config/index.ts';
 
@@ -7,9 +7,11 @@ interface BalancesCardProps {
     motoBalance: bigint | null;
     pillBalance: bigint | null;
     loading: boolean;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
 }
 
-export function BalancesCard({ motoBalance, pillBalance, loading }: BalancesCardProps) {
+export function BalancesCard({ motoBalance, pillBalance, loading, underlyingSymbol = 'MOTO', premiumSymbol = 'PILL' }: BalancesCardProps) {
     function fmt(v: bigint | null): string {
         if (loading) return '…';
         if (v === null) return '—';
@@ -23,13 +25,13 @@ export function BalancesCard({ motoBalance, pillBalance, loading }: BalancesCard
             </h3>
             <div className="space-y-2 font-mono text-sm">
                 <div className="flex justify-between">
-                    <span className="text-terminal-text-muted">MOTO</span>
+                    <span className="text-terminal-text-muted">{underlyingSymbol}</span>
                     <span className="text-terminal-text-primary" data-testid="moto-balance">
                         {fmt(motoBalance)}
                     </span>
                 </div>
                 <div className="flex justify-between">
-                    <span className="text-terminal-text-muted">PILL</span>
+                    <span className="text-terminal-text-muted">{premiumSymbol}</span>
                     <span className="text-terminal-text-primary" data-testid="pill-balance">
                         {fmt(pillBalance)}
                     </span>

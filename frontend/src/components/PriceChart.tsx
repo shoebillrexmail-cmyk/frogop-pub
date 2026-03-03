@@ -19,21 +19,37 @@ import {
 import type { CandleData } from '../services/priceService.ts';
 
 const INTERVALS = ['1h', '4h', '1d', '1w'] as const;
-const TOKENS = [
+const DEFAULT_TOKENS = [
     { value: 'MOTO', label: 'MOTO' },
     { value: 'PILL', label: 'PILL' },
     { value: 'MOTO_PILL', label: 'MOTO/PILL' },
 ] as const;
 
 /** Y-axis denomination info per token. */
-const TOKEN_META: Record<string, { unit: string; title: string }> = {
+const DEFAULT_TOKEN_META: Record<string, { unit: string; title: string }> = {
     MOTO: { unit: 'sats', title: 'MOTO (sats/MOTO)' },
     PILL: { unit: 'sats', title: 'PILL (sats/PILL)' },
     MOTO_PILL: { unit: 'PILL', title: 'MOTO/PILL ratio' },
 };
 
-function formatPrice(value: number, token: string): string {
-    if (token === 'MOTO_PILL') {
+/** Build token options + metadata from symbol pair. */
+function buildTokenOptions(uSym: string, pSym: string) {
+    const pairKey = `${uSym}_${pSym}`;
+    const tokens = [
+        { value: uSym, label: uSym },
+        { value: pSym, label: pSym },
+        { value: pairKey, label: `${uSym}/${pSym}` },
+    ];
+    const meta: Record<string, { unit: string; title: string }> = {
+        [uSym]: { unit: 'sats', title: `${uSym} (sats/${uSym})` },
+        [pSym]: { unit: 'sats', title: `${pSym} (sats/${pSym})` },
+        [pairKey]: { unit: pSym, title: `${uSym}/${pSym} ratio` },
+    };
+    return { tokens, meta };
+}
+
+function formatPrice(value: number, token: string, pairKey: string): string {
+    if (token === pairKey) {
         // Ratio — show up to 4 decimals, strip trailing zeros
         return value.toFixed(4).replace(/\.?0+$/, '');
     }
@@ -50,6 +66,8 @@ interface PriceChartProps {
     onIntervalChange: (interval: string) => void;
     onTokenChange: (token: string) => void;
     height?: number;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
 }
 
 export function PriceChart({
@@ -59,7 +77,15 @@ export function PriceChart({
     onIntervalChange,
     onTokenChange,
     height = 400,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
 }: PriceChartProps) {
+    const { tokens: TOKENS, meta: TOKEN_META } =
+        underlyingSymbol === 'MOTO' && premiumSymbol === 'PILL'
+            ? { tokens: DEFAULT_TOKENS as unknown as { value: string; label: string }[], meta: DEFAULT_TOKEN_META }
+            : buildTokenOptions(underlyingSymbol, premiumSymbol);
+    const pairKey = `${underlyingSymbol}_${premiumSymbol}`;
+
     const containerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -105,7 +131,7 @@ export function PriceChart({
             wickDownColor: '#fb7185',
             priceFormat: {
                 type: 'custom',
-                formatter: (price: number) => formatPrice(price, token),
+                formatter: (price: number) => formatPrice(price, token, pairKey),
             },
         });
 
@@ -147,7 +173,7 @@ export function PriceChart({
         candleSeriesRef.current.applyOptions({
             priceFormat: {
                 type: 'custom',
-                formatter: (price: number) => formatPrice(price, token),
+                formatter: (price: number) => formatPrice(price, token, pairKey),
             },
         });
     }, [token]);

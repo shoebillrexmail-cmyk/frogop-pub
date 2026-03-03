@@ -1,0 +1,50 @@
+{
+  "pools": [
+    {
+      "id": "moto-pill",
+      "underlying": {
+        "symbol": "MOTO",
+        "name": "Frogop Underlying",
+        "decimals": 18,
+        "addresses": {
+          "testnet": "0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd",
+          "mainnet": ""
+        }
+      },
+      "premium": {
+        "symbol": "PILL",
+        "name": "Frogop Premium",
+        "decimals": 18,
+        "addresses": {
+          "testnet": "0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb",
+          "mainnet": ""
+        }
+      },
+      "pool": {
+        "addresses": {
+          "testnet": "opt1sqze2thmp29pkkj8ft8qll0383k3ek4sgvvfqd9r5",
+          "mainnet": ""
+        }
+      },
+      "nativeSwap": {
+        "addresses": {
+          "testnet": "0x4397befe4e067390596b3c296e77fe86589487bf3bf3f0a9a93ce794e2d78fb5",
+          "mainnet": ""
+        }
+      }
+    }
+  ],
+  "factory": {
+    "addresses": {
+      "testnet": "opt1sqz4wm6z6gy2rrfsqxf0tuh6tkyn32eerkg57nrka",
+      "mainnet": ""
+    }
+  },
+  "testConfig": {
+    "mintAmount": "1000000",
+    "wasmPaths": {
+      "token": "build/MyToken.wasm",
+      "pool": "build/OptionsPool.wasm"
+    }
+  }
+}

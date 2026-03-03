@@ -29,6 +29,8 @@ interface CancelModalProps {
     address: Address | null;
     provider: AbstractRpcProvider;
     network: WalletConnectNetwork;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -47,6 +49,8 @@ export function CancelModal({
     address,
     provider,
     network,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
     onClose,
     onSuccess,
 }: CancelModalProps) {
@@ -70,7 +74,7 @@ export function CancelModal({
     const collateral = isCall
         ? option.underlyingAmount
         : (option.strikePrice * option.underlyingAmount) / (10n ** 18n);
-    const collateralToken = isCall ? 'MOTO' : 'PILL';
+    const collateralToken = isCall ? underlyingSymbol : premiumSymbol;
 
     const isExpired = currentBlock !== null && currentBlock >= option.expiryBlock;
     const feeBps = isExpired ? 0n : poolInfo.cancelFeeBps;

@@ -54,7 +54,7 @@ interface WriteOptionPanelProps {
     address: Address | null;
     provider: AbstractRpcProvider;
     network: WalletConnectNetwork;
-    /** Current MOTO/PILL spot price for BS suggested premium */
+    /** Current underlying/premium spot price for BS suggested premium */
     motoPillRatio?: number | null;
     /** Pre-fill form values from strategy templates */
     initialValues?: WriteOptionInitialValues;
@@ -62,6 +62,10 @@ interface WriteOptionPanelProps {
     strategyLabel?: string;
     /** Stable UUID for this write flow instance (from resume); generates fresh if omitted */
     flowInstanceId?: string;
+    /** Display symbol for the underlying token (default: 'MOTO') */
+    underlyingSymbol?: string;
+    /** Display symbol for the premium token (default: 'PILL') */
+    premiumSymbol?: string;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -95,6 +99,8 @@ export function WriteOptionPanel({
     initialValues,
     strategyLabel,
     flowInstanceId: flowInstanceIdProp,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
     onClose,
     onSuccess,
 }: WriteOptionPanelProps) {
@@ -235,7 +241,7 @@ export function WriteOptionPanel({
             yieldPct = Number(premiumBi) / Number(col) * 100;
         }
         const annualizedYieldPct = yieldPct !== null && selectedDays > 0 ? yieldPct * 365 / selectedDays : null;
-        const collateralSym = optionType === OptionType.CALL ? 'MOTO' : 'PILL';
+        const collateralSym = optionType === OptionType.CALL ? underlyingSymbol : premiumSymbol;
 
         return { maxProfit, breakeven, maxLoss, yieldPct, annualizedYieldPct, collateralSym };
     }, [premiumStr, strikeStr, amountStr, optionType, selectedDays, motoPillRatio]);
@@ -261,7 +267,7 @@ export function WriteOptionPanel({
 
     // CALL locks MOTO (underlying), PUT locks PILL (premiumToken)
     const collateralToken = optionType === OptionType.CALL ? poolInfo.underlying : poolInfo.premiumToken;
-    const collateralSymbol = optionType === OptionType.CALL ? 'MOTO' : 'PILL';
+    const collateralSymbol = optionType === OptionType.CALL ? underlyingSymbol : premiumSymbol;
 
     const { info: tokenInfo, loading: tokenLoading, refetch: refetchToken } = useTokenInfo({
         tokenAddress: collateralToken,
@@ -392,7 +398,7 @@ export function WriteOptionPanel({
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
             const typeLabel_ = optionType === OptionType.CALL ? 'CALL' : 'PUT';
-            trackAction(receipt.transactionId, 'writeOption', `Write ${typeLabel_} — ${amountStr} MOTO @ ${strikeStr} PILL`, {
+            trackAction(receipt.transactionId, 'writeOption', `Write ${typeLabel_} — ${amountStr} ${underlyingSymbol} @ ${strikeStr} ${premiumSymbol}`, {
                 optionType: String(optionType),
                 amount: amountStr,
                 strike: strikeStr,
@@ -506,7 +512,7 @@ export function WriteOptionPanel({
                     {/* Amount */}
                     <div>
                         <label className="block text-xs text-terminal-text-muted font-mono mb-1">
-                            Amount (MOTO)
+                            Amount ({underlyingSymbol})
                         </label>
                         <div className="flex items-center gap-2 border border-terminal-border-subtle rounded px-3 py-2">
                             <input
@@ -518,14 +524,14 @@ export function WriteOptionPanel({
                                 placeholder="1.0"
                                 data-testid="input-amount"
                             />
-                            <span className="text-terminal-text-muted text-xs font-mono">MOTO</span>
+                            <span className="text-terminal-text-muted text-xs font-mono">{underlyingSymbol}</span>
                         </div>
                     </div>
 
                     {/* Strike */}
                     <div>
                         <label className="block text-xs text-terminal-text-muted font-mono mb-1">
-                            Strike Price (PILL)
+                            Strike Price ({premiumSymbol})
                         </label>
                         <div className="flex items-center gap-2 border border-terminal-border-subtle rounded px-3 py-2">
                             <input
@@ -537,14 +543,14 @@ export function WriteOptionPanel({
                                 placeholder="50.0"
                                 data-testid="input-strike"
                             />
-                            <span className="text-terminal-text-muted text-xs font-mono">PILL</span>
+                            <span className="text-terminal-text-muted text-xs font-mono">{premiumSymbol}</span>
                         </div>
                         {/* Moneyness badge */}
                         {motoPillRatio != null && motoPillRatio > 0 && (
                             <div className="mt-1.5 space-y-1" data-testid="moneyness-section">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] text-terminal-text-muted font-mono">
-                                        Spot: <span className="text-terminal-text-secondary">{motoPillRatio.toFixed(2)} PILL</span>
+                                        Spot: <span className="text-terminal-text-secondary">{motoPillRatio.toFixed(2)} {premiumSymbol}</span>
                                     </span>
                                     {moneynessResult && (
                                         <span
@@ -573,7 +579,7 @@ export function WriteOptionPanel({
                     {/* Premium */}
                     <div>
                         <label className="block text-xs text-terminal-text-muted font-mono mb-1">
-                            Premium (PILL)
+                            Premium ({premiumSymbol})
                         </label>
                         <div className="flex items-center gap-2 border border-terminal-border-subtle rounded px-3 py-2">
                             <input
@@ -585,13 +591,13 @@ export function WriteOptionPanel({
                                 placeholder="5.0"
                                 data-testid="input-premium"
                             />
-                            <span className="text-terminal-text-muted text-xs font-mono">PILL</span>
+                            <span className="text-terminal-text-muted text-xs font-mono">{premiumSymbol}</span>
                         </div>
                         {suggestedPremium !== null && suggestedPremium > 0n && (
                             <div className="mt-1.5 space-y-1">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] text-terminal-text-muted font-mono">
-                                        Fair value: <span className="text-cyan-400">{formatBigInt(suggestedPremium)} PILL</span>
+                                        Fair value: <span className="text-cyan-400">{formatBigInt(suggestedPremium)} {premiumSymbol}</span>
                                     </span>
                                     <button
                                         type="button"
@@ -611,7 +617,7 @@ export function WriteOptionPanel({
                                     </button>
                                     <span
                                         className="text-[10px] text-terminal-text-muted cursor-help"
-                                        title="Estimated using Black-Scholes pricing. Depends on current MOTO/PILL price, time to expiry, and expected volatility. You can set any premium — this is just a reference."
+                                        title={`Estimated using Black-Scholes pricing. Depends on current ${underlyingSymbol}/${premiumSymbol} price, time to expiry, and expected volatility. You can set any premium — this is just a reference.`}
                                     >
                                         ?
                                     </span>
@@ -707,11 +713,11 @@ export function WriteOptionPanel({
                             <span className="text-[10px] text-terminal-text-muted uppercase tracking-wider">Writer Outlook</span>
                             <div className="flex justify-between">
                                 <span className="text-terminal-text-muted">Max profit</span>
-                                <span className="text-green-400">{formatBigInt(writerOutlook.maxProfit)} PILL</span>
+                                <span className="text-green-400">{formatBigInt(writerOutlook.maxProfit)} {premiumSymbol}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-terminal-text-muted">Breakeven</span>
-                                <span className="text-cyan-400">{formatBigInt(writerOutlook.breakeven)} PILL</span>
+                                <span className="text-cyan-400">{formatBigInt(writerOutlook.breakeven)} {premiumSymbol}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-terminal-text-muted">Yield</span>

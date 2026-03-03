@@ -30,7 +30,7 @@ import { QuickStrategies } from '../components/QuickStrategies.tsx';
 import { YieldOverview } from '../components/YieldOverview.tsx';
 import { WriterHowItWorks } from '../components/WriterHowItWorks.tsx';
 import { CollarModal } from '../components/CollarModal.tsx';
-import { CONTRACT_ADDRESSES, currentNetwork, formatAddress, formatTokenAmount } from '../config/index.ts';
+import { CONTRACT_ADDRESSES, currentNetwork, formatAddress, formatTokenAmount, findPoolConfig, getPricePairKey } from '../config/index.ts';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
 import { NotificationBanner } from '../components/NotificationBanner.tsx';
 import { useNotifications } from '../hooks/useNotifications.ts';
@@ -102,7 +102,18 @@ export function PoolsPage() {
 
     const { currentBlock } = useBlockTracker(readProvider, wsBlockInfo?.blockNumber);
 
+    // Derive pool metadata from config
+    const selectedPool = pools.find((p) => p.address === selectedPoolAddr) ?? null;
+    const poolConfig = useMemo(() => {
+        if (poolInfo) return findPoolConfig(poolInfo.underlying, poolInfo.premiumToken);
+        return null;
+    }, [poolInfo]);
+    const underlyingSymbol = selectedPool?.underlyingSymbol ?? poolConfig?.underlying.symbol ?? 'MOTO';
+    const premiumSymbol = selectedPool?.premiumSymbol ?? poolConfig?.premium.symbol ?? 'PILL';
+    const pairKey = poolConfig ? getPricePairKey(poolConfig) : `${underlyingSymbol}_${premiumSymbol}`;
+
     const { motoPillRatio, lastUpdated: priceLastUpdated } = usePriceRatio(
+        pairKey,
         NATIVESWAP_ADDRESS || null,
         poolInfo?.underlying ?? null,
         poolInfo?.premiumToken ?? null,
@@ -110,8 +121,8 @@ export function PoolsPage() {
         network ?? null,
     );
 
-    // Price chart state
-    const [chartToken, setChartToken] = useState('MOTO_PILL');
+    // Price chart state — default to the pool's pair key
+    const [chartToken, setChartToken] = useState(pairKey);
     const [chartInterval, setChartInterval] = useState('1d');
     const { candles } = usePriceCandles(chartToken, chartInterval);
     const [chartOpen, setChartOpen] = useState(true);
@@ -346,7 +357,9 @@ export function PoolsPage() {
                                     : 'bg-terminal-bg-elevated text-terminal-text-secondary hover:bg-terminal-bg-secondary'
                             }`}
                         >
-                            {formatAddress(p.address)}
+                            {p.underlyingSymbol && p.premiumSymbol
+                                ? `${p.underlyingSymbol}/${p.premiumSymbol}`
+                                : formatAddress(p.address)}
                         </button>
                     ))}
                 </div>
@@ -361,6 +374,8 @@ export function PoolsPage() {
                         poolAddress={selectedPoolAddr}
                         motoPillRatio={motoPillRatio}
                         priceLastUpdated={priceLastUpdated}
+                        underlyingSymbol={underlyingSymbol}
+                        premiumSymbol={premiumSymbol}
                     />
 
                     {/* Tab bar */}
@@ -420,6 +435,8 @@ export function PoolsPage() {
                                     motoPillRatio={motoPillRatio}
                                     poolAddress={selectedPoolAddr}
                                     buyFeeBps={poolInfo.buyFeeBps}
+                                    underlyingSymbol={underlyingSymbol}
+                                    premiumSymbol={premiumSymbol}
                                     onBuy={handleBuy}
                                 />
                             ) : (
@@ -431,6 +448,8 @@ export function PoolsPage() {
                                     gracePeriodBlocks={poolInfo.gracePeriodBlocks}
                                     motoPillRatio={motoPillRatio}
                                     poolAddress={selectedPoolAddr}
+                                    underlyingSymbol={underlyingSymbol}
+                                    premiumSymbol={premiumSymbol}
                                     onBuy={handleBuy}
                                     onCancel={handleCancel}
                                     onExercise={handleExercise}
@@ -447,17 +466,17 @@ export function PoolsPage() {
                                     Protective Put
                                 </h4>
                                 <p className="text-xs text-terminal-text-muted font-mono mb-3">
-                                    Hedge your MOTO — buy downside protection
+                                    Hedge your {underlyingSymbol} — buy downside protection
                                 </p>
                                 {bestProtectivePut ? (
                                     <div className="text-xs font-mono space-y-1 mb-3">
                                         <div className="flex justify-between">
                                             <span className="text-terminal-text-muted">Strike</span>
-                                            <span className="text-terminal-text-secondary">{formatTokenAmount(bestProtectivePut.strikePrice)} PILL</span>
+                                            <span className="text-terminal-text-secondary">{formatTokenAmount(bestProtectivePut.strikePrice)} {premiumSymbol}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-terminal-text-muted">Premium</span>
-                                            <span className="text-rose-400">{formatTokenAmount(bestProtectivePut.premium)} PILL</span>
+                                            <span className="text-rose-400">{formatTokenAmount(bestProtectivePut.premium)} {premiumSymbol}</span>
                                         </div>
                                     </div>
                                 ) : (
@@ -493,6 +512,8 @@ export function PoolsPage() {
                                             interval={chartInterval}
                                             onIntervalChange={setChartInterval}
                                             onTokenChange={setChartToken}
+                                            underlyingSymbol={underlyingSymbol}
+                                            premiumSymbol={premiumSymbol}
                                         />
                                     )}
                                 </div>
@@ -544,6 +565,8 @@ export function PoolsPage() {
                                             interval={chartInterval}
                                             onIntervalChange={setChartInterval}
                                             onTokenChange={setChartToken}
+                                            underlyingSymbol={underlyingSymbol}
+                                            premiumSymbol={premiumSymbol}
                                         />
                                     )}
                                 </div>
@@ -579,6 +602,8 @@ export function PoolsPage() {
                     motoPillRatio={motoPillRatio}
                     currentBlock={currentBlock ?? undefined}
                     strategyLabel={buyStrategyLabel}
+                    underlyingSymbol={underlyingSymbol}
+                    premiumSymbol={premiumSymbol}
                     onClose={() => { setBuyTarget(null); setBuyStrategyLabel(undefined); }}
                     onSuccess={() => {
                         setBuyTarget(null);
@@ -598,6 +623,8 @@ export function PoolsPage() {
                     address={address}
                     provider={provider}
                     network={network}
+                    underlyingSymbol={underlyingSymbol}
+                    premiumSymbol={premiumSymbol}
                     onClose={() => setCancelTarget(null)}
                     onSuccess={() => {
                         setCancelTarget(null);
@@ -617,6 +644,8 @@ export function PoolsPage() {
                     provider={provider}
                     network={network}
                     motoPillRatio={motoPillRatio}
+                    underlyingSymbol={underlyingSymbol}
+                    premiumSymbol={premiumSymbol}
                     onClose={() => setExerciseTarget(null)}
                     onSuccess={() => {
                         setExerciseTarget(null);
@@ -639,6 +668,8 @@ export function PoolsPage() {
                         setSettleTarget(null);
                         refetchPool();
                     }}
+                    underlyingSymbol={underlyingSymbol}
+                    premiumSymbol={premiumSymbol}
                 />
             )}
 
@@ -653,6 +684,8 @@ export function PoolsPage() {
                     provider={provider}
                     network={network}
                     motoPillRatio={motoPillRatio}
+                    underlyingSymbol={underlyingSymbol}
+                    premiumSymbol={premiumSymbol}
                     initialValues={writeInitialValues}
                     strategyLabel={writeStrategyLabel}
                     flowInstanceId={writeFlowInstanceId}

@@ -157,7 +157,6 @@ async function route(
     const candlesMatch = path.match(/^\/prices\/([^/]+)\/candles$/);
     if (candlesMatch) {
         const token = normalizeToken(candlesMatch[1] ?? '');
-        if (!token) return badRequest('Invalid token. Use MOTO, PILL, or MOTO_PILL');
         const interval = params.get('interval') ?? '1d';
         if (!['1h', '4h', '1d', '1w'].includes(interval)) {
             return badRequest('Invalid interval. Use 1h, 4h, 1d, or 1w');
@@ -176,7 +175,6 @@ async function route(
     const latestMatch = path.match(/^\/prices\/([^/]+)\/latest$/);
     if (latestMatch) {
         const token = normalizeToken(latestMatch[1] ?? '');
-        if (!token) return badRequest('Invalid token. Use MOTO, PILL, or MOTO_PILL');
         const price = await getLatestPrice(env.DB, token);
         return price ? json(price) : notFound('No price data');
     }
@@ -185,7 +183,6 @@ async function route(
     const historyMatch = path.match(/^\/prices\/([^/]+)\/history$/);
     if (historyMatch) {
         const token = normalizeToken(historyMatch[1] ?? '');
-        if (!token) return badRequest('Invalid token. Use MOTO, PILL, or MOTO_PILL');
         const limit = Math.min(1000, Math.max(1, parseInt(params.get('limit') ?? '200', 10)));
         const hOpts: { from?: string; to?: string; limit?: number } = { limit };
         const hFrom = params.get('from');
@@ -199,12 +196,9 @@ async function route(
     return notFound();
 }
 
-const VALID_TOKENS = new Set(['MOTO', 'PILL', 'MOTO_PILL']);
-
-function normalizeToken(raw: string): string | null {
+function normalizeToken(raw: string): string {
     const decoded = decodeURIComponent(raw);
-    const upper = decoded.toUpperCase().replace('/', '_');
-    return VALID_TOKENS.has(upper) ? upper : null;
+    return decoded.toUpperCase().replace('/', '_');
 }
 
 async function handlePoolOptions(

@@ -27,6 +27,8 @@ interface OptionsChainProps {
     motoPillRatio?: number | null;
     poolAddress?: string;
     buyFeeBps?: bigint;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
     onBuy?: (option: OptionData) => void;
 }
 
@@ -222,6 +224,8 @@ function ExpandedListings({
     walletHex,
     walletConnected,
     currentBlock,
+    uSym = 'MOTO',
+    pSym = 'PILL',
     onBuy,
 }: {
     cell: ChainCell;
@@ -229,6 +233,8 @@ function ExpandedListings({
     walletHex: string | null;
     walletConnected: boolean;
     currentBlock?: bigint;
+    uSym?: string;
+    pSym?: string;
     onBuy?: (option: OptionData) => void;
 }) {
     const sideColor = side === 'call' ? 'border-l-green-500/30' : 'border-l-rose-500/30';
@@ -268,10 +274,10 @@ function ExpandedListings({
                                     {opt.id.toString()}
                                 </td>
                                 <td className="py-1.5 pr-2 text-terminal-text-secondary">
-                                    {formatTokenAmount(opt.underlyingAmount)} MOTO
+                                    {formatTokenAmount(opt.underlyingAmount)} {uSym}
                                 </td>
                                 <td className={`py-1.5 pr-2 ${side === 'call' ? 'text-green-400' : 'text-rose-400'}`}>
-                                    {formatTokenAmount(opt.premium)} PILL
+                                    {formatTokenAmount(opt.premium)} {pSym}
                                 </td>
                                 <td className="py-1.5 pr-2 text-terminal-text-secondary">
                                     {blocksLeft !== undefined
@@ -282,7 +288,7 @@ function ExpandedListings({
                                     }
                                 </td>
                                 <td className="py-1.5 pr-2 text-terminal-text-secondary">
-                                    {be !== null ? `${formatTokenAmount(be)} PILL` : '—'}
+                                    {be !== null ? `${formatTokenAmount(be)} ${pSym}` : '—'}
                                 </td>
                                 <td className="py-1.5">
                                     {isWriter ? (
@@ -338,6 +344,8 @@ export function OptionsChain({
     walletConnected = walletHex !== null,
     currentBlock,
     motoPillRatio,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
     onBuy,
 }: OptionsChainProps) {
     const [activeBucket, setActiveBucket] = useState<ExpiryBucket | 'all'>('all');
@@ -474,6 +482,8 @@ export function OptionsChain({
                                         walletHex={walletHex}
                                         walletConnected={walletConnected}
                                         currentBlock={currentBlock}
+                                        uSym={underlyingSymbol}
+                                        pSym={premiumSymbol}
                                         onBuy={onBuy}
                                     />
                                 )}
@@ -484,6 +494,8 @@ export function OptionsChain({
                                         walletHex={walletHex}
                                         walletConnected={walletConnected}
                                         currentBlock={currentBlock}
+                                        uSym={underlyingSymbol}
+                                        pSym={premiumSymbol}
                                         onBuy={onBuy}
                                     />
                                 )}

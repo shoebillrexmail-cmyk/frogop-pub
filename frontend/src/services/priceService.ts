@@ -80,11 +80,14 @@ function toFloat(s: string): number {
 }
 
 /**
- * Tokens whose raw indexer data (tokens-per-100k-sats) should be inverted to
- * sats-per-token for intuitive charting (higher = more expensive).
+ * Individual tokens (no underscore) have raw indexer data in tokens-per-100k-sats
+ * and should be inverted to sats-per-token for intuitive charting.
+ * Pair keys (e.g. MOTO_PILL) are cross-rates and should NOT be inverted.
  */
 const SATS_PER_QUOTE = 100_000;
-const INVERTED_TOKENS = new Set(['MOTO', 'PILL']);
+function shouldInvert(token: string): boolean {
+    return !token.includes('_');
+}
 
 function safeInvert(v: number): number {
     return v > 0 ? SATS_PER_QUOTE / v : 0;
@@ -143,8 +146,8 @@ export async function getCandles(
     const rows = await fetchJson<CandleRow[]>(`/prices/${token}/candles?${qs}`);
     if (!rows) return null;
     const candles = rows.map(mapCandleRow);
-    // Invert MOTO/PILL to sats-per-token (intuitive: up = more expensive)
-    return INVERTED_TOKENS.has(token) ? candles.map(invertCandle) : candles;
+    // Invert individual tokens to sats-per-token (intuitive: up = more expensive)
+    return shouldInvert(token) ? candles.map(invertCandle) : candles;
 }
 
 export async function getLatestPrice(token: string): Promise<PriceSnapshot | null> {

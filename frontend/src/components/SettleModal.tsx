@@ -27,6 +27,8 @@ interface SettleModalProps {
     network: WalletConnectNetwork;
     onClose: () => void;
     onSuccess: () => void;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
 }
 
 const MAX_SAT = 10_000_000n;
@@ -44,6 +46,8 @@ export function SettleModal({
     network,
     onClose,
     onSuccess,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
 }: SettleModalProps) {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
@@ -57,7 +61,7 @@ export function SettleModal({
     const collateral = isCall
         ? option.underlyingAmount
         : (option.strikePrice * option.underlyingAmount) / (10n ** 18n);
-    const collateralToken = isCall ? 'MOTO' : 'PILL';
+    const collateralToken = isCall ? underlyingSymbol : premiumSymbol;
 
     const busy = txStatus === 'settling';
 

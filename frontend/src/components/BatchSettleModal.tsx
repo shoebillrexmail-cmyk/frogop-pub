@@ -27,6 +27,8 @@ interface BatchSettleModalProps {
     network: WalletConnectNetwork;
     onClose: () => void;
     onSuccess: () => void;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
 }
 
 const MAX_SAT = 10_000_000n;
@@ -36,12 +38,12 @@ function fmt(v: bigint) {
     return formatTokenAmount(v);
 }
 
-function calcCollateral(option: OptionData): { amount: bigint; token: string } {
+function calcCollateral(option: OptionData, uSym: string, pSym: string): { amount: bigint; token: string } {
     const isCall = option.optionType === OptionType.CALL;
     // Fixed-point: (strike * amount) / 1e18 — both are 18-decimal
     return {
         amount: isCall ? option.underlyingAmount : (option.strikePrice * option.underlyingAmount) / (10n ** 18n),
-        token: isCall ? 'MOTO' : 'PILL',
+        token: isCall ? uSym : pSym,
     };
 }
 
@@ -54,6 +56,8 @@ export function BatchSettleModal({
     network,
     onClose,
     onSuccess,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
 }: BatchSettleModalProps) {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
@@ -62,7 +66,7 @@ export function BatchSettleModal({
     const [txId, setTxId] = useState<string | null>(null);
     const { addTransaction } = useTransactionContext();
 
-    const totalCollateral = options.reduce((sum, opt) => sum + calcCollateral(opt).amount, 0n);
+    const totalCollateral = options.reduce((sum, opt) => sum + calcCollateral(opt, underlyingSymbol, premiumSymbol).amount, 0n);
 
     const busy = txStatus === 'settling';
     const overLimit = options.length > MAX_BATCH;
@@ -158,7 +162,7 @@ export function BatchSettleModal({
                     {/* Per-option list */}
                     <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 text-xs font-mono space-y-2 max-h-48 overflow-y-auto">
                         {options.map((opt) => {
-                            const { amount, token } = calcCollateral(opt);
+                            const { amount, token } = calcCollateral(opt, underlyingSymbol, premiumSymbol);
                             return (
                                 <div key={opt.id.toString()} className="flex justify-between">
                                     <span className="text-terminal-text-muted">#{opt.id.toString()}</span>

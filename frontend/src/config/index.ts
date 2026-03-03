@@ -1,3 +1,39 @@
+import poolsConfigJson from '../../../pools.config.json';
+import type { PoolsConfig, PoolConfig, NetworkId } from '../../../shared/pool-config.types.ts';
+
+const poolsConfig = poolsConfigJson as PoolsConfig;
+
+/** Find a pool config entry by matching underlying + premium hex addresses. */
+export function findPoolConfig(underlyingHex: string, premiumHex: string): PoolConfig | null {
+    const net = currentNetwork as NetworkId;
+    const uLower = underlyingHex.toLowerCase();
+    const pLower = premiumHex.toLowerCase();
+    return poolsConfig.pools.find((p) =>
+        p.underlying.addresses[net]?.toLowerCase() === uLower &&
+        p.premium.addresses[net]?.toLowerCase() === pLower,
+    ) ?? null;
+}
+
+/** Find a pool config entry by pool contract address (bech32 or hex). */
+export function findPoolConfigByAddress(poolAddress: string): PoolConfig | null {
+    const net = currentNetwork as NetworkId;
+    const lower = poolAddress.toLowerCase();
+    return poolsConfig.pools.find((p) =>
+        p.pool.addresses[net]?.toLowerCase() === lower,
+    ) ?? null;
+}
+
+/** Build a price pair key like "MOTO_PILL" from a pool config entry. */
+export function getPricePairKey(config: PoolConfig): string {
+    return `${config.underlying.symbol}_${config.premium.symbol}`;
+}
+
+/** Get all pool configs for the current network. */
+export function getAllPoolConfigs(): PoolConfig[] {
+    const net = currentNetwork as NetworkId;
+    return poolsConfig.pools.filter((p) => p.pool.addresses[net]);
+}
+
 export const NETWORKS = {
   regtest: {
     name: 'Regtest',

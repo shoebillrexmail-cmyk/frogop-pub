@@ -28,6 +28,8 @@ interface BatchCancelModalProps {
     network: WalletConnectNetwork;
     onClose: () => void;
     onSuccess: () => void;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
 }
 
 const MAX_SAT = 10_000_000n;
@@ -37,12 +39,12 @@ function fmt(v: bigint) {
     return formatTokenAmount(v);
 }
 
-function calcCollateral(option: OptionData): { amount: bigint; token: string } {
+function calcCollateral(option: OptionData, uSym: string, pSym: string): { amount: bigint; token: string } {
     const isCall = option.optionType === OptionType.CALL;
     // Fixed-point: (strike * amount) / 1e18 — both are 18-decimal
     return {
         amount: isCall ? option.underlyingAmount : (option.strikePrice * option.underlyingAmount) / (10n ** 18n),
-        token: isCall ? 'MOTO' : 'PILL',
+        token: isCall ? uSym : pSym,
     };
 }
 
@@ -56,6 +58,8 @@ export function BatchCancelModal({
     network,
     onClose,
     onSuccess,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
 }: BatchCancelModalProps) {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
@@ -74,7 +78,7 @@ export function BatchCancelModal({
     const feeBps = poolInfo.cancelFeeBps;
 
     const breakdown = options.map((opt) => {
-        const { amount, token } = calcCollateral(opt);
+        const { amount, token } = calcCollateral(opt, underlyingSymbol, premiumSymbol);
         const isExpired = currentBlock !== null && currentBlock >= opt.expiryBlock;
         const fee = isExpired || feeBps === 0n ? 0n : (amount * feeBps + 9999n) / 10000n;
         const returned = amount - fee;

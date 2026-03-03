@@ -37,6 +37,7 @@ function priceToFloat(s: string): number {
 }
 
 export function usePriceRatio(
+    pairKey: string | null,
     nativeSwapAddress: string | null,
     motoAddress: string | null,
     pillAddress: string | null,
@@ -59,7 +60,8 @@ export function usePriceRatio(
 
             // ---- Try indexer first (no wallet needed) ----
             try {
-                const snapshot = await getLatestPrice('MOTO_PILL');
+                const effectivePairKey = pairKey ?? 'MOTO_PILL';
+                const snapshot = await getLatestPrice(effectivePairKey);
                 if (snapshot && !cancelled) {
                     const ratio = priceToFloat(snapshot.price);
                     if (ratio > 0) {
@@ -131,7 +133,7 @@ export function usePriceRatio(
             cancelled = true;
             clearInterval(id);
         };
-    }, [nativeSwapAddress, motoAddress, pillAddress, provider, network, tick, refresh]);
+    }, [pairKey, nativeSwapAddress, motoAddress, pillAddress, provider, network, tick, refresh]);
 
     return { motoPillRatio, lastUpdated, loading, error };
 }

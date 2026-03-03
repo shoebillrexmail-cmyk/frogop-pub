@@ -13,6 +13,8 @@ interface PoolHeaderBarProps {
     poolAddress: string;
     motoPillRatio?: number | null;
     priceLastUpdated?: Date | null;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
 }
 
 function bpsToPct(bps: bigint): string {
@@ -28,7 +30,7 @@ function freshnessLabel(lastUpdated: Date | null | undefined): { text: string; c
     return { text: `${mins}m ago`, color: 'text-rose-400' };
 }
 
-export function PoolHeaderBar({ poolInfo, poolAddress, motoPillRatio, priceLastUpdated }: PoolHeaderBarProps) {
+export function PoolHeaderBar({ poolInfo, poolAddress, motoPillRatio, priceLastUpdated, underlyingSymbol = 'MOTO', premiumSymbol = 'PILL' }: PoolHeaderBarProps) {
     const [detailsOpen, setDetailsOpen] = useState(false);
     const freshness = freshnessLabel(priceLastUpdated);
     const feeSummary = `${bpsToPct(poolInfo.buyFeeBps)} / ${bpsToPct(poolInfo.exerciseFeeBps)} / ${bpsToPct(poolInfo.cancelFeeBps)}`;
@@ -41,14 +43,14 @@ export function PoolHeaderBar({ poolInfo, poolAddress, motoPillRatio, priceLastU
             {/* Top row */}
             <div className="flex items-center gap-4 flex-wrap text-sm font-mono">
                 <span className="font-bold text-terminal-text-primary" data-testid="pool-name">
-                    MOTO / PILL Pool
+                    {underlyingSymbol} / {premiumSymbol} Pool
                 </span>
 
                 <span className="text-terminal-text-muted">
                     Spot:{' '}
                     <span className="text-terminal-text-primary" data-testid="spot-price">
                         {motoPillRatio != null && motoPillRatio > 0
-                            ? `${motoPillRatio.toFixed(4)} PILL`
+                            ? `${motoPillRatio.toFixed(4)} ${premiumSymbol}`
                             : 'N/A'}
                     </span>
                     {freshness && (

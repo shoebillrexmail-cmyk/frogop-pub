@@ -53,9 +53,9 @@ interface OptionsTableProps {
     currentBlock?: bigint;
     /** Grace period in blocks */
     gracePeriodBlocks?: bigint;
-    /** MOTO/PILL price ratio for strike equivalent display */
+    /** Underlying/premium price ratio for strike equivalent display */
     motoPillRatio?: number | null;
-    /** Per-option unrealized P&L in PILL (from usePnL hook) */
+    /** Per-option unrealized P&L in premium token (from usePnL hook) */
     pnlMap?: Map<bigint, number>;
     /** Show the status filter bar (default: true) */
     showFilter?: boolean;
@@ -63,6 +63,10 @@ interface OptionsTableProps {
     userStatusLabel?: (option: OptionData) => string;
     /** Pool address for building detail page links */
     poolAddress?: string;
+    /** Display symbol for the underlying token (default: 'MOTO') */
+    underlyingSymbol?: string;
+    /** Display symbol for the premium token (default: 'PILL') */
+    premiumSymbol?: string;
     onBuy?: (option: OptionData) => void;
     onCancel?: (option: OptionData) => void;
     onExercise?: (option: OptionData) => void;
@@ -299,6 +303,8 @@ export function OptionsTable({
     onTransfer,
     onBatchCancel,
     onBatchSettle,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
 }: OptionsTableProps) {
     const [filter, setFilter] = useState<FilterStatus>('ALL');
     const [selected, setSelected] = useState<Set<bigint>>(new Set());
@@ -462,7 +468,7 @@ export function OptionsTable({
                             </div>
                             {/* Strike range */}
                             <div>
-                                <label className="text-terminal-text-muted block mb-1">Strike (PILL)</label>
+                                <label className="text-terminal-text-muted block mb-1">Strike ({premiumSymbol})</label>
                                 <div className="flex gap-1">
                                     <input
                                         type="number"
@@ -484,7 +490,7 @@ export function OptionsTable({
                             </div>
                             {/* Premium range */}
                             <div>
-                                <label className="text-terminal-text-muted block mb-1">Premium (PILL)</label>
+                                <label className="text-terminal-text-muted block mb-1">Premium ({premiumSymbol})</label>
                                 <div className="flex gap-1">
                                     <input
                                         type="number"
@@ -628,15 +634,15 @@ export function OptionsTable({
                                         <TypeBadge optionType={option.optionType} />
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary">
-                                        {formatTokenAmount(option.strikePrice)} PILL
+                                        {formatTokenAmount(option.strikePrice)} {premiumSymbol}
                                         {motoPillRatio != null && motoPillRatio > 0 && (
                                             <span className="block text-[10px] text-terminal-text-muted">
-                                                ~{(Number(option.strikePrice) / 1e18 / motoPillRatio).toFixed(4)} MOTO eq.
+                                                ~{(Number(option.strikePrice) / 1e18 / motoPillRatio).toFixed(4)} {underlyingSymbol} eq.
                                             </span>
                                         )}
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary">
-                                        {formatTokenAmount(option.premium)} PILL
+                                        {formatTokenAmount(option.premium)} {premiumSymbol}
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary">
                                         {currentBlock !== undefined
@@ -650,12 +656,12 @@ export function OptionsTable({
                                         }
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary">
-                                        {formatTokenAmount(option.underlyingAmount)} MOTO
+                                        {formatTokenAmount(option.underlyingAmount)} {underlyingSymbol}
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary text-xs">
                                         {(() => {
                                             const be = calcBreakeven(option);
-                                            return be !== null ? <>{formatTokenAmount(be)} PILL</> : <span className="text-terminal-text-muted">—</span>;
+                                            return be !== null ? <>{formatTokenAmount(be)} {premiumSymbol}</> : <span className="text-terminal-text-muted">—</span>;
                                         })()}
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary text-xs">
@@ -671,7 +677,7 @@ export function OptionsTable({
                                                 if (pnl === undefined) return <span className="text-terminal-text-muted">—</span>;
                                                 return (
                                                     <span className={pnl >= 0 ? 'text-green-400' : 'text-rose-400'}>
-                                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} PILL
+                                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} {premiumSymbol}
                                                     </span>
                                                 );
                                             })()}
