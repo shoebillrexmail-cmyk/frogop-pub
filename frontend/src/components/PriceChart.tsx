@@ -176,7 +176,7 @@ export function PriceChart({
                 formatter: (price: number) => formatPrice(price, token, pairKey),
             },
         });
-    }, [token]);
+    }, [token, pairKey]);
 
     // Update data when candles change
     useEffect(() => {

@@ -244,7 +244,7 @@ export function WriteOptionPanel({
         const collateralSym = optionType === OptionType.CALL ? underlyingSymbol : premiumSymbol;
 
         return { maxProfit, breakeven, maxLoss, yieldPct, annualizedYieldPct, collateralSym };
-    }, [premiumStr, strikeStr, amountStr, optionType, selectedDays, motoPillRatio]);
+    }, [premiumStr, strikeStr, amountStr, optionType, selectedDays, motoPillRatio, underlyingSymbol, premiumSymbol]);
 
     // Black-Scholes suggested premium
     const { suggestedPremium, annualizedVol } = useSuggestedPremium(
