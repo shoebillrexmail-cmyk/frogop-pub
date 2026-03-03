@@ -1,5 +1,13 @@
 # OptionsFactory Contract
 
+> **AUDIT (2026-03-03)**: This doc has discrepancies vs source (`src/contracts/factory/contract.ts`).
+> - `poolCount()` → actual method is `getPoolCount()`
+> - `allPools(index)` → actual method is `getPoolByIndex(index)`, returns 3 addresses (pool+underlying+premium), not 1
+> - `createPool()` missing 2 params: `underlyingDecimals`, `premiumDecimals`
+> - `PoolCreated` event: only emits 3 fields (pool, underlying, premium), NOT creator/blockNumber
+> - Missing methods: `getOwner()`, `getPoolTemplate()`, `setPoolTemplate()`, `getTreasury()`, `setTreasury()`, `registerPool()`
+> - **TODO**: Update this doc to match source code
+
 ## Overview
 
 OptionsFactory is the pool registry contract. Pools are deployed by the protocol admin and registered via `registerPool()`. The factory provides pool discovery methods (`getPoolCount`, `getPoolByIndex`, `getPool`).

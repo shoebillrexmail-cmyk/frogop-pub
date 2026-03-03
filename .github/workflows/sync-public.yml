@@ -16,9 +16,10 @@ jobs:
       - name: Create clean snapshot
         run: |
           EXCLUDED=(
-            "docs/"
+            "docs/planning/"
+            "docs/research/"
+            "legacy/"
             ".github/workflows/"
-            "SPRINTBOARD.md"
             "AGENTS.md"
             "indexer/.wrangler/"
             "tests/dist/"

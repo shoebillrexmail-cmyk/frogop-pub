@@ -1,5 +1,13 @@
 # OptionsPool Contract
 
+> **AUDIT (2026-03-03)**: This doc has discrepancies vs source (`src/contracts/pool/contract.ts`).
+> - `getOptionCount()` → actual method is `optionCount()`
+> - `writeOption()` missing `premium` parameter (5 params, not 4)
+> - `getReserves()`, `addLiquidity()`, `removeLiquidity()` documented but NOT implemented (Phase 3)
+> - Missing 11 methods: `feeRecipient()`, `buyFeeBps()`, `exerciseFeeBps()`, `cancelFeeBps()`, `gracePeriodBlocks()`, `maxExpiryBlocks()`, `calculateCollateral()`, `updateFeeRecipient()`, `transferOption()`, `rollOption()`, `batchCancel()`, `batchSettle()`, `getOptionsBatch()`
+> - `settle()` exists in code but not in ABI section
+> - **TODO**: Update this doc to match source code
+
 ## Overview
 
 OptionsPool is the core contract for an individual option market. Each pool handles a specific token pair (underlying + premium token) and manages option lifecycle.

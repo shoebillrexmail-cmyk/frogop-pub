@@ -1,78 +1,42 @@
-# FrogOp - Options Protocol on OPNet
+# FroGop Documentation
 
-Bitcoin-native options protocol built on OPNet (Bitcoin Layer 1 smart contracts).
-test
-## Overview
+## Structure
 
-FrogOp enables trustless options trading with two integration modes:
+### [technical/](technical/) — Implemented Code Documentation
+Documentation verified against actual source code. **Code is source of truth.**
 
-| Mode | Premium Asset | Collateral | Use Case |
-|------|---------------|------------|----------|
-| **NativeSwap** | Native BTC | OP20 tokens | BTC holders, hedgers |
-| **AMM Pool** | OP20 tokens | OP20 tokens | Token speculators, LPs |
+- [Architecture](technical/architecture.md) — System overview (Factory + Pool + Frontend + Indexer)
+- [OptionsFactory ABI](technical/contracts/options-factory.md) — Factory contract methods
+- [OptionsPool ABI](technical/contracts/options-pool.md) — Pool contract methods (write, buy, exercise, settle, cancel, transfer, roll)
+- [Flow State](technical/frontend/flow-state.md) — On-chain-first flow derivation architecture
+- [User Flows](technical/frontend/user-flows.md) — 9 modal step-by-step interaction flows
+- [Integration Testing](technical/testing/integration-guide.md) — Testnet integration test setup
+- [Cloudflare Pages](technical/deployment/cloudflare-pages.md) — Frontend deployment
+- [Indexer](technical/deployment/indexer.md) — CF Workers + D1 indexer deployment
+- [OPNet Optimization](technical/opnet/optimization.md) — WASM binary optimization patterns
+- [OPNet Complexity Guide](technical/opnet/complexity-guide.md) — OPNet constraints and patterns
 
-## Features
+### [product/](product/) — Business Logic & Usage
+End-user product documentation.
 
-- **Call Options**: Right to buy underlying at strike price
-- **Put Options**: Right to sell underlying at strike price
-- **Token-Pair Strikes**: Strike expressed as `premiumToken / underlyingToken` (no oracle needed)
-- **Permissionless Pools**: Anyone can create new option markets
-- **Block-Height Expiry**: Uses block number, not manipulable timestamps
+- [User Guide](product/user-guide.md) — How to use FroGop (write, buy, exercise options)
+- [Fee Model](product/fee-model.md) — Protocol fee structure
 
-## Quick Links
+### [research/](research/) — Unimplemented Feature Specs
+Design documents for features not yet in the codebase. Linked to backlog items.
 
-- [Architecture](./ARCHITECTURE.md)
-- [Mode Comparison](./modes/mode-comparison.md)
-- [Security Model](./security/THREAT_MODEL.md)
+- [Research Index](research/README.md) — All research docs with implementation status
 
-## Integration Modes
+### [planning/](planning/) — Roadmap & Phase Specs
+Active project roadmap and phase specifications.
 
-- [Mode 1: NativeSwap (BTC)](./modes/mode-1-nativeswap.md) - BTC premiums via NativeSwap
-- [Mode 2: AMM Pool](./modes/mode-2-amm.md) - OP20 liquidity pools
+- [Sprintboard](planning/sprintboard.md) — Active backlog and in-progress items
+- [Phase 1 Completed](planning/phase-1-completed.md) — Record of all Phase 1 deliverables
+- [Roadmap](planning/roadmap.md) — Unified Phase 1-3 timeline
+- [Phase 1 Spec](planning/phase-1-spec.md) — Phase 1 technical spec (completed, reference)
+- [Phase 2 Spec](planning/phase-2-native.md) — Native BTC integration (upcoming)
+- [Phase 3 Spec](planning/phase-3-amm.md) — AMM liquidity pools (future)
 
-## Contracts
+---
 
-- [OptionsFactory](./contracts/OptionsFactory.md) - Permissionless pool creation
-- [OptionsPool](./contracts/OptionsPool.md) - Individual option market
-- [NativeSwapBridge](./contracts/NativeSwapBridge.md) - BTC verification (Phase 2)
-- [AMMPool](./contracts/AMMPool.md) - Liquidity pools (Phase 3)
-
-## Roadmap
-
-| Phase | Features | Status |
-|-------|----------|--------|
-| [Phase 1: MVP](../internal/roadmap/PHASE_1_MVP.md) | Core options (Calls + Puts, OP20-only) | Planning |
-| [Phase 2: Native](../internal/roadmap/PHASE_2_NATIVE.md) | NativeSwap BTC integration | Future |
-| [Phase 3: AMM](../internal/roadmap/PHASE_3_AMM.md) | Liquidity pools, LP rewards | Future |
-
-## Technology Stack
-
-- **Smart Contracts**: AssemblyScript → WASM
-- **Runtime**: OPNet btc-runtime
-- **Network**: Bitcoin L1 (regtest → mainnet)
-- **Frontend**: React + Vite + @btc-vision/opwallet
-
-## Getting Started
-
-```bash
-# Clone repository
-git clone https://github.com/your-org/frogop.git
-cd frogop
-
-# Install dependencies (contracts)
-npm install
-
-# Build contracts
-npm run build
-
-# Run tests
-npm test
-```
-
-## Security
-
-See [Threat Model](./security/THREAT_MODEL.md) and [Audit Checklist](../internal/security/AUDIT_CHECKLIST.md).
-
-## License
-
-MIT
+See also: [legacy/](../legacy/) for archived sprint history and completed planning documents.

@@ -1,5 +1,12 @@
 # FroGop Frontend User Flows
 
+> **AUDIT (2026-03-03)**: Minor discrepancies vs source code.
+> - "Write Put" strategy: documented but NOT implemented in code
+> - Protective Put: doc says QuickStrategies card, but actually inline on Buy tab
+> - Strategy count: 3 in QuickStrategies (Covered Call, Collar, Write Custom), not 4
+> - NetworkStatusBar component not documented (recent addition)
+> - **TODO**: Update strategy section to match actual implementation
+
 All user flows in the FroGop options platform frontend.
 
 ## Core Option Flows

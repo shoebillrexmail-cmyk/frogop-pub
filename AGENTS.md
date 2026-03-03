@@ -126,13 +126,34 @@ npm run typecheck          # Run TypeScript type checking
 
 ### MANDATORY Before Committing
 
-After making ANY code changes, you MUST run:
+After making ANY code changes, you MUST complete ALL of the following before creating a commit:
 
+#### 1. Build verification
 ```bash
 npm run lint && npm run typecheck && npm run build
 ```
+Fix ALL errors before proceeding.
 
-Fix ALL errors before creating commits or PRs.
+#### 2. Documentation sync (CRITICAL — do not skip)
+
+For every code change in the commit, check whether documentation needs updating. Code is source of truth — docs must reflect it.
+
+| What Changed | Update These Docs |
+|-------------|-------------------|
+| Contract methods, params, events, constants | `docs/technical/contracts/options-factory.md` and/or `options-pool.md` |
+| Frontend pages, components, modals, hooks | `docs/technical/frontend/user-flows.md` and/or `flow-state.md` |
+| System architecture, new services, project structure | `docs/technical/architecture.md` |
+| Deployment config, CI/CD workflows | `docs/technical/deployment/` |
+| OPNet patterns, WASM optimization | `docs/technical/opnet/` |
+| Fee model, pricing, product behavior | `docs/product/fee-model.md` and/or `user-guide.md` |
+| Bug fix or feature completion | `docs/planning/sprintboard.md` — update backlog/in-progress status |
+
+**Rules:**
+- `docs/technical/` must ONLY describe what is actually in the code — never document aspirational features here
+- If you add a new public method, it MUST appear in the contract ABI docs before committing
+- If you complete a sprintboard item, mark it done in `docs/planning/sprintboard.md`
+- If you discover new backlog work during implementation, add it to the sprintboard
+- If the change doesn't affect any docs, explicitly confirm this in your commit reasoning
 
 ---
 
@@ -162,11 +183,10 @@ frogop/
 │   ├── OptionsFactory.test.ts
 │   └── OptionsPool.test.ts
 ├── docs/                      # Documentation
-│   ├── contracts/             # Contract specifications
-│   ├── deployment/            # Deploy guides (contracts, indexer, frontend)
-│   ├── frontend/              # Frontend design & user flows
-│   ├── roadmap/               # Unified roadmap + phase specs
-│   └── security/              # Threat model & audit checklist
+│   ├── technical/             # Implemented code docs (contracts, frontend, deployment, opnet)
+│   ├── product/               # Business logic & usage (user guide, fee model)
+│   ├── research/              # Unimplemented feature specs (NativeSwap, AMM, CSV, modes)
+│   └── planning/              # Roadmap, sprintboard, phase specs, completed work
 ├── abis/                      # Generated ABIs (JSON, TS, type defs)
 └── build/                     # Compiled WASM (OptionsFactory, OptionsPool)
 ```
@@ -181,23 +201,22 @@ When making changes to contracts or architecture, you MUST update the relevant d
 
 | Change Type | Files to Update |
 |-------------|-----------------|
-| Contract methods/ABI | `docs/contracts/[ContractName].md`, `README.md` |
-| Architecture changes | `docs/ARCHITECTURE.md`, `README.md` |
-| New features | `internal/roadmap/IMPLEMENTATION_PLAN.md` |
-| Security changes | `docs/security/THREAT_MODEL.md` |
-| Test changes | `internal/tests/UNIT_TESTS_STATUS.md` |
-| Completing a story / new tasks | `SPRINTBOARD.md` (project root) |
-| Gas optimizations | `internal/roadmap/GAS_OPTIMIZATION_REFACTOR.md` |
+| Contract methods/ABI | `docs/technical/contracts/options-factory.md`, `docs/technical/contracts/options-pool.md` |
+| Architecture changes | `docs/technical/architecture.md`, `README.md` |
+| Frontend flows | `docs/technical/frontend/user-flows.md`, `docs/technical/frontend/flow-state.md` |
+| Deployment changes | `docs/technical/deployment/` |
+| Completing a story / new tasks | `docs/planning/sprintboard.md` |
+| Roadmap / phase changes | `docs/planning/roadmap.md` |
+| Security changes | `docs/research/threat-model.md` |
 
 ### Documentation Checklist
 
 After making code changes, verify:
 
 - [ ] README.md reflects current status and features
-- [ ] Contract docs match actual implementation
-- [ ] Architecture diagrams are accurate
-- [ ] Test status is updated
-- [ ] Sprint board updated if story completed
+- [ ] Contract docs in `docs/technical/contracts/` match actual implementation
+- [ ] Architecture doc (`docs/technical/architecture.md`) is accurate
+- [ ] Sprintboard updated if story completed (`docs/planning/sprintboard.md`)
 
 ---
 
@@ -252,52 +271,32 @@ export class MyContract extends OP_NET {
 
 ## Roadmap & Planning (CRITICAL - Follow Always)
 
-### Planning Documents to Maintain
+### Planning Documents
 
 | Document | Purpose | When to Update |
 |----------|---------|----------------|
-| `internal/roadmap/IMPLEMENTATION_PLAN.md` | Full implementation plan with stories, tasks, estimates | When adding/removing features, changing scope |
-| `internal/roadmap/SPRINT_BOARD.md` | Current sprint status, completed/pending stories | After completing stories, starting new sprint |
-| `internal/roadmap/GAS_OPTIMIZATION_REFACTOR.md` | Gas optimization analysis and plan | When optimizing contracts, measuring gas |
+| `docs/planning/sprintboard.md` | Active backlog and in-progress work | After completing stories, adding new tasks |
+| `docs/planning/roadmap.md` | Unified Phase 1-3 timeline | When changing scope or phase plans |
+| `docs/planning/phase-1-completed.md` | Record of all Phase 1 deliverables | Reference only (completed) |
+| `docs/planning/phase-2-native.md` | Phase 2 spec (NativeSwap/BTC) | When planning Phase 2 work |
+| `docs/planning/phase-3-amm.md` | Phase 3 spec (AMM liquidity) | When planning Phase 3 work |
 
-### Current Sprint
+### Before Starting Work
 
-**Check `internal/roadmap/SPRINT_BOARD.md` for current sprint status.**
+1. Check `docs/planning/sprintboard.md` for backlog items
+2. Pick the next priority item
+3. Check `docs/research/` for relevant specs if the task involves unimplemented features
 
-Before starting work:
-1. Read the current sprint goal
-2. Check which stories are pending
-3. Pick the next priority item
+### After Completing Work
 
-After completing work:
-1. Update the sprint board
-2. Mark story as complete
-3. Update story point summary
+1. Update `docs/planning/sprintboard.md` — move item to Done or add new backlog items
+2. Update relevant technical docs in `docs/technical/` if code changed
 
-### Epic Summary
+### Phase 1 — Complete
 
-| Epic | Description | Status |
-|------|-------------|--------|
-| Epic 1 | Smart Contracts | ✅ Done |
-| Epic 2 | Security | ✅ Done |
-| Epic 3 | Testing | ✅ Done |
-| Epic 4 | Frontend MVP | ✅ Done |
-| Epic 5 | Integration Testing | ✅ Done (testnet) |
-| Epic 6 | Gas Optimization | ✅ Done |
-| Epic 7 | Indexer + Price Tracking | ✅ Done |
+All Phase 1 epics delivered. See `docs/planning/phase-1-completed.md` for full record.
 
-### Integration Tests (Epic 5 — Complete)
-
-All integration tests run against **OPNet testnet** (`https://testnet.opnet.org`). Regtest is no longer used.
-
-Deployed testnet contracts (see `tests/integration/deployed-contracts.json`):
-- FROG-U, FROG-P tokens deployed and minted
-- OptionsFactory + pool template deployed
-- OptionsPool deployed directly (factory `createPool` is NOT supported by OPNet runtime)
-
-Full lifecycle verified: writeOption → getOption → cancelOption (status=4, fees collected).
-
-**See**: `SPRINTBOARD.md` for current task backlog.
+Integration tests run against **OPNet testnet** (`https://testnet.opnet.org`). Deployed contracts in `tests/integration/deployed-contracts.json`.
 
 ---
 
@@ -305,18 +304,17 @@ Full lifecycle verified: writeOption → getOption → cancelOption (status=4, f
 
 ### Must Read
 
-1. **[internal/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md](internal/contracts/OPNET_OPTIMIZATION_BEST_PRACTICES.md)** - Optimization lessons learned (READ THIS FIRST)
-2. **[internal/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md](internal/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md)** - OPNet complexity and gas optimization
-3. **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
-4. **[docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md)** - Security considerations
-5. **[SPRINTBOARD.md](SPRINTBOARD.md)** - Current task backlog and in-progress work
+1. **[docs/technical/opnet/optimization.md](docs/technical/opnet/optimization.md)** - WASM optimization patterns (READ THIS FIRST)
+2. **[docs/technical/opnet/complexity-guide.md](docs/technical/opnet/complexity-guide.md)** - OPNet constraints and DO/DON'T
+3. **[docs/technical/architecture.md](docs/technical/architecture.md)** - System architecture
+4. **[docs/planning/sprintboard.md](docs/planning/sprintboard.md)** - Active backlog and in-progress work
 
 ### Reference
 
-- **[docs/contracts/OptionsFactory.md](docs/contracts/OptionsFactory.md)** - Factory specification
-- **[docs/contracts/OptionsPool.md](docs/contracts/OptionsPool.md)** - Pool specification
-- **[internal/roadmap/GAS_OPTIMIZATION_REFACTOR.md](internal/roadmap/GAS_OPTIMIZATION_REFACTOR.md)** - Gas optimization plan
-- **[internal/tests/UNIT_TESTS_STATUS.md](internal/tests/UNIT_TESTS_STATUS.md)** - Test coverage
+- **[docs/technical/contracts/options-factory.md](docs/technical/contracts/options-factory.md)** - Factory ABI
+- **[docs/technical/contracts/options-pool.md](docs/technical/contracts/options-pool.md)** - Pool ABI
+- **[docs/research/threat-model.md](docs/research/threat-model.md)** - Security threat model
+- **[docs/planning/phase-1-completed.md](docs/planning/phase-1-completed.md)** - Phase 1 completed work record
 
 ---
 
@@ -392,9 +390,9 @@ git push origin feat/my-feature
 
 ## Questions?
 
-- Architecture: See `docs/ARCHITECTURE.md`
-- Security: See `docs/security/THREAT_MODEL.md`
-- OPNet Patterns: See `internal/contracts/OPNET_COMPLEXITY_BEST_PRACTICES.md`
-- Planning: See `internal/roadmap/IMPLEMENTATION_PLAN.md`
-- Current Sprint: See `SPRINTBOARD.md`
-- Gas Optimization: See `internal/roadmap/GAS_OPTIMIZATION_REFACTOR.md`
+- Architecture: See `docs/technical/architecture.md`
+- Security: See `docs/research/threat-model.md`
+- OPNet Patterns: See `docs/technical/opnet/complexity-guide.md`
+- Planning & Backlog: See `docs/planning/sprintboard.md`
+- Roadmap: See `docs/planning/roadmap.md`
+- Completed Work: See `docs/planning/phase-1-completed.md`
