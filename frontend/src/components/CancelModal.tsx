@@ -18,6 +18,7 @@ import { formatTokenAmount } from '../config/index.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { TxErrorBlock } from './TxErrorBlock.tsx';
+import { EstimatedFee } from './EstimatedFee.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface CancelModalProps {
@@ -199,6 +200,9 @@ export function CancelModal({
                             onDone={onSuccess}
                         />
                     )}
+
+                    {/* Estimated BTC fee */}
+                    {txStatus !== 'done' && <EstimatedFee />}
 
                     {/* Action buttons */}
                     {txStatus !== 'done' && (

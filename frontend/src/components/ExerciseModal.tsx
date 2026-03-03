@@ -24,6 +24,7 @@ import type { StepStatus } from './StepIndicator.tsx';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { TxErrorBlock } from './TxErrorBlock.tsx';
 import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
+import { EstimatedFee } from './EstimatedFee.tsx';
 import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
@@ -60,7 +61,7 @@ export function ExerciseModal({
 }: ExerciseModalProps) {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
-    const wsBlock = useWsBlock();
+    const wsBlockInfo = useWsBlock();
     const [poolHex, setPoolHex] = useState<string | null>(null);
     const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'exercising' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
@@ -128,7 +129,7 @@ export function ExerciseModal({
         spenderHex: poolHex,
         walletAddress: address,
         provider,
-        currentBlock: wsBlock,
+        currentBlock: wsBlockInfo?.blockNumber,
     });
 
     const tokenBalance = tokenInfo?.balance ?? null;
@@ -419,6 +420,9 @@ export function ExerciseModal({
                             onDone={onSuccess}
                         />
                     )}
+
+                    {/* Estimated BTC fee */}
+                    {txStatus !== 'done' && <EstimatedFee />}
 
                     {/* Action buttons */}
                     {txStatus !== 'done' && (

@@ -46,7 +46,7 @@ type PoolTab = 'buy' | 'write';
 const NATIVESWAP_ADDRESS = import.meta.env.VITE_NATIVESWAP_ADDRESS || '';
 
 export function PoolsPage() {
-    const wsBlock = useWsBlock();
+    const wsBlockInfo = useWsBlock();
     const { walletAddress, address, provider, network } = useWalletConnect();
     const readProvider = useFallbackProvider();
     const walletConnected = provider !== null && provider !== undefined;
@@ -100,7 +100,7 @@ export function PoolsPage() {
     const { poolInfo, options, loading: poolLoading, error: poolError, refetch: refetchPool } =
         usePool(selectedPoolAddr, readProvider);
 
-    const { currentBlock } = useBlockTracker(readProvider, wsBlock);
+    const { currentBlock } = useBlockTracker(readProvider, wsBlockInfo?.blockNumber);
 
     const { motoPillRatio, lastUpdated: priceLastUpdated } = usePriceRatio(
         NATIVESWAP_ADDRESS || null,

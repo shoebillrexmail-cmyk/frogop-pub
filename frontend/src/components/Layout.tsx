@@ -4,9 +4,12 @@ import { useWalletConnect } from '@btc-vision/walletconnect';
 import { formatAddress } from '../config';
 import { TransactionToast } from './TransactionToast';
 import { TransactionDetailModal } from './TransactionDetailModal';
+import { NetworkStatusBar } from './NetworkStatusBar';
 import { useTransactionPoller } from '../hooks/useTransactionPoller';
 import { useTransactionContext } from '../hooks/useTransactionContext';
 import { useWebSocketProvider, WsBlockContext } from '../hooks/useWebSocketProvider';
+import { useFallbackProvider } from '../hooks/useFallbackProvider';
+import { NetworkStatusProvider } from '../contexts/NetworkStatusContext';
 
 export function Layout() {
   const location = useLocation();
@@ -15,11 +18,14 @@ export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { reopenRequest, clearReopenRequest } = useTransactionContext();
 
+  // Read-only RPC provider (wallet when connected, fallback JSONRpc otherwise)
+  const readProvider = useFallbackProvider();
+
   // WebSocket provider for real-time block subscriptions
-  const { connected: wsConnected, currentBlock: wsBlock } = useWebSocketProvider();
+  const { connected: wsConnected, wsBlockInfo } = useWebSocketProvider();
 
   // TX receipt checks — triggered by WS block events, falls back to 15s polling
-  useTransactionPoller(provider ?? null, wsBlock);
+  useTransactionPoller(provider ?? null, wsBlockInfo?.blockNumber);
 
   const navLinks = [
     { path: '/', label: 'Home', testId: 'nav-home' },
@@ -118,67 +124,68 @@ export function Layout() {
         )}
       </header>
 
-      <main className="flex-1">
-        <WsBlockContext.Provider value={wsBlock}>
-          <Outlet />
-        </WsBlockContext.Provider>
-      </main>
-      {reopenRequest && (
-        <TransactionDetailModal tx={reopenRequest.tx} onClose={clearReopenRequest} />
-      )}
+      <NetworkStatusProvider provider={readProvider} wsConnected={wsConnected}>
+        <main className="flex-1">
+          <WsBlockContext.Provider value={wsBlockInfo}>
+            <Outlet />
+          </WsBlockContext.Provider>
+        </main>
+        {reopenRequest && (
+          <TransactionDetailModal tx={reopenRequest.tx} onClose={clearReopenRequest} />
+        )}
 
-      <footer className="bg-terminal-bg-elevated border-t border-terminal-border-subtle py-8">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <img src="/frogop_512.png" alt="FroGop" className="h-12 w-12" />
-              <span className="text-sm text-terminal-text-muted font-mono">
-                FroGop — Decentralized Options on Bitcoin
-              </span>
-            </div>
-            <div className="flex items-center gap-6 text-sm text-terminal-text-muted">
-              <Link to="/about" className="hover:text-terminal-text-primary transition-colors">
-                About
-              </Link>
-              <a
-                href="https://github.com/shoebillrexmail-cmyk/frogop-pub"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-terminal-text-primary transition-colors"
-              >
-                GitHub
-              </a>
-              <a
-                href="https://x.com/frogop_opnet"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-terminal-text-primary transition-colors"
-              >
-                X / Twitter
-              </a>
-              <button
-                onClick={() => {
-                  try { localStorage.removeItem('frogop_onboarding_complete'); } catch { /* noop */ }
-                  window.location.href = '/pools';
-                }}
-                className="hover:text-terminal-text-primary transition-colors"
-                data-testid="show-tutorial"
-              >
-                Show Tutorial
-              </button>
-              <span className="flex items-center gap-1.5 font-mono">
-                Built on <img src="/opnet_logo.svg" alt="OPNet" className="h-4 inline-block" />
-              </span>
-              {wsBlock !== null && (
-                <span className="flex items-center gap-1.5 font-mono text-terminal-text-muted" title="WebSocket live">
-                  <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-green-400' : 'bg-rose-400'}`} />
-                  #{wsBlock.toString()}
+        <footer className="bg-terminal-bg-elevated border-t border-terminal-border-subtle">
+          <div className="max-w-7xl mx-auto px-4 py-8">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <img src="/frogop_512.png" alt="FroGop" className="h-12 w-12" />
+                <span className="text-sm text-terminal-text-muted font-mono">
+                  FroGop — Decentralized Options on Bitcoin
                 </span>
-              )}
+              </div>
+              <div className="flex items-center gap-6 text-sm text-terminal-text-muted">
+                <Link to="/about" className="hover:text-terminal-text-primary transition-colors">
+                  About
+                </Link>
+                <a
+                  href="https://github.com/shoebillrexmail-cmyk/frogop-pub"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-terminal-text-primary transition-colors"
+                >
+                  GitHub
+                </a>
+                <a
+                  href="https://x.com/frogop_opnet"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-terminal-text-primary transition-colors"
+                >
+                  X / Twitter
+                </a>
+                <button
+                  onClick={() => {
+                    try { localStorage.removeItem('frogop_onboarding_complete'); } catch { /* noop */ }
+                    window.location.href = '/pools';
+                  }}
+                  className="hover:text-terminal-text-primary transition-colors"
+                  data-testid="show-tutorial"
+                >
+                  Show Tutorial
+                </button>
+                <span className="flex items-center gap-1.5 font-mono">
+                  Built on <img src="/opnet_logo.svg" alt="OPNet" className="h-4 inline-block" />
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </footer>
+          <div className="border-t border-terminal-border-subtle">
+            <div className="max-w-7xl mx-auto">
+              <NetworkStatusBar />
+            </div>
+          </div>
+        </footer>
+      </NetworkStatusProvider>
     </div>
   );
 }

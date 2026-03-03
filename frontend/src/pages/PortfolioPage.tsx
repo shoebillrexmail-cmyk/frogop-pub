@@ -37,12 +37,12 @@ import type { ResumeRequest } from '../contexts/flowDefs.ts';
 const POOL_ADDRESS = CONTRACT_ADDRESSES.pool;
 
 export function PortfolioPage() {
-    const wsBlock = useWsBlock();
+    const wsBlockInfo = useWsBlock();
     const { walletAddress, address, provider, network, openConnectModal } = useWalletConnect();
 
     const walletHex = address ? address.toString() : null;
 
-    const { currentBlock } = useBlockTracker(provider ?? null, wsBlock);
+    const { currentBlock } = useBlockTracker(provider ?? null, wsBlockInfo?.blockNumber);
 
     // Pool config only (fees, grace period, token addresses)
     const { poolInfo, loading: poolLoading, error: poolError, refetch: poolRefetch } = usePool(

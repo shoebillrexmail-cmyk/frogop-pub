@@ -39,13 +39,13 @@ function fmt(v: bigint): string {
 
 export function OptionDetailPage() {
     const { addr, id } = useParams<{ addr: string; id: string }>();
-    const wsBlock = useWsBlock();
+    const wsBlockInfo = useWsBlock();
     const { address } = useWalletConnect();
     const readProvider = useFallbackProvider();
     const walletHex = address ? address.toString() : null;
 
     const { poolInfo, options, loading, error } = usePool(addr ?? null, readProvider);
-    const { currentBlock } = useBlockTracker(readProvider, wsBlock);
+    const { currentBlock } = useBlockTracker(readProvider, wsBlockInfo?.blockNumber);
 
     const { motoPillRatio } = usePriceRatio(null, null, null, null, null);
 

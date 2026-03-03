@@ -23,12 +23,18 @@ const WS_URLS: Record<string, string> = {
 const wsUrl = import.meta.env.VITE_OPNET_WS_URL || WS_URLS[currentNetwork] || '';
 
 // ---------------------------------------------------------------------------
-// Context for sharing WS block across the app
+// Context for sharing WS block info across the app
 // ---------------------------------------------------------------------------
-const WsBlockContext = createContext<bigint | null>(null);
+export interface WsBlockInfo {
+    readonly blockNumber: bigint;
+    readonly timestamp: bigint;
+    readonly blockHash: string;
+}
 
-/** Read the latest WS block number from context. Returns null if WS is unavailable. */
-export function useWsBlock(): bigint | null {
+const WsBlockContext = createContext<WsBlockInfo | null>(null);
+
+/** Read the latest WS block info from context. Returns null if WS is unavailable. */
+export function useWsBlock(): WsBlockInfo | null {
     return useContext(WsBlockContext);
 }
 
@@ -41,14 +47,12 @@ export interface UseWebSocketProviderResult {
     wsProvider: WebSocketRpcProvider | null;
     connectionState: ConnectionState;
     connected: boolean;
-    currentBlock: bigint | null;
-    latestBlockHash: string | null;
+    wsBlockInfo: WsBlockInfo | null;
 }
 
 export function useWebSocketProvider(): UseWebSocketProviderResult {
     const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.DISCONNECTED);
-    const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
-    const [latestBlockHash, setLatestBlockHash] = useState<string | null>(null);
+    const [wsBlockInfo, setWsBlockInfo] = useState<WsBlockInfo | null>(null);
 
     // Create provider once via lazy state initializer (avoids synchronous
     // setState inside useEffect, which the react-hooks/set-state-in-effect
@@ -93,8 +97,11 @@ export function useWebSocketProvider(): UseWebSocketProviderResult {
                 await provider.connect();
 
                 await provider.subscribeBlocks((notification: BlockNotification) => {
-                    setCurrentBlock(notification.blockNumber);
-                    setLatestBlockHash(notification.blockHash);
+                    setWsBlockInfo({
+                        blockNumber: notification.blockNumber,
+                        timestamp: notification.timestamp,
+                        blockHash: notification.blockHash,
+                    });
                 });
             } catch (err) {
                 console.warn('[ws] Connection failed:', err instanceof Error ? err.message : err);
@@ -118,7 +125,6 @@ export function useWebSocketProvider(): UseWebSocketProviderResult {
         wsProvider,
         connectionState,
         connected,
-        currentBlock,
-        latestBlockHash,
+        wsBlockInfo,
     };
 }

@@ -25,6 +25,7 @@ import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { TxErrorBlock } from './TxErrorBlock.tsx';
 import { classifyMoneyness } from '../utils/optionsChain.ts';
 import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
+import { EstimatedFee } from './EstimatedFee.tsx';
 import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
@@ -99,7 +100,7 @@ export function WriteOptionPanel({
 }: WriteOptionPanelProps) {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
-    const wsBlock = useWsBlock();
+    const wsBlockInfo = useWsBlock();
 
     // Per-instance UUID: adopt from resume prop, or generate fresh.
     // Used as `optionId` in the flow identity key so parallel write flows
@@ -267,7 +268,7 @@ export function WriteOptionPanel({
         spenderHex: poolHex,
         walletAddress: address,
         provider,
-        currentBlock: wsBlock,
+        currentBlock: wsBlockInfo?.blockNumber,
     });
 
     const balance = tokenInfo?.balance ?? null;
@@ -783,6 +784,9 @@ export function WriteOptionPanel({
                             </span>
                         </div>
                     )}
+
+                    {/* Estimated BTC fee */}
+                    {txStatus !== 'done' && <EstimatedFee />}
 
                     {/* Action buttons */}
                     {txStatus !== 'done' && (

@@ -3,7 +3,11 @@ import { vi } from 'vitest';
 import { createContext } from 'react';
 
 // Pre-create the mock context so vi.mock can reference it (vi.mock is hoisted).
-const MockWsBlockContext = createContext<bigint | null>(null);
+const MockWsBlockContext = createContext<{
+    blockNumber: bigint;
+    timestamp: bigint;
+    blockHash: string;
+} | null>(null);
 
 // Global mock for transactionDefs — the context creation used by hooks/components.
 vi.mock('../contexts/transactionDefs.ts', () => ({
@@ -120,15 +124,79 @@ vi.mock('../hooks/usePriceRatio.ts', () => ({
     })),
 }));
 
+// Global mock for useFallbackProvider — used by Layout and pages.
+vi.mock('../hooks/useFallbackProvider.ts', () => ({
+    useFallbackProvider: vi.fn(() => null),
+}));
+
 // Global mock for useWebSocketProvider — used by Layout and pages.
 vi.mock('../hooks/useWebSocketProvider.ts', () => ({
     useWebSocketProvider: vi.fn(() => ({
         wsProvider: null,
         connectionState: 0, // DISCONNECTED
         connected: false,
-        currentBlock: null,
-        latestBlockHash: null,
+        wsBlockInfo: null,
     })),
     useWsBlock: vi.fn(() => null),
     WsBlockContext: MockWsBlockContext,
+}));
+
+// Global mock for useGasParameters — used by NetworkStatusProvider.
+vi.mock('../hooks/useGasParameters.ts', () => ({
+    useGasParameters: vi.fn(() => ({
+        gasParams: null,
+        loading: false,
+        error: null,
+        refetch: vi.fn(),
+    })),
+}));
+
+// Global mock for useMempoolInfo — used by NetworkStatusProvider.
+vi.mock('../hooks/useMempoolInfo.ts', () => ({
+    useMempoolInfo: vi.fn(() => ({
+        mempoolInfo: null,
+        loading: false,
+        error: null,
+        refetch: vi.fn(),
+    })),
+}));
+
+// Global mock for useNextBlockEstimate — used by NetworkStatusProvider.
+vi.mock('../hooks/useNextBlockEstimate.ts', () => ({
+    useNextBlockEstimate: vi.fn(() => ({
+        secondsSinceLastBlock: 0,
+        estimatedSecondsToNext: 600,
+        progressPercent: 0,
+        lastBlockTimestamp: null,
+    })),
+}));
+
+// Global mock for networkStatusDefs — the context creation.
+vi.mock('../contexts/networkStatusDefs.ts', () => ({
+    NetworkStatusContext: createContext(null),
+}));
+
+// Global mock for NetworkStatusProvider — passthrough wrapper.
+vi.mock('../contexts/NetworkStatusContext.tsx', () => ({
+    NetworkStatusProvider: ({ children }: { children: unknown }) => children,
+}));
+
+// Global mock for useNetworkStatus — default values.
+vi.mock('../hooks/useNetworkStatus.ts', () => ({
+    useNetworkStatus: vi.fn(() => ({
+        gasParams: null,
+        btcFees: null,
+        mempoolInfo: null,
+        secondsSinceLastBlock: 0,
+        estimatedSecondsToNext: 600,
+        progressPercent: 0,
+        lastBlockTimestamp: null,
+        wsConnected: false,
+        blockNumber: null,
+    })),
+}));
+
+// Global mock for NetworkStatusBar — used by Layout.
+vi.mock('../components/NetworkStatusBar.tsx', () => ({
+    NetworkStatusBar: () => null,
 }));

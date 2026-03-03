@@ -24,6 +24,7 @@ import type { StepStatus } from './StepIndicator.tsx';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { TxErrorBlock } from './TxErrorBlock.tsx';
 import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
+import { EstimatedFee } from './EstimatedFee.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 
 interface BuyOptionModalProps {
@@ -457,6 +458,9 @@ export function BuyOptionModal({
                             onDone={onSuccess}
                         />
                     )}
+
+                    {/* Estimated BTC fee */}
+                    {txStatus !== 'done' && <EstimatedFee />}
 
                     {/* Action buttons */}
                     {txStatus !== 'done' && (

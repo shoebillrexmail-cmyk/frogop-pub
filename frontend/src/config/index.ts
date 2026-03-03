@@ -36,6 +36,9 @@ export function explorerTxUrl(txId: string): string {
   return `${net.explorerTxBase}${txId}${net.explorerTxSuffix}`;
 }
 
+/** Expected seconds between Signet blocks (~10 minutes). */
+export const EXPECTED_BLOCK_INTERVAL_S = 600;
+
 export const BLOCK_CONSTANTS = {
   BLOCKS_PER_DAY: 144,
   BLOCKS_PER_WEEK: 1008,
