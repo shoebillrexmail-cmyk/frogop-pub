@@ -1,13 +1,5 @@
 # OptionsFactory Contract
 
-> **AUDIT (2026-03-03)**: This doc has discrepancies vs source (`src/contracts/factory/contract.ts`).
-> - `poolCount()` → actual method is `getPoolCount()`
-> - `allPools(index)` → actual method is `getPoolByIndex(index)`, returns 3 addresses (pool+underlying+premium), not 1
-> - `createPool()` missing 2 params: `underlyingDecimals`, `premiumDecimals`
-> - `PoolCreated` event: only emits 3 fields (pool, underlying, premium), NOT creator/blockNumber
-> - Missing methods: `getOwner()`, `getPoolTemplate()`, `setPoolTemplate()`, `getTreasury()`, `setTreasury()`, `registerPool()`
-> - **TODO**: Update this doc to match source code
-
 ## Overview
 
 OptionsFactory is the pool registry contract. Pools are deployed by the protocol admin and registered via `registerPool()`. The factory provides pool discovery methods (`getPoolCount`, `getPoolByIndex`, `getPool`).
@@ -15,21 +7,27 @@ OptionsFactory is the pool registry contract. Pools are deployed by the protocol
 ## Contract Address
 
 ```
-regtest:  (TBD after deployment)
-mainnet:  (TBD after deployment)
+testnet:  (see tests/integration/deployed-contracts.json)
+mainnet:  (TBD)
 ```
 
 ## ABI
 
 ```typescript
 const OPTIONS_FACTORY_ABI = [
+    // View methods
+    { name: 'getOwner', inputs: [], outputs: [{ name: 'owner', type: 'address' }] },
+    { name: 'getPoolTemplate', inputs: [], outputs: [{ name: 'template', type: 'address' }] },
+    { name: 'getTreasury', inputs: [], outputs: [{ name: 'treasury', type: 'address' }] },
+    { name: 'getPoolCount', inputs: [], outputs: [{ name: 'count', type: 'uint256' }] },
     {
-        name: 'createPool',
-        inputs: [
+        name: 'getPoolByIndex',
+        inputs: [{ name: 'index', type: 'uint256' }],
+        outputs: [
+            { name: 'poolAddress', type: 'address' },
             { name: 'underlying', type: 'address' },
             { name: 'premiumToken', type: 'address' },
         ],
-        outputs: [{ name: 'pool', type: 'address' }],
     },
     {
         name: 'getPool',
@@ -37,348 +35,217 @@ const OPTIONS_FACTORY_ABI = [
             { name: 'underlying', type: 'address' },
             { name: 'premiumToken', type: 'address' },
         ],
-        outputs: [{ name: 'pool', type: 'address' }],
+        outputs: [{ name: 'poolAddress', type: 'address' }],
+    },
+
+    // State-changing methods
+    {
+        name: 'setPoolTemplate',
+        inputs: [{ name: 'template', type: 'address' }],
+        outputs: [{ name: 'success', type: 'bool' }],
     },
     {
-        name: 'allPools',
-        inputs: [{ name: 'index', type: 'uint256' }],
-        outputs: [{ name: 'pool', type: 'address' }],
+        name: 'setTreasury',
+        inputs: [{ name: 'treasury', type: 'address' }],
+        outputs: [{ name: 'success', type: 'bool' }],
     },
     {
-        name: 'poolCount',
-        inputs: [],
-        outputs: [{ name: 'count', type: 'uint256' }],
+        name: 'registerPool',
+        inputs: [
+            { name: 'pool', type: 'address' },
+            { name: 'underlying', type: 'address' },
+            { name: 'premiumToken', type: 'address' },
+        ],
+        outputs: [{ name: 'success', type: 'bool' }],
+    },
+    {
+        name: 'createPool',
+        inputs: [
+            { name: 'underlying', type: 'address' },
+            { name: 'premiumToken', type: 'address' },
+            { name: 'underlyingDecimals', type: 'uint8' },
+            { name: 'premiumDecimals', type: 'uint8' },
+        ],
+        outputs: [{ name: 'poolAddress', type: 'address' }],
     },
 ];
 ```
 
 ## Methods
 
-### createPool
+### View Methods
 
-Creates a new option pool for a token pair.
+#### getOwner
+
+Returns the contract owner address (set to `tx.origin` at deployment).
 
 ```typescript
-@method(
-    { name: 'underlying', type: ABIDataTypes.ADDRESS },
-    { name: 'premiumToken', type: ABIDataTypes.ADDRESS },
-)
-@emit('PoolCreated')
-@returns({ name: 'pool', type: ABIDataTypes.ADDRESS })
-public createPool(calldata: Calldata): BytesWriter
+@view @method()
+@returns({ name: 'owner', type: ABIDataTypes.ADDRESS })
+public getOwner(_calldata: Calldata): BytesWriter
 ```
 
-**Parameters:**
+#### getPoolTemplate
 
-| Name | Type | Description |
-|------|------|-------------|
-| underlying | Address | Token being optioned (e.g., MOTO) |
-| premiumToken | Address | Token for premiums and strikes (e.g., PILL) |
-
-**Returns:**
-
-| Name | Type | Description |
-|------|------|-------------|
-| pool | Address | Address of newly created pool |
-
-**Events:**
+Returns the pool template address used by `createPool`.
 
 ```typescript
-@emit('PoolCreated')
-{
-    underlying: Address,
-    premiumToken: Address,
-    pool: Address,
-    creator: Address,
-    blockNumber: u64
+@view @method()
+@returns({ name: 'template', type: ABIDataTypes.ADDRESS })
+public getPoolTemplate(_calldata: Calldata): BytesWriter
+```
+
+#### getTreasury
+
+Returns the treasury address.
+
+```typescript
+@view @method()
+@returns({ name: 'treasury', type: ABIDataTypes.ADDRESS })
+public getTreasury(_calldata: Calldata): BytesWriter
+```
+
+#### getPoolCount
+
+Returns total number of registered pools.
+
+```typescript
+@view @method()
+@returns({ name: 'count', type: ABIDataTypes.UINT256 })
+public getPoolCount(_calldata: Calldata): BytesWriter
+```
+
+#### getPoolByIndex
+
+Returns pool info by index. Returns 96 bytes: poolAddress + underlying + premiumToken.
+
+```typescript
+@view
+@method({ name: 'index', type: ABIDataTypes.UINT256 })
+@returns({ name: 'poolAddress', type: ABIDataTypes.ADDRESS })
+public getPoolByIndex(calldata: Calldata): BytesWriter
+```
+
+**Returns:** 96 bytes — `poolAddress(32) + underlying(32) + premiumToken(32)`
+
+**Reverts:** `'Index out of bounds'` if index >= poolCount.
+
+**Example:**
+
+```typescript
+const countResult = await factory.getPoolCount();
+const count = countResult.properties.count;
+
+for (let i = 0n; i < count; i++) {
+    const result = await factory.getPoolByIndex(i);
+    // result contains: poolAddress, underlying, premiumToken
 }
 ```
 
-**Example (Frontend):**
+#### getPool
+
+Gets the pool address for a token pair. Returns zero address if not registered.
 
 ```typescript
-import { getContract, OPTIONS_FACTORY_ABI, IOptionsFactoryContract } from 'opnet';
-
-const factory = getContract<IOptionsFactoryContract>(
-    factoryAddress,
-    OPTIONS_FACTORY_ABI,
-    provider,
-    network,
-    wallet.address
-);
-
-// Create MOTO/PILL option pool
-const simulation = await factory.createPool(motoAddress, pillAddress);
-
-const receipt = await simulation.sendTransaction({
-    signer: wallet.keypair,
-    mldsaSigner: wallet.mldsaKeypair,
-    refundTo: wallet.p2tr,
-    feeRate: 10,
-    network,
-});
-
-console.log('Pool created:', simulation.properties.pool.toHex());
-```
-
-> **Runtime Limitation:** `createPool()` relies on `Blockchain.deployContractFromExisting()` which is **not supported** by the OPNet runtime. Calling `createPool()` will revert on-chain. Instead, deploy pools via CLI/script and register them with `registerPool()`.
-
-### getPool
-
-Gets the pool address for a token pair.
-
-```typescript
+@view
 @method(
     { name: 'underlying', type: ABIDataTypes.ADDRESS },
     { name: 'premiumToken', type: ABIDataTypes.ADDRESS },
 )
-@returns({ name: 'pool', type: ABIDataTypes.ADDRESS })
+@returns({ name: 'poolAddress', type: ABIDataTypes.ADDRESS })
 public getPool(calldata: Calldata): BytesWriter
 ```
 
-**Returns:**
+### State-Changing Methods
 
-- Pool address if exists
-- Zero address (`0x0000...`) if not exists
+#### setPoolTemplate
 
-**Example:**
-
-```typescript
-const result = await factory.getPool(motoAddress, pillAddress);
-const poolAddress = result.properties.pool;
-
-if (poolAddress.toHex() === '0x' + '0'.repeat(64)) {
-    console.log('Pool does not exist');
-} else {
-    console.log('Pool address:', poolAddress.toHex());
-}
-```
-
-### allPools
-
-Gets pool address by index.
+Sets the pool template address for `createPool`. Owner only.
 
 ```typescript
-@method({ name: 'index', type: ABIDataTypes.UINT256 })
-@returns({ name: 'pool', type: ABIDataTypes.ADDRESS })
-public allPools(calldata: Calldata): BytesWriter
+@method({ name: 'template', type: ABIDataTypes.ADDRESS })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+public setPoolTemplate(calldata: Calldata): BytesWriter
 ```
 
-**Example:**
+#### setTreasury
+
+Sets the treasury address. Owner only. Rejects zero address.
 
 ```typescript
-// Get total count
-const countResult = await factory.poolCount();
-const count = countResult.properties.count;
-
-// Iterate all pools
-for (let i = 0n; i < count; i++) {
-    const poolResult = await factory.allPools(i);
-    console.log(`Pool ${i}:`, poolResult.properties.pool.toHex());
-}
+@method({ name: 'treasury', type: ABIDataTypes.ADDRESS })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+public setTreasury(calldata: Calldata): BytesWriter
 ```
 
-### poolCount
+#### registerPool
 
-Returns total number of pools created.
+Registers an externally-deployed pool in the factory registry. Owner only. This is the **primary method** for adding pools since `createPool` is not supported by OPNet runtime.
 
 ```typescript
-@method()
-@returns({ name: 'count', type: ABIDataTypes.UINT256 })
-public poolCount(calldata: Calldata): BytesWriter
+@method(
+    { name: 'pool', type: ABIDataTypes.ADDRESS },
+    { name: 'underlying', type: ABIDataTypes.ADDRESS },
+    { name: 'premiumToken', type: ABIDataTypes.ADDRESS },
+)
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+public registerPool(calldata: Calldata): BytesWriter
 ```
+
+**Reverts:** `'Pool already registered'` if the token pair already has a pool.
+
+#### createPool
+
+Creates a new pool from the template via `deployContractFromExisting`.
+
+```typescript
+@method(
+    { name: 'underlying', type: ABIDataTypes.ADDRESS },
+    { name: 'premiumToken', type: ABIDataTypes.ADDRESS },
+    { name: 'underlyingDecimals', type: ABIDataTypes.UINT8 },
+    { name: 'premiumDecimals', type: ABIDataTypes.UINT8 },
+)
+@returns({ name: 'poolAddress', type: ABIDataTypes.ADDRESS })
+@emit('PoolCreated')
+public createPool(calldata: Calldata): BytesWriter
+```
+
+> **Runtime Limitation:** `createPool()` relies on `Blockchain.deployContractFromExisting()` which is **not supported** by the OPNet runtime. Use `registerPool()` with externally-deployed pools instead.
 
 ## Storage Layout
 
-```typescript
-class OptionsFactory extends Upgradeable {
-    // Pointers
-    private poolsPointer: u16 = Blockchain.nextPointer;      // Map<underlying, Map<premium, pool>>
-    private poolListPointer: u16 = Blockchain.nextPointer;   // Array<pool>
-    
-    // Storage
-    private _pools: StoredMap;       // Nested map: underlying → premium → pool
-    private _poolList: StoredList;   // All pool addresses
-}
+```
+Pointer 10: owner (StoredAddress) — contract owner
+Pointer 11: poolTemplate (StoredAddress) — template for createPool
+Pointer 12: pools (MapOfMap<u256>) — nested map: underlying → premiumToken → poolAddress
+Pointer 13: treasury (StoredAddress) — lazy-loaded
+Pointer 14: poolCount (StoredU256) — lazy-loaded, incremented by registerPool/createPool
+Pointer 15: poolList (SHA256-keyed raw storage) — enumerable pool list (3 slots per index)
 ```
 
-## Factory Pattern Implementation
-
-### Template Contract
-
-```typescript
-// OptionsPool template is deployed once
-private OPTIONS_POOL_TEMPLATE: Address;
-
-constructor() {
-    super();
-    this.OPTIONS_POOL_TEMPLATE = Address.fromString(TEMPLATE_ADDRESS);
-}
-```
-
-### Salt-Based Deployment
-
-```typescript
-private salt(underlying: Address, premiumToken: Address): Uint8Array {
-    // Deterministic salt for pool address
-    const writer = new BytesWriter(64);
-    writer.writeAddress(underlying);
-    writer.writeAddress(premiumToken);
-    return SHA256(writer.buffer);
-}
-
-// Pool addresses are deterministic
-// Same underlying + premiumToken = same address
-// Prevents duplicate pools
-```
-
-### Deployment
-
-```typescript
-private deployPool(underlying: Address, premiumToken: Address): Address {
-    // Prepare init calldata
-    const initData = new BytesWriter(64);
-    initData.writeAddress(underlying);
-    initData.writeAddress(premiumToken);
-    
-    // Deploy from template
-    const poolAddress = Blockchain.deployContractFromExisting(
-        this.OPTIONS_POOL_TEMPLATE,
-        this.salt(underlying, premiumToken),
-        initData.buffer
-    );
-    
-    return poolAddress;
-}
-```
-
-## Events Reference
+## Events
 
 ### PoolCreated
 
-Emitted when a new pool is created.
+Emitted by `createPool` (not by `registerPool`).
 
 ```typescript
-interface PoolCreatedEvent {
-    underlying: Address;      // Token being optioned
-    premiumToken: Address;    // Token for premiums
-    pool: Address;           // New pool address
-    creator: Address;        // Who created it
-    blockNumber: u64;        // Creation block
+// Event data: 96 bytes
+{
+    poolAddress: Address,    // 32 bytes
+    underlying: Address,     // 32 bytes
+    premiumToken: Address,   // 32 bytes
 }
 ```
 
-## Error Codes
+## Access Control
 
-| Code | Message | Cause |
-|------|---------|-------|
-| 0x01 | "Pool already exists" | Token pair already has a pool |
-| 0x02 | "Invalid token address" | Zero address passed |
-| 0x03 | "Same token pair" | underlying == premiumToken |
-| 0x04 | "Template not set" | Factory not initialized |
+| Method | Access |
+|--------|--------|
+| `getOwner`, `getPoolTemplate`, `getTreasury`, `getPoolCount`, `getPoolByIndex`, `getPool` | Public (view) |
+| `setPoolTemplate`, `setTreasury`, `registerPool` | Owner only |
+| `createPool` | Any (but unsupported by runtime) |
 
-## Security
+## Source
 
-### Access Control
-
-- **createPool**: Not supported by OPNet runtime (use `registerPool` instead)
-- **registerPool**: Owner only
-- **setTemplate**: Owner only
-
-### Validation
-
-```typescript
-private validateTokens(underlying: Address, premiumToken: Address): void {
-    // Not zero addresses
-    if (underlying.isZero() || premiumToken.isZero()) {
-        throw new Revert('Invalid token address');
-    }
-    
-    // Not same token
-    if (underlying.equals(premiumToken)) {
-        throw new Revert('Same token pair');
-    }
-    
-    // Pool doesn't exist
-    if (this.poolExists(underlying, premiumToken)) {
-        throw new Revert('Pool already exists');
-    }
-}
-```
-
-## Upgrade Pattern
-
-Factory extends `Upgradeable` for future improvements:
-
-```typescript
-class OptionsFactory extends Upgradeable {
-    // Upgrade requires:
-    // 1. 2/3 multisig approval
-    // 2. 48 hour timelock
-    // 3. No breaking changes to existing pools
-}
-```
-
-## Frontend Integration
-
-### Pool Discovery Hook
-
-```typescript
-import { useContract, useProvider } from 'opnet';
-import { useState, useEffect } from 'react';
-
-function usePoolDiscovery(factoryAddress: Address) {
-    const provider = useProvider();
-    const [pools, setPools] = useState<PoolInfo[]>([]);
-    
-    useEffect(() => {
-        async function fetchPools() {
-            const factory = getContract<IOptionsFactoryContract>(
-                factoryAddress,
-                OPTIONS_FACTORY_ABI,
-                provider,
-                network
-            );
-            
-            const count = await factory.poolCount();
-            const poolInfos: PoolInfo[] = [];
-            
-            for (let i = 0n; i < count.properties.count; i++) {
-                const poolAddr = await factory.allPools(i);
-                const pool = getContract<IOptionsPoolContract>(
-                    poolAddr.properties.pool,
-                    OPTIONS_POOL_ABI,
-                    provider,
-                    network
-                );
-                
-                const [underlying, premium, reserves] = await Promise.all([
-                    pool.underlying(),
-                    pool.premiumToken(),
-                    pool.getReserves(),
-                ]);
-                
-                poolInfos.push({
-                    address: poolAddr.properties.pool,
-                    underlying: underlying.properties.token,
-                    premiumToken: premium.properties.token,
-                    reserve0: reserves.properties.reserve0,
-                    reserve1: reserves.properties.reserve1,
-                });
-            }
-            
-            setPools(poolInfos);
-        }
-        
-        fetchPools();
-    }, [factoryAddress]);
-    
-    return pools;
-}
-```
-
-## Next Steps
-
-- [OptionsPool Contract](./OptionsPool.md)
-- [AMMPool Contract](./AMMPool.md)
-- [Phase 1 MVP](../../internal/roadmap/PHASE_1_MVP.md)
+`src/contracts/factory/contract.ts`

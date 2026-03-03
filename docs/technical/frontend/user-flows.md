@@ -1,12 +1,5 @@
 # FroGop Frontend User Flows
 
-> **AUDIT (2026-03-03)**: Minor discrepancies vs source code.
-> - "Write Put" strategy: documented but NOT implemented in code
-> - Protective Put: doc says QuickStrategies card, but actually inline on Buy tab
-> - Strategy count: 3 in QuickStrategies (Covered Call, Collar, Write Custom), not 4
-> - NetworkStatusBar component not documented (recent addition)
-> - **TODO**: Update strategy section to match actual implementation
-
 All user flows in the FroGop options platform frontend.
 
 ## Core Option Flows
@@ -59,25 +52,36 @@ All user flows in the FroGop options platform frontend.
 ## Strategy Flows
 
 ### 10. Covered Call
-**Entry**: QuickStrategies card → pre-fills WriteOptionPanel
+**Entry**: QuickStrategies card on Write tab → pre-fills WriteOptionPanel
 **Params**: CALL at 120% spot, 30-day expiry
 **Goal**: Earn premium on MOTO holdings
 
 ### 11. Protective Put
-**Entry**: QuickStrategies card → opens BuyOptionModal with best PUT
+**Entry**: Inline card on Buy tab (PoolsPage) → opens BuyOptionModal with best PUT
 **Params**: PUT at 80-95% spot
 **Goal**: Insure MOTO against price drops
 
-### 12. Write Put
-**Entry**: QuickStrategies card → pre-fills WriteOptionPanel
-**Params**: PUT at 80% spot
-**Goal**: Earn premium; willing to buy MOTO at lower price
-
-### 13. Collar Strategy (2-leg)
+### 12. Collar Strategy (2-leg)
 **Component**: `CollarModal.tsx`
+**Entry**: QuickStrategies card → opens CollarModal
 **Steps**: Write CALL (earn premium) → Buy PUT (spend premium)
 **Persistence**: Progress tracked in localStorage per wallet
-**Status**: Surfaced on PortfolioPage when in-progress
+**Status**: Surfaced on PortfolioPage when in-progress via `CollarProgressCard`
+
+### QuickStrategies Component
+Located on PoolsPage Write tab. Contains 3 cards:
+- **Covered Call** — pre-fills WriteOptionPanel with CALL defaults
+- **Collar** — opens CollarModal for 2-leg strategy
+- **Write Custom** — focuses WriteOptionPanel for manual entry
+
+## Network Status
+
+### NetworkStatusBar
+**Component**: `NetworkStatusBar.tsx`
+Displays live network data in header:
+- Current gas parameters
+- Mempool transaction count
+- Block countdown (time to next block)
 
 ## Transaction Flow Management
 
