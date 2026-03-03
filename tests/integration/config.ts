@@ -108,6 +108,13 @@ export const TEST_TOKENS = {
     },
 };
 
+export interface PoolDeployment {
+    id: string;
+    underlying: string;
+    premium: string;
+    pool: string;
+}
+
 export interface DeployedContracts {
     network: string;
     rpcUrl: string;
@@ -118,8 +125,44 @@ export interface DeployedContracts {
     };
     factory: string;
     poolTemplate: string;
+    /** Legacy single-pool field (backward compat). */
     pool?: string;
+    /** Multi-pool array (preferred). */
+    pools?: PoolDeployment[];
     deployedAt: string;
+}
+
+/**
+ * Resolve pool address from deployed contracts.
+ *
+ * Checks `--pool-id <id>` CLI arg against `deployed.pools[]`, falls back to
+ * `deployed.pool` for backward compatibility with single-pool setups.
+ */
+export function resolvePoolAddress(deployed: DeployedContracts): { poolAddress: string; underlying: string; premium: string } {
+    const args = process.argv.slice(2);
+    const poolIdIdx = args.indexOf('--pool-id');
+    const poolId = poolIdIdx !== -1 ? args[poolIdIdx + 1] : undefined;
+
+    if (poolId && deployed.pools) {
+        const match = deployed.pools.find((p) => p.id === poolId);
+        if (match) {
+            return { poolAddress: match.pool, underlying: match.underlying, premium: match.premium };
+        }
+        throw new Error(`Pool "${poolId}" not found in deployed-contracts.json pools array.`);
+    }
+
+    // Multi-pool: default to first pool
+    if (deployed.pools && deployed.pools.length > 0) {
+        const first = deployed.pools[0]!;
+        return { poolAddress: first.pool, underlying: first.underlying, premium: first.premium };
+    }
+
+    // Legacy single-pool
+    if (deployed.pool) {
+        return { poolAddress: deployed.pool, underlying: deployed.tokens.frogU, premium: deployed.tokens.frogP };
+    }
+
+    throw new Error('No pool address found in deployed-contracts.json. Deploy a pool first.');
 }
 
 export function saveDeployedContracts(contracts: DeployedContracts): void {

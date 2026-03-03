@@ -26,6 +26,8 @@
     "test:integration:transfer": "npx tsx tests/integration/08-option-transfer.ts",
     "test:integration:batch": "npx tsx tests/integration/09-batch-operations.ts",
     "test:integration:roll": "npx tsx tests/integration/10-roll-option.ts",
+    "deploy:pool": "npx tsx scripts/deploy-pool.ts",
+    "mint:test-tokens": "npx tsx scripts/mint-test-tokens.ts",
     "deploy:motoswap-pool": "npx tsx tests/integration/deploy-motoswap-pool.ts",
     "lint": "eslint src/**/*.ts tests/**/*.ts",
     "typecheck": "tsc --noEmit",
