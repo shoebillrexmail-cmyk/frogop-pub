@@ -28,6 +28,25 @@ export const POOL_VIEW_SELECTORS = {
     calculateCollateral: sel('calculateCollateral(uint8,uint256,uint256)'),
 } as const;
 
+/** Selectors for BTC quote pool (type 1) — two-phase commit methods */
+export const BTC_QUOTE_SELECTORS = {
+    reserveOption: sel('reserveOption(uint256)'),
+    executeReservation: sel('executeReservation(uint256)'),
+    cancelReservation: sel('cancelReservation(uint256)'),
+    getReservation: sel('getReservation(uint256)'),
+} as const;
+
+/** Selectors for BTC underlying pool (type 2) */
+export const BTC_UNDERLYING_SELECTORS = {
+    writeOptionBtc: sel('writeOptionBtc(uint8,uint256,uint64,uint256,uint256)'),
+} as const;
+
+/** Selectors for SpreadRouter (atomic multi-leg strategies) */
+export const ROUTER_SELECTORS = {
+    executeSpread: sel('executeSpread(address,uint8,uint256,uint64,uint256,uint256,uint256)'),
+    executeDualWrite: sel('executeDualWrite(address,uint8,uint256,uint64,uint256,uint256,uint8,uint256,uint64,uint256,uint256)'),
+} as const;
+
 /** View method selectors for OP20 tokens */
 export const TOKEN_VIEW_SELECTORS = {
     balanceOf: sel('balanceOf(address)'),

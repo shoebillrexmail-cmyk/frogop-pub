@@ -121,6 +121,32 @@ export function getNativeSwapAddress(config: PoolConfig | null): string | null {
     return config.nativeSwap.addresses[net] || null;
 }
 
+/** Get the NativeSwapBridge contract address for a specific pool config on the current network. */
+export function getBridgeAddress(config: PoolConfig | null): string | null {
+    if (!config?.bridge) return null;
+    const net = currentNetwork as NetworkId;
+    return config.bridge.addresses[net] || null;
+}
+
+/** Get pool type from config (defaults to 0 = OP20/OP20). */
+export function getPoolType(config: PoolConfig | null): 0 | 1 | 2 {
+    return config?.poolType ?? 0;
+}
+
+/** Human-readable label for pool type. */
+export function poolTypeLabel(poolType: 0 | 1 | 2): string {
+    switch (poolType) {
+        case 0: return 'OP20/OP20';
+        case 1: return 'OP20/BTC';
+        case 2: return 'BTC/OP20';
+    }
+}
+
+/** Whether the pool involves native BTC. */
+export function isBtcPool(poolType: 0 | 1 | 2): boolean {
+    return poolType !== 0;
+}
+
 export function formatTokenAmount(amount: bigint, decimals: number = 18): string {
   const divisor = BigInt(10 ** decimals);
   const whole = amount / divisor;

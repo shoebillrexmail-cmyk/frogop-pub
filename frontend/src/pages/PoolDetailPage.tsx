@@ -30,7 +30,7 @@ import { QuickStrategies } from '../components/QuickStrategies.tsx';
 import { YieldOverview } from '../components/YieldOverview.tsx';
 import { WriterHowItWorks } from '../components/WriterHowItWorks.tsx';
 import { CollarModal } from '../components/CollarModal.tsx';
-import { currentNetwork, findPoolConfig, getNativeSwapAddress, getPricePairKey, formatTokenAmount } from '../config/index.ts';
+import { currentNetwork, findPoolConfig, getNativeSwapAddress, getPricePairKey, formatTokenAmount, getPoolType } from '../config/index.ts';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
 import { NotificationBanner } from '../components/NotificationBanner.tsx';
 import { useNotifications } from '../hooks/useNotifications.ts';
@@ -63,6 +63,7 @@ export function PoolDetailPage() {
     }, [poolInfo]);
     const underlyingSymbol = poolConfig?.underlying.symbol ?? 'MOTO';
     const premiumSymbol = poolConfig?.premium.symbol ?? 'PILL';
+    const poolType = getPoolType(poolConfig);
     const pairKey = poolConfig ? getPricePairKey(poolConfig) : `${underlyingSymbol}_${premiumSymbol}`;
 
     // NativeSwap address from pool config (not env var)
@@ -326,6 +327,7 @@ export function PoolDetailPage() {
                         priceLastUpdated={priceLastUpdated}
                         underlyingSymbol={underlyingSymbol}
                         premiumSymbol={premiumSymbol}
+                        poolType={poolType}
                     />
 
                     {/* Tab bar */}

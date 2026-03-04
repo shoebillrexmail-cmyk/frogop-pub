@@ -7,6 +7,8 @@
 import { useState } from 'react';
 import type { PoolInfo } from '../services/types.ts';
 import { formatAddress } from '../config/index.ts';
+import { PoolTypeBadge } from './PoolTypeBadge.tsx';
+import type { PoolType } from '../../../shared/pool-config.types.ts';
 
 interface PoolHeaderBarProps {
     poolInfo: PoolInfo;
@@ -15,6 +17,7 @@ interface PoolHeaderBarProps {
     priceLastUpdated?: Date | null;
     underlyingSymbol?: string;
     premiumSymbol?: string;
+    poolType?: PoolType;
 }
 
 function bpsToPct(bps: bigint): string {
@@ -30,7 +33,7 @@ function freshnessLabel(lastUpdated: Date | null | undefined): { text: string; c
     return { text: `${mins}m ago`, color: 'text-rose-400' };
 }
 
-export function PoolHeaderBar({ poolInfo, poolAddress, motoPillRatio, priceLastUpdated, underlyingSymbol = 'MOTO', premiumSymbol = 'PILL' }: PoolHeaderBarProps) {
+export function PoolHeaderBar({ poolInfo, poolAddress, motoPillRatio, priceLastUpdated, underlyingSymbol = 'MOTO', premiumSymbol = 'PILL', poolType = 0 }: PoolHeaderBarProps) {
     const [detailsOpen, setDetailsOpen] = useState(false);
     const freshness = freshnessLabel(priceLastUpdated);
     const feeSummary = `${bpsToPct(poolInfo.buyFeeBps)} / ${bpsToPct(poolInfo.exerciseFeeBps)} / ${bpsToPct(poolInfo.cancelFeeBps)}`;
@@ -45,6 +48,7 @@ export function PoolHeaderBar({ poolInfo, poolAddress, motoPillRatio, priceLastU
                 <span className="font-bold text-terminal-text-primary" data-testid="pool-name">
                     {underlyingSymbol} / {premiumSymbol} Pool
                 </span>
+                {poolType !== 0 && <PoolTypeBadge poolType={poolType} />}
 
                 <span className="text-terminal-text-muted">
                     Spot:{' '}

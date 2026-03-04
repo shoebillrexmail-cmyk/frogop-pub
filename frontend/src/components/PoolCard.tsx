@@ -4,8 +4,9 @@
  * Fetches pool info on mount for live data.
  */
 import { Link } from 'react-router-dom';
-import { formatAddress, bpsToPct } from '../config/index.ts';
+import { formatAddress, bpsToPct, findPoolConfigByAddress, getPoolType } from '../config/index.ts';
 import { usePool } from '../hooks/usePool.ts';
+import { PoolTypeBadge } from './PoolTypeBadge.tsx';
 import type { AbstractRpcProvider } from 'opnet';
 import type { PoolEntry } from '../services/types.ts';
 
@@ -16,6 +17,8 @@ interface PoolCardProps {
 
 export function PoolCard({ pool, provider }: PoolCardProps) {
     const { poolInfo, loading } = usePool(pool.address, provider ?? null);
+    const poolConfig = findPoolConfigByAddress(pool.address);
+    const poolType = getPoolType(poolConfig);
 
     const pairLabel =
         pool.underlyingSymbol && pool.premiumSymbol
@@ -29,9 +32,12 @@ export function PoolCard({ pool, provider }: PoolCardProps) {
             data-testid={`pool-card-${pool.address}`}
         >
             <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-terminal-text-primary font-mono group-hover:text-accent transition-colors">
-                    {pairLabel}
-                </h3>
+                <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-terminal-text-primary font-mono group-hover:text-accent transition-colors">
+                        {pairLabel}
+                    </h3>
+                    {poolType !== 0 && <PoolTypeBadge poolType={poolType} />}
+                </div>
                 {pool.poolId && (
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-terminal-bg-primary border border-terminal-border-subtle text-terminal-text-muted">
                         {pool.poolId}

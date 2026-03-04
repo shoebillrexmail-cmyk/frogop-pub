@@ -7,8 +7,8 @@
  */
 import type { AbstractRpcProvider } from 'opnet';
 import { BinaryWriter } from '@btc-vision/transaction';
-import type { OptionData, PoolInfo } from './types.ts';
-import { POOL_VIEW_SELECTORS } from './selectors.ts';
+import type { OptionData, PoolInfo, ReservationData } from './types.ts';
+import { POOL_VIEW_SELECTORS, BTC_QUOTE_SELECTORS } from './selectors.ts';
 
 /** Max batch size enforced by the contract (OPNet 2048-byte receipt limit) */
 const MAX_BATCH_SIZE = 9n;
@@ -138,6 +138,32 @@ export class PoolService {
         }
 
         return all;
+    }
+
+    // =========================================================================
+    // BTC Quote Pool (Type 1) — Two-Phase Commit View Methods
+    // =========================================================================
+
+    /**
+     * Fetch a reservation by ID (type 1 pools only).
+     * Returns null if reservation doesn't exist.
+     */
+    async getReservation(reservationId: bigint): Promise<ReservationData | null> {
+        try {
+            const calldata = buildCalldata(BTC_QUOTE_SELECTORS.getReservation, reservationId);
+            const reader = await this.callView(calldata);
+            return {
+                reservationId,
+                optionId: reader.readU256(),
+                buyer: reader.readAddress().toString(),
+                btcAmount: reader.readU256(),
+                csvScriptHash: reader.readAddress().toString(),
+                expiryBlock: reader.readU64(),
+                status: reader.readU8(),
+            };
+        } catch {
+            return null;
+        }
     }
 
     /** Fetch pool configuration (token addresses, fee bps, constants) */

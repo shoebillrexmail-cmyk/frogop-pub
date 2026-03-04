@@ -12,6 +12,8 @@ export const OptionStatus = {
     EXERCISED: 2,
     EXPIRED: 3,
     CANCELLED: 4,
+    /** Used by BTC quote pools (type 1) during two-phase commit */
+    RESERVED: 5,
 } as const;
 export type OptionStatus = (typeof OptionStatus)[keyof typeof OptionStatus];
 
@@ -28,7 +30,7 @@ export interface OptionData {
     underlyingAmount: bigint;
     premium: bigint;
     expiryBlock: bigint;
-    /** 0–4: OPEN / PURCHASED / EXERCISED / EXPIRED / CANCELLED */
+    /** 0–5: OPEN / PURCHASED / EXERCISED / EXPIRED / CANCELLED / RESERVED */
     status: number;
     /** Pool contract address this option belongs to (populated by indexer) */
     poolAddress?: string;
@@ -66,4 +68,18 @@ export interface PoolInfo {
     exerciseFeeBps: bigint;
     /** Grace period in blocks after expiry for exercise */
     gracePeriodBlocks: bigint;
+    /** Pool type: 0 = OP20/OP20, 1 = OP20/BTC, 2 = BTC/OP20 (from config, not on-chain) */
+    poolType?: 0 | 1 | 2;
+}
+
+/** Reservation data for BTC quote pools (type 1 two-phase commit) */
+export interface ReservationData {
+    reservationId: bigint;
+    optionId: bigint;
+    buyer: string;
+    btcAmount: bigint;
+    csvScriptHash: string;
+    expiryBlock: bigint;
+    /** 0 = PENDING, 1 = EXECUTED, 2 = EXPIRED */
+    status: number;
 }

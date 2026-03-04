@@ -83,6 +83,7 @@ const STATUS_LABELS: Record<number, string> = {
     [OptionStatus.EXERCISED]: 'EXERCISED',
     [OptionStatus.EXPIRED]: 'EXPIRED',
     [OptionStatus.CANCELLED]: 'CANCELLED',
+    [OptionStatus.RESERVED]: 'RESERVED',
 };
 
 const STATUS_BADGE_CLASSES: Record<number, string> = {
@@ -91,6 +92,7 @@ const STATUS_BADGE_CLASSES: Record<number, string> = {
     [OptionStatus.EXERCISED]: 'border border-orange-400 text-orange-300',
     [OptionStatus.EXPIRED]: 'border border-gray-600 text-gray-400',
     [OptionStatus.CANCELLED]: 'border border-rose-700 text-rose-500',
+    [OptionStatus.RESERVED]: 'border border-yellow-500 text-yellow-400',
 };
 
 const FILTER_OPTIONS: FilterStatus[] = ['ALL', 'OPEN', 'PURCHASED', 'EXPIRED', 'CANCELLED'];

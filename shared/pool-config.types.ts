@@ -13,14 +13,28 @@ export interface TokenConfig {
     addresses: Record<NetworkId, string>;
 }
 
+/**
+ * Pool type discriminator:
+ *   0 = OP20/OP20 (default, Phase 1)
+ *   1 = OP20 underlying / BTC quote (premium + strike in sats)
+ *   2 = BTC underlying / OP20 quote (collateral in sats)
+ */
+export type PoolType = 0 | 1 | 2;
+
 export interface PoolConfig {
     id: string;
+    /** Pool type: 0 = OP20/OP20, 1 = OP20/BTC, 2 = BTC/OP20. Defaults to 0. */
+    poolType?: PoolType;
     underlying: TokenConfig;
     premium: TokenConfig;
     pool: {
         addresses: Record<NetworkId, string>;
     };
     nativeSwap?: {
+        addresses: Record<NetworkId, string>;
+    };
+    /** NativeSwapBridge contract address (required for poolType 1 and 2) */
+    bridge?: {
         addresses: Record<NetworkId, string>;
     };
 }
