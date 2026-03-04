@@ -5,9 +5,10 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "build": "npm run build:factory && npm run build:pool",
+    "build": "npm run build:factory && npm run build:pool && npm run build:bridge",
     "build:factory": "npx asc src/contracts/factory/index.ts --target factory --measure",
     "build:pool": "npx asc src/contracts/pool/index.ts --target pool --measure",
+    "build:bridge": "npx asc src/contracts/bridge/index.ts --target bridge --measure",
     "build:debug": "npx asc src/index.ts --target debug",
     "build:tests": "tsc -p tests/tsconfig.json",
     "test": "npm run test:all",

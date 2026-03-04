@@ -1,44 +1,12 @@
 /**
- * OptionsPool - A pool for trading options on a specific token pair
- * 
- * This contract manages options for a single underlying/premium token pair.
- * Writers can create options (CALL or PUT), and buyers can purchase them.
- * Options can be exercised, settled, or cancelled according to the protocol rules.
- * 
- * ## Storage Pattern Explanation
- * 
- * Following OPNet best practices, we use a hybrid storage pattern:
- * 
- * ### Critical Fields (3 fields in constructor):
- * - underlying: The underlying token address
- * - premiumToken: The token used for premium payments
- * - nextId: Counter for option IDs
- * 
- * ### Lazy-Loaded Fields (initialized on first access):
- * - locked: Reentrancy guard boolean
- * - feeRecipient: Protocol fee destination address
- * - options: Option storage (complex nested structure)
- * 
- * This pattern avoids the WASM start function gas limit while maintaining
- * all required functionality.
- * 
- * ## Gas Optimization
- * 
- * - Cold storage reads: ~21M gas (first access to lazy fields)
- * - Warm storage reads: ~5K gas (subsequent accesses)
- * - Write operations: ~20M gas
- * 
- * ## Option Lifecycle
- * 
- * 1. Writer calls writeOption() - Creates option, locks collateral
- * 2. Buyer calls buyOption() - Pays premium, receives option rights
- * 3. At expiry:
- *    - Buyer can exercise() (within grace period)
- *    - Anyone can settle() (after grace period)
- * 4. Writer can cancelOption() (before purchase, with fee)
- * 
- * @author Frogop Team
- * @version 1.0.0
+ * OptionsPool (Type 0) - OP20/OP20 option pool
+ *
+ * Extends OptionsPoolBase with state-changing methods:
+ * writeOption, cancelOption, buyOption, exercise, settle,
+ * transferOption, rollOption, batchCancel, batchSettle.
+ *
+ * All view methods, storage, constants, events, and token
+ * transfer helpers are inherited from OptionsPoolBase.
  */
 
 import { u256 } from '@btc-vision/as-bignum/assembly';
@@ -49,593 +17,44 @@ import {
     Calldata,
     Revert,
     SafeMath,
-    StoredAddress,
-    StoredU256,
-    EMPTY_BUFFER,
-    NetEvent,
-    ReentrancyGuard,
-    ReentrancyLevel,
-    encodeSelector,
 } from '@btc-vision/btc-runtime/runtime';
-import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
-// =============================================================================
-// CONSTANTS
-// =============================================================================
 
-/** Option type: CALL - Right to buy underlying at strike price */
-const CALL: u8 = 0;
+import {
+    CALL,
+    OPEN,
+    PURCHASED,
+    EXERCISED,
+    EXPIRED,
+    CANCELLED,
+    GRACE_PERIOD_BLOCKS,
+    MAX_EXPIRY_BLOCKS,
+    CANCEL_FEE_BPS,
+    BUY_FEE_BPS,
+    EXERCISE_FEE_BPS,
+    MAX_BATCH_SIZE,
+    PRECISION,
+} from './constants';
 
-/** Option type: PUT - Right to sell underlying at strike price */
-const PUT: u8 = 1;
+import { Option } from './storage';
 
-/** Option status: OPEN - Available for purchase */
-const OPEN: u8 = 0;
+import {
+    OptionWrittenEvent,
+    OptionCancelledEvent,
+    OptionPurchasedEvent,
+    OptionExercisedEvent,
+    OptionExpiredEvent,
+    OptionTransferredEvent,
+    OptionRolledEvent,
+} from './events';
 
-/** Option status: PURCHASED - Bought by buyer, not yet exercised */
-const PURCHASED: u8 = 1;
-
-/** Option status: EXERCISED - Buyer exercised the option */
-const EXERCISED: u8 = 2;
-
-/** Option status: EXPIRED - Expired without exercise */
-const EXPIRED: u8 = 3;
-
-/** Option status: CANCELLED - Writer cancelled before purchase */
-const CANCELLED: u8 = 4;
-
-/** Grace period after expiry for exercise (in blocks) ~1 day */
-const GRACE_PERIOD_BLOCKS: u64 = 144;
-
-/** Maximum expiry time from creation (in blocks) ~1 year */
-const MAX_EXPIRY_BLOCKS: u64 = 52560;
-
-/** Cancellation fee in basis points (100 = 1%) */
-const CANCEL_FEE_BPS: u64 = 100;
-
-/** Buy fee in basis points (100 = 1%) — deducted from premium before writer receives */
-const BUY_FEE_BPS: u64 = 100;
-
-/** Exercise fee in basis points (10 = 0.1%) — deducted from buyer's proceeds */
-const EXERCISE_FEE_BPS: u64 = 10;
-
-/** Maximum number of options in a batch operation */
-const MAX_BATCH_SIZE: u8 = 5;
-
-/** Fixed-point precision for strike × amount calculations (18 decimals) */
-const PRECISION: u256 = u256.fromU64(1_000_000_000_000_000_000);
-
-// =============================================================================
-// STORAGE POINTER DEFINITIONS - Using Blockchain.nextPointer
-// =============================================================================
-
-// ReentrancyGuard uses first 2 pointers internally (statusPointer, depthPointer)
-// Our pointers start after ReentrancyGuard's
-const UNDERLYING_POINTER: u16 = Blockchain.nextPointer;
-const PREMIUM_TOKEN_POINTER: u16 = Blockchain.nextPointer;
-const NEXT_ID_POINTER: u16 = Blockchain.nextPointer;
-const FEE_RECIPIENT_POINTER: u16 = Blockchain.nextPointer;
-
-const OPTIONS_BASE_POINTER: u16 = Blockchain.nextPointer;
-
-// =============================================================================
-// EVENTS
-// =============================================================================
-
-/** Emitted when a new option is written */
-class OptionWrittenEvent extends NetEvent {
-    constructor(data: BytesWriter) {
-        super('OptionWritten', data);
-    }
-}
-
-/** Emitted when an option is cancelled */
-class OptionCancelledEvent extends NetEvent {
-    constructor(data: BytesWriter) {
-        super('OptionCancelled', data);
-    }
-}
-
-/** Emitted when an option is purchased */
-class OptionPurchasedEvent extends NetEvent {
-    constructor(data: BytesWriter) {
-        super('OptionPurchased', data);
-    }
-}
-
-/** Emitted when an option is exercised */
-class OptionExercisedEvent extends NetEvent {
-    constructor(data: BytesWriter) {
-        super('OptionExercised', data);
-    }
-}
-
-/** Emitted when an option expires */
-class OptionExpiredEvent extends NetEvent {
-    constructor(data: BytesWriter) {
-        super('OptionExpired', data);
-    }
-}
-
-/** Emitted when an option is transferred to a new buyer */
-class OptionTransferredEvent extends NetEvent {
-    constructor(data: BytesWriter) {
-        super('OptionTransferred', data);
-    }
-}
-
-/** Emitted when an option is rolled (cancelled + new option created atomically) */
-class OptionRolledEvent extends NetEvent {
-    constructor(data: BytesWriter) {
-        super('OptionRolled', data);
-    }
-}
-
-/** Emitted when the fee recipient address is updated */
-class FeeRecipientUpdatedEvent extends NetEvent {
-    constructor(data: BytesWriter) {
-        super('FeeRecipientUpdated', data);
-    }
-}
-
-// =============================================================================
-// DATA STRUCTURES
-// =============================================================================
-
-class Option {
-    id: u256 = u256.Zero;
-    writer: Address = Address.zero();
-    buyer: Address = Address.zero();
-    strikePrice: u256 = u256.Zero;
-    underlyingAmount: u256 = u256.Zero;
-    premium: u256 = u256.Zero;
-    expiryBlock: u64 = 0;
-    createdBlock: u64 = 0;
-    optionType: u8 = CALL;
-    status: u8 = OPEN;
-}
-
-/**
- * Optimized Option Storage
- * 
- * Uses SHA256-based storage keys for UNLIMITED options.
- * Storage pattern: StorageKey = SHA256(basePointer || optionId || slot)
- * 
- * Storage Layout (7 slots per option):
- *   0: writer (Address)
- *   1: buyer (Address)
- *   2: strikePrice (u256)
- *   3: underlyingAmount (u256)
- *   4: premium (u256)
- *   5: expiryBlock (u64) | createdBlock (u64) - packed
- *   6: optionType (u8) | status (u8) - packed
- */
-class OptionStorage {
-    private basePointer: u16;
-    
-    constructor(pointer: u16) {
-        this.basePointer = pointer;
-    }
-    
-    private getKey(optionId: u256, slot: u8): Uint8Array {
-        const writer = new BytesWriter(35);
-        writer.writeU16(this.basePointer);
-        writer.writeU256(optionId);
-        writer.writeU8(slot);
-        return sha256(writer.getBuffer());
-    }
-    
-    setWriter(optionId: u256, writer: Address): void {
-        Blockchain.setStorageAt(this.getKey(optionId, 0), writer);
-    }
-    
-    getWriter(optionId: u256): Address {
-        return Address.fromUint8Array(Blockchain.getStorageAt(this.getKey(optionId, 0)));
-    }
-    
-    setBuyer(optionId: u256, buyer: Address): void {
-        Blockchain.setStorageAt(this.getKey(optionId, 1), buyer);
-    }
-    
-    getBuyer(optionId: u256): Address {
-        return Address.fromUint8Array(Blockchain.getStorageAt(this.getKey(optionId, 1)));
-    }
-    
-    setStrikePrice(optionId: u256, price: u256): void {
-        Blockchain.setStorageAt(this.getKey(optionId, 2), price.toUint8Array(true));
-    }
-    
-    getStrikePrice(optionId: u256): u256 {
-        return u256.fromUint8ArrayBE(Blockchain.getStorageAt(this.getKey(optionId, 2)));
-    }
-    
-    setUnderlyingAmount(optionId: u256, amount: u256): void {
-        Blockchain.setStorageAt(this.getKey(optionId, 3), amount.toUint8Array(true));
-    }
-    
-    getUnderlyingAmount(optionId: u256): u256 {
-        return u256.fromUint8ArrayBE(Blockchain.getStorageAt(this.getKey(optionId, 3)));
-    }
-    
-    setPremium(optionId: u256, premium: u256): void {
-        Blockchain.setStorageAt(this.getKey(optionId, 4), premium.toUint8Array(true));
-    }
-    
-    getPremium(optionId: u256): u256 {
-        return u256.fromUint8ArrayBE(Blockchain.getStorageAt(this.getKey(optionId, 4)));
-    }
-    
-    private packBlocks(expiryBlock: u64, createdBlock: u64): Uint8Array {
-        const data = new Uint8Array(32);
-        for (let i = 0; i < 8; i++) {
-            data[16 + i] = u8((expiryBlock >> u64(56 - i * 8)) & 0xFF);
-            data[24 + i] = u8((createdBlock >> u64(56 - i * 8)) & 0xFF);
-        }
-        return data;
-    }
-    
-    setExpiryAndCreatedBlock(optionId: u256, expiryBlock: u64, createdBlock: u64): void {
-        Blockchain.setStorageAt(this.getKey(optionId, 5), this.packBlocks(expiryBlock, createdBlock));
-    }
-    
-    getExpiryBlock(optionId: u256): u64 {
-        const data = Blockchain.getStorageAt(this.getKey(optionId, 5));
-        let result: u64 = 0;
-        for (let i = 0; i < 8; i++) {
-            result = (result << 8) | u64(data[16 + i]);
-        }
-        return result;
-    }
-    
-    getCreatedBlock(optionId: u256): u64 {
-        const data = Blockchain.getStorageAt(this.getKey(optionId, 5));
-        let result: u64 = 0;
-        for (let i = 0; i < 8; i++) {
-            result = (result << 8) | u64(data[24 + i]);
-        }
-        return result;
-    }
-    
-    setExpiryBlock(optionId: u256, blockNum: u64): void {
-        const createdBlock = this.getCreatedBlock(optionId);
-        Blockchain.setStorageAt(this.getKey(optionId, 5), this.packBlocks(blockNum, createdBlock));
-    }
-    
-    setCreatedBlock(optionId: u256, blockNum: u64): void {
-        const expiryBlock = this.getExpiryBlock(optionId);
-        Blockchain.setStorageAt(this.getKey(optionId, 5), this.packBlocks(expiryBlock, blockNum));
-    }
-    
-    private packTypeAndStatus(optionType: u8, status: u8): Uint8Array {
-        const data = new Uint8Array(32);
-        data[30] = optionType;
-        data[31] = status;
-        return data;
-    }
-    
-    setOptionType(optionId: u256, optionType: u8): void {
-        const status = this.getStatus(optionId);
-        Blockchain.setStorageAt(this.getKey(optionId, 6), this.packTypeAndStatus(optionType, status));
-    }
-    
-    getOptionType(optionId: u256): u8 {
-        return Blockchain.getStorageAt(this.getKey(optionId, 6))[30];
-    }
-    
-    setStatus(optionId: u256, status: u8): void {
-        const optionType = this.getOptionType(optionId);
-        Blockchain.setStorageAt(this.getKey(optionId, 6), this.packTypeAndStatus(optionType, status));
-    }
-    
-    getStatus(optionId: u256): u8 {
-        return Blockchain.getStorageAt(this.getKey(optionId, 6))[31];
-    }
-    
-    exists(optionId: u256): boolean {
-        return Blockchain.hasStorageAt(this.getKey(optionId, 0));
-    }
-    
-    get(optionId: u256): Option {
-        const option = new Option();
-        option.id = optionId;
-        option.writer = this.getWriter(optionId);
-        option.buyer = this.getBuyer(optionId);
-        option.strikePrice = this.getStrikePrice(optionId);
-        option.underlyingAmount = this.getUnderlyingAmount(optionId);
-        option.premium = this.getPremium(optionId);
-        option.expiryBlock = this.getExpiryBlock(optionId);
-        option.createdBlock = this.getCreatedBlock(optionId);
-        option.optionType = this.getOptionType(optionId);
-        option.status = this.getStatus(optionId);
-        return option;
-    }
-    
-    set(optionId: u256, option: Option): void {
-        this.setWriter(optionId, option.writer);
-        this.setBuyer(optionId, option.buyer);
-        this.setStrikePrice(optionId, option.strikePrice);
-        this.setUnderlyingAmount(optionId, option.underlyingAmount);
-        this.setPremium(optionId, option.premium);
-        this.setExpiryAndCreatedBlock(optionId, option.expiryBlock, option.createdBlock);
-        Blockchain.setStorageAt(this.getKey(optionId, 6), this.packTypeAndStatus(option.optionType, option.status));
-    }
-}
+import { OptionsPoolBase } from './base';
 
 // =============================================================================
 // CONTRACT IMPLEMENTATION
 // =============================================================================
 
 @final
-export class OptionsPool extends ReentrancyGuard {
-    protected readonly reentrancyLevel: ReentrancyLevel = ReentrancyLevel.STANDARD;
-
-    private _underlying: StoredAddress;
-    private _premiumToken: StoredAddress;
-    private _nextId: StoredU256;
-
-    private _feeRecipient: StoredAddress | null = null;
-    private _options: OptionStorage | null = null;
-
-    public constructor() {
-        super();
-        this._underlying = new StoredAddress(UNDERLYING_POINTER);
-        this._premiumToken = new StoredAddress(PREMIUM_TOKEN_POINTER);
-        this._nextId = new StoredU256(NEXT_ID_POINTER, EMPTY_BUFFER);
-    }
-
-    private get feeRecipientStore(): StoredAddress {
-        if (!this._feeRecipient) {
-            this._feeRecipient = new StoredAddress(FEE_RECIPIENT_POINTER);
-        }
-        return this._feeRecipient!;
-    }
-
-    private get options(): OptionStorage {
-        if (!this._options) {
-            this._options = new OptionStorage(OPTIONS_BASE_POINTER);
-        }
-        return this._options!;
-    }
-
-    public override onDeployment(calldata: Calldata): void {
-        super.onDeployment(calldata);
-
-        const underlying = calldata.readAddress();
-        const premiumToken = calldata.readAddress();
-        const feeRecipientAddr = calldata.readAddress();
-
-        if (feeRecipientAddr.equals(Address.zero())) {
-            throw new Revert('Fee recipient cannot be zero');
-        }
-
-        this._underlying.value = underlying;
-        this._premiumToken.value = premiumToken;
-        this.feeRecipientStore.value = feeRecipientAddr;
-    }
-    
-    // -------------------------------------------------------------------------
-    // VIEW METHODS
-    // -------------------------------------------------------------------------
-    
-    @view
-    @method('underlying')
-    @returns({ name: 'underlying', type: ABIDataTypes.ADDRESS })
-    public getUnderlying(_calldata: Calldata): BytesWriter {
-        const writer = new BytesWriter(32);
-        writer.writeAddress(this._underlying.value);
-        return writer;
-    }
-    
-    @view
-    @method('premiumToken')
-    @returns({ name: 'premiumToken', type: ABIDataTypes.ADDRESS })
-    public getPremiumToken(_calldata: Calldata): BytesWriter {
-        const writer = new BytesWriter(32);
-        writer.writeAddress(this._premiumToken.value);
-        return writer;
-    }
-    
-    @view
-    @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
-    public getOption(calldata: Calldata): BytesWriter {
-        const optionId = calldata.readU256();
-        
-        if (!this.options.exists(optionId)) {
-            throw new Revert('Option not found');
-        }
-        
-        const option = this.options.get(optionId);
-        
-        const writer = new BytesWriter(32 * 6 + 8 + 2);
-        writer.writeU256(option.id);
-        writer.writeAddress(option.writer);
-        writer.writeAddress(option.buyer);
-        writer.writeU8(option.optionType);
-        writer.writeU256(option.strikePrice);
-        writer.writeU256(option.underlyingAmount);
-        writer.writeU256(option.premium);
-        writer.writeU64(option.expiryBlock);
-        writer.writeU8(option.status);
-        
-        return writer;
-    }
-    
-    @view
-    @method()
-    @returns({ name: 'count', type: ABIDataTypes.UINT256 })
-    public optionCount(_calldata: Calldata): BytesWriter {
-        const writer = new BytesWriter(32);
-        writer.writeU256(this._nextId.value);
-        return writer;
-    }
-
-    /**
-     * Return a batch of options starting at startId (inclusive).
-     * Response: u256 actualCount, then actualCount × option records.
-     * Each record: id(32) writer(32) buyer(32) optionType(1) strikePrice(32)
-     *              underlyingAmount(32) premium(32) expiryBlock(8) status(1) = 202 bytes.
-     * Capped at 50 options per call.
-     */
-    @view
-    @method(
-        { name: 'startId', type: ABIDataTypes.UINT256 },
-        { name: 'count', type: ABIDataTypes.UINT256 },
-    )
-    public getOptionsBatch(calldata: Calldata): BytesWriter {
-        const startId = calldata.readU256();
-        const requestedCount = calldata.readU256();
-
-        const totalOptions = this._nextId.value;
-
-        // Nothing to return if startId is at or beyond the option count
-        if (!u256.lt(startId, totalOptions)) {
-            const writer = new BytesWriter(32);
-            writer.writeU256(u256.Zero);
-            return writer;
-        }
-
-        // OPNet receipt limit is 2048 bytes. Each option encodes to 202 bytes.
-        // Max options that fit: floor((2048 - 32) / 202) = 9.
-        const maxBatch: u256 = u256.fromU64(9);
-        let actualCount: u256 = requestedCount;
-        if (u256.gt(actualCount, maxBatch)) {
-            actualCount = maxBatch;
-        }
-
-        // Can't return more than what exists from startId onward
-        const available = SafeMath.sub(totalOptions, startId);
-        if (u256.gt(actualCount, available)) {
-            actualCount = available;
-        }
-
-        // Allocate exactly the bytes needed so BytesWriter capacity stays under the 2048-byte limit.
-        // BytesWriter capacity = 32 (count header) + 202 * actualCount  (≤ 1850 for 9 options)
-        const count: i32 = i32(u32(actualCount.lo1));
-        const writer = new BytesWriter(32 + 202 * count);
-        writer.writeU256(actualCount);
-
-        let i: u256 = u256.Zero;
-        while (u256.lt(i, actualCount)) {
-            const optionId = SafeMath.add(startId, i);
-            const opt = this.options.get(optionId);
-            writer.writeU256(opt.id);
-            writer.writeAddress(opt.writer);
-            writer.writeAddress(opt.buyer);
-            writer.writeU8(opt.optionType);
-            writer.writeU256(opt.strikePrice);
-            writer.writeU256(opt.underlyingAmount);
-            writer.writeU256(opt.premium);
-            writer.writeU64(opt.expiryBlock);
-            writer.writeU8(opt.status);
-            i = SafeMath.add(i, u256.One);
-        }
-
-        return writer;
-    }
-
-    @view
-    @method('feeRecipient')
-    @returns({ name: 'recipient', type: ABIDataTypes.ADDRESS })
-    public feeRecipientMethod(_calldata: Calldata): BytesWriter {
-        const writer = new BytesWriter(32);
-        writer.writeAddress(this.feeRecipientStore.value);
-        return writer;
-    }
-
-    @view
-    @method('buyFeeBps')
-    @returns({ name: 'bps', type: ABIDataTypes.UINT64 })
-    public buyFeeBpsMethod(_calldata: Calldata): BytesWriter {
-        const writer = new BytesWriter(8);
-        writer.writeU64(BUY_FEE_BPS);
-        return writer;
-    }
-
-    @view
-    @method('exerciseFeeBps')
-    @returns({ name: 'bps', type: ABIDataTypes.UINT64 })
-    public exerciseFeeBpsMethod(_calldata: Calldata): BytesWriter {
-        const writer = new BytesWriter(8);
-        writer.writeU64(EXERCISE_FEE_BPS);
-        return writer;
-    }
-    
-    @view
-    @method()
-    @returns({ name: 'blocks', type: ABIDataTypes.UINT64 })
-    public gracePeriodBlocks(_calldata: Calldata): BytesWriter {
-        const writer = new BytesWriter(8);
-        writer.writeU64(GRACE_PERIOD_BLOCKS);
-        return writer;
-    }
-    
-    @view
-    @method()
-    @returns({ name: 'blocks', type: ABIDataTypes.UINT64 })
-    public maxExpiryBlocks(_calldata: Calldata): BytesWriter {
-        const writer = new BytesWriter(8);
-        writer.writeU64(MAX_EXPIRY_BLOCKS);
-        return writer;
-    }
-    
-    @view
-    @method()
-    @returns({ name: 'bps', type: ABIDataTypes.UINT64 })
-    public cancelFeeBps(_calldata: Calldata): BytesWriter {
-        const writer = new BytesWriter(8);
-        writer.writeU64(CANCEL_FEE_BPS);
-        return writer;
-    }
-    
-    @view
-    @method(
-        { name: 'optionType', type: ABIDataTypes.UINT8 },
-        { name: 'strikePrice', type: ABIDataTypes.UINT256 },
-        { name: 'underlyingAmount', type: ABIDataTypes.UINT256 },
-    )
-    @returns({ name: 'collateral', type: ABIDataTypes.UINT256 })
-    public calculateCollateral(calldata: Calldata): BytesWriter {
-        const optionType = calldata.readU8();
-        const strikePrice = calldata.readU256();
-        const underlyingAmount = calldata.readU256();
-
-        let collateralAmount: u256;
-        if (optionType == CALL) {
-            collateralAmount = underlyingAmount;
-        } else {
-            // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
-            collateralAmount = SafeMath.div(SafeMath.mul(strikePrice, underlyingAmount), PRECISION);
-        }
-        
-        const writer = new BytesWriter(32);
-        writer.writeU256(collateralAmount);
-        return writer;
-    }
-    
-    @method('updateFeeRecipient', { name: 'newRecipient', type: ABIDataTypes.ADDRESS })
-    @returns({ name: 'success', type: ABIDataTypes.BOOL })
-    @emit('FeeRecipientUpdated')
-    public updateFeeRecipientMethod(calldata: Calldata): BytesWriter {
-        const caller = Blockchain.tx.sender;
-        if (!caller.equals(this.feeRecipientStore.value)) {
-            throw new Revert('Only fee recipient');
-        }
-
-        const newAddr = calldata.readAddress();
-        if (newAddr.equals(Address.zero())) {
-            throw new Revert('Zero address not allowed');
-        }
-
-        this.feeRecipientStore.value = newAddr;
-
-        const event = new BytesWriter(64);
-        event.writeAddress(caller);
-        event.writeAddress(newAddr);
-        Blockchain.emit(new FeeRecipientUpdatedEvent(event));
-
-        const result = new BytesWriter(1);
-        result.writeBoolean(true);
-        return result;
-    }
+export class OptionsPool extends OptionsPoolBase {
 
     // -------------------------------------------------------------------------
     // STATE-CHANGING METHODS
@@ -681,7 +100,6 @@ export class OptionsPool extends ReentrancyGuard {
             collateralAmount = underlyingAmount;
         } else {
             collateralToken = this._premiumToken.value;
-            // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
             collateralAmount = SafeMath.div(SafeMath.mul(strikePrice, underlyingAmount), PRECISION);
         }
 
@@ -747,12 +165,9 @@ export class OptionsPool extends ReentrancyGuard {
             collateralAmount = option.underlyingAmount;
         } else {
             collateralToken = this._premiumToken.value;
-            // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
             collateralAmount = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
         }
 
-        // Story 8.3: expired unsold options get full collateral back (no penalty)
-        // Story 8.4: ceiling division so protocol never under-collects on dust
         const currentBlock = Blockchain.block.number;
         let fee: u256;
         if (currentBlock >= option.expiryBlock) {
@@ -776,7 +191,7 @@ export class OptionsPool extends ReentrancyGuard {
             this._transfer(collateralToken, this.feeRecipientStore.value, fee);
         }
 
-        const event = new BytesWriter(128); // 32+32+32+32 = 128 bytes
+        const event = new BytesWriter(128);
         event.writeU256(optionId);
         event.writeAddress(option.writer);
         event.writeU256(returnAmount);
@@ -814,7 +229,6 @@ export class OptionsPool extends ReentrancyGuard {
             throw new Revert('Writer cannot buy own option');
         }
 
-        // Story 8.4: ceiling division — protocol never under-collects on dust
         const buyFee = SafeMath.div(
             SafeMath.add(
                 SafeMath.mul(option.premium, u256.fromU64(BUY_FEE_BPS)),
@@ -830,7 +244,7 @@ export class OptionsPool extends ReentrancyGuard {
         this._transferFrom(this._premiumToken.value, buyer, option.writer, writerAmount);
         this._transferFrom(this._premiumToken.value, buyer, this.feeRecipientStore.value, buyFee);
 
-        const event = new BytesWriter(168); // 32+32+32+32+32+8 = 168 bytes
+        const event = new BytesWriter(168);
         event.writeU256(optionId);
         event.writeAddress(buyer);
         event.writeAddress(option.writer);
@@ -875,7 +289,6 @@ export class OptionsPool extends ReentrancyGuard {
             throw new Revert('Grace period ended');
         }
 
-        // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
         const strikeValue = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
 
         this.options.setStatus(optionId, EXERCISED);
@@ -883,7 +296,6 @@ export class OptionsPool extends ReentrancyGuard {
         let exerciseFee: u256 = u256.Zero;
 
         if (option.optionType == CALL) {
-            // Story 8.4: ceiling division — protocol never under-collects on dust
             exerciseFee = SafeMath.div(
                 SafeMath.add(
                     SafeMath.mul(option.underlyingAmount, u256.fromU64(EXERCISE_FEE_BPS)),
@@ -896,7 +308,6 @@ export class OptionsPool extends ReentrancyGuard {
             this._transfer(this._underlying.value, caller, buyerReceives);
             this._transfer(this._underlying.value, this.feeRecipientStore.value, exerciseFee);
         } else {
-            // Story 8.4: ceiling division — protocol never under-collects on dust
             exerciseFee = SafeMath.div(
                 SafeMath.add(
                     SafeMath.mul(strikeValue, u256.fromU64(EXERCISE_FEE_BPS)),
@@ -910,7 +321,7 @@ export class OptionsPool extends ReentrancyGuard {
             this._transfer(this._premiumToken.value, this.feeRecipientStore.value, exerciseFee);
         }
 
-        const event = new BytesWriter(193); // 32+32+32+1+32+32+32 = 193 bytes
+        const event = new BytesWriter(193);
         event.writeU256(optionId);
         event.writeAddress(option.buyer);
         event.writeAddress(option.writer);
@@ -955,7 +366,6 @@ export class OptionsPool extends ReentrancyGuard {
             collateralAmount = option.underlyingAmount;
         } else {
             collateralToken = this._premiumToken.value;
-            // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
             collateralAmount = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
         }
 
@@ -973,7 +383,7 @@ export class OptionsPool extends ReentrancyGuard {
         result.writeBoolean(true);
         return result;
     }
-    
+
     @method(
         { name: 'optionId', type: ABIDataTypes.UINT256 },
         { name: 'to', type: ABIDataTypes.ADDRESS },
@@ -1015,7 +425,7 @@ export class OptionsPool extends ReentrancyGuard {
 
         this.options.setBuyer(optionId, newBuyer);
 
-        const event = new BytesWriter(96); // 32 + 32 + 32
+        const event = new BytesWriter(96);
         event.writeU256(optionId);
         event.writeAddress(option.buyer);
         event.writeAddress(newBuyer);
@@ -1070,7 +480,6 @@ export class OptionsPool extends ReentrancyGuard {
             throw new Revert('Expiry too far');
         }
 
-        // Determine collateral token and compute old / new collateral
         let collateralToken: Address;
         let oldCollateral: u256;
         let newCollateral: u256;
@@ -1078,15 +487,13 @@ export class OptionsPool extends ReentrancyGuard {
         if (option.optionType == CALL) {
             collateralToken = this._underlying.value;
             oldCollateral = option.underlyingAmount;
-            newCollateral = option.underlyingAmount; // immutable for CALL
+            newCollateral = option.underlyingAmount;
         } else {
             collateralToken = this._premiumToken.value;
-            // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
             oldCollateral = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
             newCollateral = SafeMath.div(SafeMath.mul(newStrikePrice, option.underlyingAmount), PRECISION);
         }
 
-        // Compute cancel fee on old collateral (0 if expired)
         let fee: u256;
         if (currentBlock >= option.expiryBlock) {
             fee = u256.Zero;
@@ -1100,28 +507,21 @@ export class OptionsPool extends ReentrancyGuard {
             );
         }
 
-        // Mark old option as CANCELLED
         this.options.setStatus(optionId, CANCELLED);
 
-        // Send cancel fee to feeRecipient
         if (fee > u256.Zero) {
             this._transfer(collateralToken, this.feeRecipientStore.value, fee);
         }
 
-        // Handle net collateral transfer
         const refundAfterFee = SafeMath.sub(oldCollateral, fee);
         if (u256.gt(newCollateral, refundAfterFee)) {
-            // Writer needs to top up the difference
             const topUp = SafeMath.sub(newCollateral, refundAfterFee);
             this._transferFrom(collateralToken, caller, Blockchain.contractAddress, topUp);
         } else if (u256.lt(newCollateral, refundAfterFee)) {
-            // Surplus returned to writer
             const surplus = SafeMath.sub(refundAfterFee, newCollateral);
             this._transfer(collateralToken, caller, surplus);
         }
-        // If equal: no transfer needed
 
-        // Create new option with incremented nextId
         const newOptionId = this._nextId.value;
         this._nextId.value = SafeMath.add(newOptionId, u256.One);
 
@@ -1139,7 +539,6 @@ export class OptionsPool extends ReentrancyGuard {
 
         this.options.set(newOptionId, newOption);
 
-        // Emit backward-compatible events for indexer
         const cancelEvent = new BytesWriter(128);
         cancelEvent.writeU256(optionId);
         cancelEvent.writeAddress(caller);
@@ -1157,8 +556,7 @@ export class OptionsPool extends ReentrancyGuard {
         writeEvent.writeU64(newExpiryBlock);
         Blockchain.emit(new OptionWrittenEvent(writeEvent));
 
-        // Emit OptionRolled event
-        const rollEvent = new BytesWriter(228); // 32+32+32+32+8+32 = 168 + padding
+        const rollEvent = new BytesWriter(228);
         rollEvent.writeU256(optionId);
         rollEvent.writeU256(newOptionId);
         rollEvent.writeAddress(caller);
@@ -1176,11 +574,6 @@ export class OptionsPool extends ReentrancyGuard {
     // BATCH OPERATIONS
     // -------------------------------------------------------------------------
 
-    /**
-     * Cancel multiple OPEN options atomically.
-     * Calldata: count(u256) + id0(u256) + id1(u256) + ... (padded to 5 with 0)
-     * Reverts if ANY option fails validation (atomic).
-     */
     @method(
         { name: 'count', type: ABIDataTypes.UINT256 },
         { name: 'id0', type: ABIDataTypes.UINT256 },
@@ -1203,7 +596,6 @@ export class OptionsPool extends ReentrancyGuard {
 
         const n: i32 = i32(u32(count.lo1));
 
-        // Read all IDs (always read 5, ignore extras beyond count)
         const ids: u256[] = new Array<u256>(5);
         for (let i: i32 = 0; i < 5; i++) {
             ids[i] = calldata.readU256();
@@ -1236,7 +628,6 @@ export class OptionsPool extends ReentrancyGuard {
                 collateralAmount = option.underlyingAmount;
             } else {
                 collateralToken = this._premiumToken.value;
-                // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
                 collateralAmount = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
             }
 
@@ -1274,11 +665,6 @@ export class OptionsPool extends ReentrancyGuard {
         return result;
     }
 
-    /**
-     * Settle multiple expired options (non-atomic: skips unsettleable).
-     * Calldata: count(u256) + id0(u256) + id1(u256) + ... (padded to 5 with 0)
-     * Returns settledCount (u256).
-     */
     @method(
         { name: 'count', type: ABIDataTypes.UINT256 },
         { name: 'id0', type: ABIDataTypes.UINT256 },
@@ -1301,7 +687,6 @@ export class OptionsPool extends ReentrancyGuard {
 
         const n: i32 = i32(u32(count.lo1));
 
-        // Read all IDs (always read 5, ignore extras beyond count)
         const ids: u256[] = new Array<u256>(5);
         for (let i: i32 = 0; i < 5; i++) {
             ids[i] = calldata.readU256();
@@ -1313,19 +698,16 @@ export class OptionsPool extends ReentrancyGuard {
         for (let i: i32 = 0; i < n; i++) {
             const optionId = ids[i];
 
-            // Skip if option doesn't exist
             if (!this.options.exists(optionId)) {
                 continue;
             }
 
             const option = this.options.get(optionId);
 
-            // Skip if not PURCHASED
             if (option.status != PURCHASED) {
                 continue;
             }
 
-            // Skip if grace period hasn't ended
             const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
             if (currentBlock < graceEnd) {
                 continue;
@@ -1339,7 +721,6 @@ export class OptionsPool extends ReentrancyGuard {
                 collateralAmount = option.underlyingAmount;
             } else {
                 collateralToken = this._premiumToken.value;
-                // Fixed-point: (strike * amount) / PRECISION — both are 18-decimal
                 collateralAmount = SafeMath.div(SafeMath.mul(option.strikePrice, option.underlyingAmount), PRECISION);
             }
 
@@ -1359,40 +740,5 @@ export class OptionsPool extends ReentrancyGuard {
         const result = new BytesWriter(32);
         result.writeU256(settledCount);
         return result;
-    }
-
-    // -------------------------------------------------------------------------
-    // INTERNAL HELPERS
-    // -------------------------------------------------------------------------
-    
-    private _transferFrom(token: Address, from: Address, to: Address, amount: u256): void {
-        const calldata = new BytesWriter(100);
-        calldata.writeSelector(encodeSelector('transferFrom(address,address,uint256)'));
-        calldata.writeAddress(from);
-        calldata.writeAddress(to);
-        calldata.writeU256(amount);
-        
-        const result = Blockchain.call(token, calldata, true);
-        if (!result.success) {
-            throw new Revert('Token transferFrom failed');
-        }
-    }
-    
-    private _transfer(token: Address, to: Address, amount: u256): void {
-        // Use transferFrom(self, to, amount) — when from == msg.sender (pool == pool),
-        // the OP20 _spendAllowance check is bypassed. This avoids cross-contract
-        // `tx.sender` ambiguity that causes `transfer(to, amount)` to fail.
-        // Use stopOnFailure=false so we get a clean short error instead of OPNet's
-        // verbose "Revert error too long." system message.
-        const calldata = new BytesWriter(100);
-        calldata.writeSelector(encodeSelector('transferFrom(address,address,uint256)'));
-        calldata.writeAddress(Blockchain.contractAddress);
-        calldata.writeAddress(to);
-        calldata.writeU256(amount);
-
-        const result = Blockchain.call(token, calldata, false);
-        if (!result.success) {
-            throw new Revert('Transfer out failed');
-        }
     }
 }
