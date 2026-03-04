@@ -39,6 +39,8 @@ export enum OptionStatus {
     EXERCISED = 2,
     EXPIRED   = 3,
     CANCELLED = 4,
+    /** Used by BTC quote pools (type 1) during two-phase commit */
+    RESERVED  = 5,
 }
 
 export enum FeeEventType {

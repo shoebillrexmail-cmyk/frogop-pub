@@ -94,6 +94,87 @@ export const POOL_WRITE_ABI: BitcoinInterfaceAbi = [
     },
 ];
 
+/** ABI for BTC quote pool (type 1) — two-phase commit methods */
+export const BTC_QUOTE_POOL_ABI: BitcoinInterfaceAbi = [
+    ...POOL_WRITE_ABI,
+    {
+        name: 'reserveOption',
+        type: BitcoinAbiTypes.Function,
+        inputs: [{ name: 'optionId', type: ABIDataTypes.UINT256 }],
+        outputs: [
+            { name: 'reservationId', type: ABIDataTypes.UINT256 },
+            { name: 'btcAmount', type: ABIDataTypes.UINT256 },
+            { name: 'csvScriptHash', type: ABIDataTypes.BYTES32 },
+            { name: 'expiryBlock', type: ABIDataTypes.UINT64 },
+        ],
+    },
+    {
+        name: 'executeReservation',
+        type: BitcoinAbiTypes.Function,
+        inputs: [{ name: 'reservationId', type: ABIDataTypes.UINT256 }],
+        outputs: [],
+    },
+    {
+        name: 'cancelReservation',
+        type: BitcoinAbiTypes.Function,
+        inputs: [{ name: 'reservationId', type: ABIDataTypes.UINT256 }],
+        outputs: [],
+    },
+];
+
+/** ABI for BTC underlying pool (type 2) — BTC collateral methods */
+export const BTC_UNDERLYING_POOL_ABI: BitcoinInterfaceAbi = [
+    ...POOL_WRITE_ABI,
+    {
+        name: 'writeOptionBtc',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'optionType', type: ABIDataTypes.UINT8 },
+            { name: 'strikePrice', type: ABIDataTypes.UINT256 },
+            { name: 'expiryBlock', type: ABIDataTypes.UINT64 },
+            { name: 'underlyingAmount', type: ABIDataTypes.UINT256 },
+            { name: 'premium', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'optionId', type: ABIDataTypes.UINT256 }],
+    },
+];
+
+/** ABI for SpreadRouter — atomic multi-leg strategies */
+export const ROUTER_ABI: BitcoinInterfaceAbi = [
+    {
+        name: 'executeSpread',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'pool', type: ABIDataTypes.ADDRESS },
+            { name: 'writeOptionType', type: ABIDataTypes.UINT8 },
+            { name: 'writeStrikePrice', type: ABIDataTypes.UINT256 },
+            { name: 'writeExpiryBlock', type: ABIDataTypes.UINT64 },
+            { name: 'writeUnderlyingAmount', type: ABIDataTypes.UINT256 },
+            { name: 'writePremium', type: ABIDataTypes.UINT256 },
+            { name: 'buyOptionId', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'newOptionId', type: ABIDataTypes.UINT256 }],
+    },
+    {
+        name: 'executeDualWrite',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'pool', type: ABIDataTypes.ADDRESS },
+            { name: 'type1', type: ABIDataTypes.UINT8 },
+            { name: 'strike1', type: ABIDataTypes.UINT256 },
+            { name: 'expiry1', type: ABIDataTypes.UINT64 },
+            { name: 'amount1', type: ABIDataTypes.UINT256 },
+            { name: 'premium1', type: ABIDataTypes.UINT256 },
+            { name: 'type2', type: ABIDataTypes.UINT8 },
+            { name: 'strike2', type: ABIDataTypes.UINT256 },
+            { name: 'expiry2', type: ABIDataTypes.UINT64 },
+            { name: 'amount2', type: ABIDataTypes.UINT256 },
+            { name: 'premium2', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'optionId1', type: ABIDataTypes.UINT256 }],
+    },
+];
+
 /** ABI for OP20 token approve (increaseAllowance) */
 export const TOKEN_APPROVE_ABI: BitcoinInterfaceAbi = [
     {

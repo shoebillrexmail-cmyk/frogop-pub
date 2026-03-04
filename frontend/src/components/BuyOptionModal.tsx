@@ -12,9 +12,10 @@ import type { AbstractRpcProvider } from 'opnet';
 import { Address } from '@btc-vision/transaction';
 import type { OptionData, PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
-import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
+import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI, BTC_QUOTE_POOL_ABI } from '../services/poolAbi.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { formatTokenAmount } from '../config/index.ts';
+import type { PoolType } from '../../../shared/pool-config.types.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import { useActiveFlow } from '../hooks/useActiveFlow.ts';
 import { calcBuyFee, calcBreakeven, calcDelta, calcTheta, blocksToYears } from '../utils/optionMath.js';
@@ -45,6 +46,8 @@ interface BuyOptionModalProps {
     underlyingSymbol?: string;
     /** Display symbol for the premium token (default: 'PILL') */
     premiumSymbol?: string;
+    /** Pool type: 0 = OP20/OP20, 1 = OP20/BTC, 2 = BTC/OP20 */
+    poolType?: PoolType;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -69,9 +72,11 @@ export function BuyOptionModal({
     strategyLabel,
     underlyingSymbol = 'MOTO',
     premiumSymbol = 'PILL',
+    poolType = 0,
     onClose,
     onSuccess,
 }: BuyOptionModalProps) {
+    const isBtcQuote = poolType === 1;
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
     const [poolHex, setPoolHex] = useState<string | null>(null);
@@ -105,6 +110,100 @@ export function BuyOptionModal({
     const handleContinueFlow = useCallback(() => {
         setFlowDismissed(true);
     }, []);
+
+    // BTC quote pool (type 1) — three-phase reservation flow
+    const [btcPhase, setBtcPhase] = useState<'idle' | 'reserving' | 'awaiting' | 'executing' | 'done' | 'error'>('idle');
+    const [reservationInfo, setReservationInfo] = useState<{
+        reservationId: bigint;
+        btcAmount: bigint;
+        csvScriptHash: string;
+        expiryBlock: bigint;
+    } | null>(null);
+
+    async function handleReserve() {
+        if (!address || sendingRef.current) return;
+        sendingRef.current = true;
+        setBtcPhase('reserving');
+        setTxError(null);
+        try {
+            const poolContract = getContract(
+                poolAddress,
+                BTC_QUOTE_POOL_ABI,
+                provider,
+                network,
+                address,
+            ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+
+            const call = await poolContract['reserveOption'](option.id);
+            const receipt = await call.sendTransaction({
+                signer: null,
+                mldsaSigner: null,
+                refundTo: walletAddress ?? '',
+                maximumAllowedSatToSpend: MAX_SAT,
+                network,
+            });
+            if (!mounted.current) return;
+            setTxId(receipt.transactionId);
+            // TODO: Parse reservation info from receipt events once event format is finalized.
+            // For now, set placeholder values to advance the flow.
+            setReservationInfo({
+                reservationId: 0n,
+                btcAmount: 0n,
+                csvScriptHash: '',
+                expiryBlock: 0n,
+            });
+            setBtcPhase('awaiting');
+        } catch (err) {
+            if (!mounted.current) return;
+            const msg = err instanceof Error ? err.message : 'Reservation failed';
+            setTxError(msg);
+            setBtcPhase('error');
+        } finally {
+            sendingRef.current = false;
+        }
+    }
+
+    async function handleExecuteReservation() {
+        if (!address || !reservationInfo || sendingRef.current) return;
+        sendingRef.current = true;
+        setBtcPhase('executing');
+        setTxError(null);
+        try {
+            const poolContract = getContract(
+                poolAddress,
+                BTC_QUOTE_POOL_ABI,
+                provider,
+                network,
+                address,
+            ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+
+            const call = await poolContract['executeReservation'](reservationInfo.reservationId);
+            const receipt = await call.sendTransaction({
+                signer: null,
+                mldsaSigner: null,
+                refundTo: walletAddress ?? '',
+                maximumAllowedSatToSpend: MAX_SAT,
+                network,
+                // extraOutputs would include BTC payment to CSV script hash address
+            });
+            if (!mounted.current) return;
+            setTxId(receipt.transactionId);
+            const typeLabel_ = option.optionType === OptionType.CALL ? 'CALL' : 'PUT';
+            trackAction(receipt.transactionId, 'buyOption', `Buy ${typeLabel_} #${option.id} via BTC reservation`, {
+                optionType: typeLabel_,
+                btcAmount: reservationInfo.btcAmount.toString(),
+            });
+            setBtcPhase('done');
+            setTxStatus('done');
+        } catch (err) {
+            if (!mounted.current) return;
+            const msg = err instanceof Error ? err.message : 'Execute reservation failed';
+            setTxError(msg);
+            setBtcPhase('error');
+        } finally {
+            sendingRef.current = false;
+        }
+    }
 
     // Resolve pool bech32 → hex
     useEffect(() => {
@@ -361,9 +460,17 @@ export function BuyOptionModal({
 
                     {/* Cost breakdown */}
                     <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 text-xs font-mono space-y-1.5">
+                        {isBtcQuote && (
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-900/30 border border-orange-700 text-orange-400">BTC Quote</span>
+                                <span className="text-[10px] text-terminal-text-muted">Premium paid in BTC via two-phase commit</span>
+                            </div>
+                        )}
                         <div className="flex justify-between font-semibold">
                             <span className="text-terminal-text-muted">You pay</span>
-                            <span className="text-terminal-text-primary">{fmt(buyerPays)} {premiumSymbol}</span>
+                            <span className="text-terminal-text-primary">
+                                {isBtcQuote ? `${fmt(buyerPays)} sats (BTC)` : `${fmt(buyerPays)} ${premiumSymbol}`}
+                            </span>
                         </div>
                         <div className="flex justify-between text-terminal-text-muted">
                             <span>Writer receives</span>
@@ -468,8 +575,8 @@ export function BuyOptionModal({
                     {/* Estimated BTC fee */}
                     {txStatus !== 'done' && <EstimatedFee />}
 
-                    {/* Action buttons */}
-                    {txStatus !== 'done' && (
+                    {/* Action buttons — type 0/2: standard approve+buy, type 1: reserve+confirm BTC */}
+                    {txStatus !== 'done' && !isBtcQuote && (
                         <div className="space-y-2">
                             {needsApproval ? (
                                 <button
@@ -493,6 +600,84 @@ export function BuyOptionModal({
                             <button
                                 onClick={onClose}
                                 disabled={busy}
+                                className="w-full btn-secondary py-2 text-sm rounded disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    )}
+
+                    {/* BTC quote pool (type 1) — three-step reservation flow */}
+                    {txStatus !== 'done' && isBtcQuote && (
+                        <div className="space-y-3">
+                            {/* Phase indicator */}
+                            <div className="flex items-center gap-2 text-xs font-mono text-terminal-text-muted">
+                                <span className={btcPhase === 'idle' || btcPhase === 'reserving' ? 'text-accent font-semibold' : 'text-green-400'}>1. Reserve</span>
+                                <span>→</span>
+                                <span className={btcPhase === 'awaiting' ? 'text-accent font-semibold' : btcPhase === 'executing' || btcPhase === 'done' ? 'text-green-400' : ''}>2. Send BTC</span>
+                                <span>→</span>
+                                <span className={btcPhase === 'executing' ? 'text-accent font-semibold' : btcPhase === 'done' ? 'text-green-400' : ''}>3. Confirm</span>
+                            </div>
+
+                            {/* BTC payment info (shown after reservation) */}
+                            {btcPhase === 'awaiting' && reservationInfo && (
+                                <div className="bg-orange-900/20 border border-orange-700 rounded p-3 text-xs font-mono space-y-2">
+                                    <p className="text-orange-400 font-semibold">Send BTC to complete purchase</p>
+                                    <div className="flex justify-between">
+                                        <span className="text-terminal-text-muted">Amount</span>
+                                        <span className="text-terminal-text-primary">{formatTokenAmount(reservationInfo.btcAmount, 8)} BTC</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-terminal-text-muted">Address</span>
+                                        <span className="text-terminal-text-primary text-[10px] break-all">
+                                            {reservationInfo.csvScriptHash.slice(0, 20)}...
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-terminal-text-muted">Expires at block</span>
+                                        <span className="text-terminal-text-primary">{reservationInfo.expiryBlock.toString()}</span>
+                                    </div>
+                                    <p className="text-yellow-400 text-[10px]">
+                                        Include BTC output via wallet extraOutputs in the confirmation transaction.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Reserve button */}
+                            {btcPhase === 'idle' && (
+                                <button
+                                    onClick={handleReserve}
+                                    disabled={sendingRef.current}
+                                    className="w-full btn-primary py-2.5 text-sm rounded disabled:opacity-50"
+                                    data-testid="btn-reserve"
+                                >
+                                    Reserve Option
+                                </button>
+                            )}
+                            {btcPhase === 'reserving' && (
+                                <button disabled className="w-full btn-primary py-2.5 text-sm rounded opacity-50">
+                                    Reserving…
+                                </button>
+                            )}
+                            {/* Confirm BTC payment button */}
+                            {btcPhase === 'awaiting' && (
+                                <button
+                                    onClick={handleExecuteReservation}
+                                    disabled={sendingRef.current}
+                                    className="w-full bg-orange-600 hover:bg-orange-500 text-white py-2.5 text-sm rounded font-mono disabled:opacity-50"
+                                    data-testid="btn-confirm-btc"
+                                >
+                                    Confirm BTC Payment
+                                </button>
+                            )}
+                            {btcPhase === 'executing' && (
+                                <button disabled className="w-full bg-orange-600 text-white py-2.5 text-sm rounded font-mono opacity-50">
+                                    Verifying…
+                                </button>
+                            )}
+                            <button
+                                onClick={onClose}
+                                disabled={btcPhase === 'reserving' || btcPhase === 'executing'}
                                 className="w-full btn-secondary py-2 text-sm rounded disabled:opacity-50"
                             >
                                 Cancel

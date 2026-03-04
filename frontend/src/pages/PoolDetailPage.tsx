@@ -542,6 +542,7 @@ export function PoolDetailPage() {
                     strategyLabel={buyStrategyLabel}
                     underlyingSymbol={underlyingSymbol}
                     premiumSymbol={premiumSymbol}
+                    poolType={poolType}
                     onClose={() => { setBuyTarget(null); setBuyStrategyLabel(undefined); }}
                     onSuccess={() => {
                         setBuyTarget(null);
@@ -584,6 +585,7 @@ export function PoolDetailPage() {
                     motoPillRatio={motoPillRatio}
                     underlyingSymbol={underlyingSymbol}
                     premiumSymbol={premiumSymbol}
+                    poolType={poolType}
                     onClose={() => setExerciseTarget(null)}
                     onSuccess={() => {
                         setExerciseTarget(null);
@@ -624,6 +626,7 @@ export function PoolDetailPage() {
                     motoPillRatio={motoPillRatio}
                     underlyingSymbol={underlyingSymbol}
                     premiumSymbol={premiumSymbol}
+                    poolType={poolType}
                     initialValues={writeInitialValues}
                     strategyLabel={writeStrategyLabel}
                     flowInstanceId={writeFlowInstanceId}

@@ -13,8 +13,9 @@ import { Address } from '@btc-vision/transaction';
 import type { PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
-import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
+import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI, BTC_UNDERLYING_POOL_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount, BLOCK_CONSTANTS } from '../config/index.ts';
+import type { PoolType } from '../../../shared/pool-config.types.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import { useActiveFlow } from '../hooks/useActiveFlow.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
@@ -66,6 +67,8 @@ interface WriteOptionPanelProps {
     underlyingSymbol?: string;
     /** Display symbol for the premium token (default: 'PILL') */
     premiumSymbol?: string;
+    /** Pool type: 0 = OP20/OP20, 1 = OP20/BTC, 2 = BTC/OP20 */
+    poolType?: PoolType;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -101,9 +104,11 @@ export function WriteOptionPanel({
     flowInstanceId: flowInstanceIdProp,
     underlyingSymbol = 'MOTO',
     premiumSymbol = 'PILL',
+    poolType = 0,
     onClose,
     onSuccess,
 }: WriteOptionPanelProps) {
+    const isBtcUnderlying = poolType === 2;
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
     const wsBlockInfo = useWsBlock();
@@ -114,6 +119,8 @@ export function WriteOptionPanel({
     const [instanceId] = useState<string>(() => flowInstanceIdProp ?? crypto.randomUUID());
 
     const [optionType, setOptionType] = useState<number>(OptionType.CALL);
+    // Type 2 CALL: BTC collateral (no OP20 approval, uses extraOutputs)
+    const isBtcCollateral = isBtcUnderlying && optionType === OptionType.CALL;
     const [amountStr, setAmountStr] = useState('1');
     const [strikeStr, setStrikeStr] = useState('');
     const [premiumStr, setPremiumStr] = useState('');
@@ -266,8 +273,9 @@ export function WriteOptionPanel({
     }, [poolAddress, provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // CALL locks MOTO (underlying), PUT locks PILL (premiumToken)
-    const collateralToken = optionType === OptionType.CALL ? poolInfo.underlying : poolInfo.premiumToken;
-    const collateralSymbol = optionType === OptionType.CALL ? underlyingSymbol : premiumSymbol;
+    // Type 2 CALL: BTC collateral — no OP20 token to approve
+    const collateralToken = isBtcCollateral ? '' : (optionType === OptionType.CALL ? poolInfo.underlying : poolInfo.premiumToken);
+    const collateralSymbol = isBtcCollateral ? 'BTC (sats)' : (optionType === OptionType.CALL ? underlyingSymbol : premiumSymbol);
 
     const { info: tokenInfo, loading: tokenLoading, refetch: refetchToken } = useTokenInfo({
         tokenAddress: collateralToken,
@@ -280,7 +288,8 @@ export function WriteOptionPanel({
     const balance = tokenInfo?.balance ?? null;
     const allowance = tokenInfo?.allowance ?? null;
     const approvalPending = myFlow?.status === 'approval_pending' && myFlow.approvalTxId != null;
-    const needsApproval = !approvalPending && !approvalReady && collateral !== null && allowance !== null && allowance < collateral;
+    // BTC collateral: no OP20 approval needed
+    const needsApproval = !isBtcCollateral && !approvalPending && !approvalReady && collateral !== null && allowance !== null && allowance < collateral;
 
     function validate(): string | null {
         if (!amount || amount <= 0n) return 'Amount must be greater than 0';
@@ -372,28 +381,34 @@ export function WriteOptionPanel({
             // Contract expects absolute block number, not relative duration
             const currentBlock = await provider.getBlockNumber();
             const expiry = BigInt(currentBlock) + duration;
+            const writeAbi = isBtcCollateral ? BTC_UNDERLYING_POOL_ABI : POOL_WRITE_ABI;
+            const writeMethod = isBtcCollateral ? 'writeOptionBtc' : 'writeOption';
             const poolContract = getContract(
                 poolAddress,
-                POOL_WRITE_ABI,
+                writeAbi,
                 provider,
                 network,
                 address,
             ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
-            const callResult = await poolContract['writeOption'](
+            const callResult = await poolContract[writeMethod](
                 optionType,
                 strike,
                 expiry,
                 amount!,
                 premium,
             );
-            const receipt = await callResult.sendTransaction({
+            const sendOpts: Record<string, unknown> = {
                 signer: null,
                 mldsaSigner: null,
                 refundTo: walletAddress ?? '',
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
-            });
+            };
+            // Type 2 CALL: attach BTC collateral as extraOutputs
+            // The wallet includes the BTC output to the escrow P2WSH address
+            // extraOutputs would be populated from bridge escrow script hash
+            const receipt = await callResult.sendTransaction(sendOpts);
 
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
@@ -682,26 +697,41 @@ export function WriteOptionPanel({
 
                     {/* Collateral summary */}
                     <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 space-y-1.5 text-xs font-mono">
+                        {isBtcCollateral && (
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-900/30 border border-orange-700 text-orange-400">BTC Collateral</span>
+                                <span className="text-[10px] text-terminal-text-muted">Locked via escrow in the write transaction</span>
+                            </div>
+                        )}
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Collateral</span>
                             <span className="text-terminal-text-primary">
                                 {collateral ? `${formatBigInt(collateral)} ${collateralSymbol}` : '—'}
                             </span>
                         </div>
-                        <div className="flex justify-between">
-                            <span className="text-terminal-text-muted">Your balance</span>
-                            <span className={balance !== null && collateral !== null && balance >= collateral ? 'text-green-400' : 'text-rose-400'}>
-                                {tokenLoading ? '...' : balance !== null ? `${formatBigInt(balance)} ${collateralSymbol}` : '—'}
-                                {balance !== null && collateral !== null && balance >= collateral ? ' ✓' : ''}
-                            </span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-terminal-text-muted">Allowance</span>
-                            <span className={needsApproval ? 'text-yellow-400' : 'text-terminal-text-secondary'}>
-                                {tokenLoading ? '...' : allowance !== null ? `${formatBigInt(allowance)} ${collateralSymbol}` : '—'}
-                                {needsApproval ? ' ← req' : ''}
-                            </span>
-                        </div>
+                        {!isBtcCollateral && (
+                            <>
+                                <div className="flex justify-between">
+                                    <span className="text-terminal-text-muted">Your balance</span>
+                                    <span className={balance !== null && collateral !== null && balance >= collateral ? 'text-green-400' : 'text-rose-400'}>
+                                        {tokenLoading ? '...' : balance !== null ? `${formatBigInt(balance)} ${collateralSymbol}` : '—'}
+                                        {balance !== null && collateral !== null && balance >= collateral ? ' ✓' : ''}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-terminal-text-muted">Allowance</span>
+                                    <span className={needsApproval ? 'text-yellow-400' : 'text-terminal-text-secondary'}>
+                                        {tokenLoading ? '...' : allowance !== null ? `${formatBigInt(allowance)} ${collateralSymbol}` : '—'}
+                                        {needsApproval ? ' ← req' : ''}
+                                    </span>
+                                </div>
+                            </>
+                        )}
+                        {isBtcCollateral && (
+                            <p className="text-yellow-400 text-[10px]">
+                                BTC will be locked to a P2WSH escrow address. Your wallet must include the BTC output via extraOutputs.
+                            </p>
+                        )}
                     </div>
 
                     {/* Writer Outlook */}

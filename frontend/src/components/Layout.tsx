@@ -30,6 +30,7 @@ export function Layout() {
   const navLinks = [
     { path: '/', label: 'Home', testId: 'nav-home' },
     { path: '/pools', label: 'Pools', testId: 'nav-pools' },
+    { path: '/strategies', label: 'Strategies', testId: 'nav-strategies' },
     { path: '/portfolio', label: 'Portfolio', testId: 'nav-portfolio' },
     { path: '/transactions', label: 'History', testId: 'nav-history' },
     { path: '/about', label: 'About', testId: 'nav-about' },

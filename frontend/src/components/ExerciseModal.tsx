@@ -16,6 +16,7 @@ import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { formatTokenAmount } from '../config/index.ts';
+import type { PoolType } from '../../../shared/pool-config.types.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import { useActiveFlow } from '../hooks/useActiveFlow.ts';
 import { calcExercisePnl } from '../utils/optionMath.js';
@@ -39,6 +40,8 @@ interface ExerciseModalProps {
     motoPillRatio?: number | null;
     underlyingSymbol?: string;
     premiumSymbol?: string;
+    /** Pool type: 0 = OP20/OP20, 1 = OP20/BTC, 2 = BTC/OP20 */
+    poolType?: PoolType;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -60,9 +63,15 @@ export function ExerciseModal({
     motoPillRatio,
     underlyingSymbol = 'MOTO',
     premiumSymbol = 'PILL',
+    poolType = 0,
     onClose,
     onSuccess,
 }: ExerciseModalProps) {
+    // Type 1 CALL: strike paid in BTC (via extraOutputs)
+    // Type 2 CALL: exercise normally, then show BTC claim instructions
+    // Type 2 PUT: BTC output to writer + receive OP20
+    const isBtcQuote = poolType === 1;
+    const isBtcUnderlying = poolType === 2;
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
     const wsBlockInfo = useWsBlock();
@@ -413,16 +422,54 @@ export function ExerciseModal({
 
                     {/* Success receipt */}
                     {txStatus === 'done' && txId && (
-                        <TransactionReceipt
-                            type="exercise"
-                            txId={txId}
-                            movements={[
-                                { direction: 'debit', amount: `${fmt(payAmount)} ${payToken}`, token: '', label: `You pay (${payToken})` },
-                                { direction: 'credit', amount: `${fmt(receiveAmount)} ${receiveToken}`, token: '', label: `You receive (${receiveToken})` },
-                            ]}
-                            fee={{ amount: `${fmt(exerciseFee)}`, token: receiveToken }}
-                            onDone={onSuccess}
-                        />
+                        <>
+                            <TransactionReceipt
+                                type="exercise"
+                                txId={txId}
+                                movements={[
+                                    { direction: 'debit', amount: `${fmt(payAmount)} ${payToken}`, token: '', label: `You pay (${payToken})` },
+                                    { direction: 'credit', amount: `${fmt(receiveAmount)} ${receiveToken}`, token: '', label: `You receive (${receiveToken})` },
+                                ]}
+                                fee={{ amount: `${fmt(exerciseFee)}`, token: receiveToken }}
+                                onDone={onSuccess}
+                            />
+                            {/* BTC claim instructions for type 2 CALL */}
+                            {isBtcUnderlying && isCall && (
+                                <div className="bg-orange-900/20 border border-orange-700 rounded p-3 text-xs font-mono space-y-2" data-testid="btc-claim-info">
+                                    <p className="text-orange-400 font-semibold">BTC Collateral Claim</p>
+                                    <p className="text-terminal-text-muted">
+                                        The BTC collateral is locked in a P2WSH escrow. Check the transaction events
+                                        for the witness script hex to construct a claim transaction.
+                                    </p>
+                                    <p className="text-yellow-400 text-[10px]">
+                                        The escrow uses a dual-path script: you can claim immediately with your key,
+                                        or the writer can reclaim after the CLTV expiry.
+                                    </p>
+                                </div>
+                            )}
+                            {/* BTC strike payment note for type 1 CALL */}
+                            {isBtcQuote && isCall && (
+                                <div className="bg-orange-900/20 border border-orange-700 rounded p-3 text-xs font-mono space-y-1" data-testid="btc-strike-info">
+                                    <p className="text-orange-400 font-semibold">BTC Strike Payment</p>
+                                    <p className="text-terminal-text-muted">
+                                        Strike value was paid in BTC via the transaction outputs.
+                                        The writer receives the BTC via CSV timelock.
+                                    </p>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* BTC payment notes for BTC pool types */}
+                    {txStatus !== 'done' && isBtcQuote && isCall && (
+                        <div className="bg-orange-900/20 border border-orange-700 rounded p-2.5 text-[10px] font-mono text-orange-300">
+                            Strike payment in BTC: your wallet must include the BTC output via extraOutputs in the exercise transaction.
+                        </div>
+                    )}
+                    {txStatus !== 'done' && isBtcUnderlying && !isCall && (
+                        <div className="bg-orange-900/20 border border-orange-700 rounded p-2.5 text-[10px] font-mono text-orange-300">
+                            PUT exercise: you must include BTC output to the writer via extraOutputs. You will receive OP20 from the contract.
+                        </div>
                     )}
 
                     {/* Estimated BTC fee */}

@@ -29,6 +29,13 @@ const EV_TRANSFERRED = 'OptionTransferred';
 // There is no FeeCollected event — fee data is embedded inline in each action event
 const EV_SWAP_EXECUTED = 'SwapExecuted';
 
+// Phase 2: BTC pool events
+const EV_OPTION_RESERVED         = 'OptionReserved';
+const EV_RESERVATION_EXECUTED    = 'ReservationExecuted';
+const EV_RESERVATION_CANCELLED   = 'ReservationCancelled';
+const EV_OPTION_WRITTEN_BTC      = 'OptionWrittenBtc';
+const EV_BTC_CLAIMABLE           = 'BtcClaimable';
+
 // Mirror of GRACE_PERIOD_BLOCKS in src/contracts/pool/contract.ts
 const GRACE_PERIOD_BLOCKS = 144;
 
@@ -95,7 +102,13 @@ function decodeEvent(
         case EV_EXERCISED: return handleExercised(db, event, blockNumber, txId);
         case EV_SETTLED:      return handleSettled(db, event, blockNumber, txId);
         case EV_TRANSFERRED: return handleTransferred(db, event, blockNumber, txId);
-        default:             return null;
+        // Phase 2: BTC pool events
+        case EV_OPTION_RESERVED:       return handleOptionReserved(db, event, blockNumber, txId);
+        case EV_RESERVATION_EXECUTED:  return handleReservationExecuted(db, event, blockNumber, txId);
+        case EV_RESERVATION_CANCELLED: return handleReservationCancelled(db, event, blockNumber, txId);
+        case EV_OPTION_WRITTEN_BTC:    return handleWrittenBtc(db, event, blockNumber, txId);
+        case EV_BTC_CLAIMABLE:         return null; // Informational event, no DB update needed
+        default:                       return null;
     }
 }
 
@@ -282,6 +295,118 @@ function handleTransferred(
             tx_id:        txId,
         }),
     ];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: BTC pool event handlers
+// ---------------------------------------------------------------------------
+
+function handleOptionReserved(
+    db: D1Database,
+    event: TxEvent,
+    blockNumber: number,
+    txId: string,
+): D1PreparedStatement[] {
+    // OptionReserved: [optionId U256, reservationId U256, buyer ADDRESS,
+    //   btcAmount U256, csvScriptHash ADDRESS, expiryBlock U64]
+    const f = parseEventData(event.data, [
+        { name: 'optionId',       type: 'u256'    },
+        { name: 'reservationId',  type: 'u256'    },
+        { name: 'buyer',          type: 'address' },
+        { name: 'btcAmount',      type: 'u256'    },
+        { name: 'csvScriptHash',  type: 'address' },
+        { name: 'expiryBlock',    type: 'u64'     },
+    ]);
+    if (!f) return [];
+
+    // Mark option as RESERVED (status 5)
+    return [
+        stmtUpdateOptionStatus(db, event.contractAddress, Number(f['optionId']), OptionStatus.RESERVED, null, blockNumber, txId),
+    ];
+}
+
+function handleReservationExecuted(
+    db: D1Database,
+    event: TxEvent,
+    blockNumber: number,
+    txId: string,
+): D1PreparedStatement[] {
+    // ReservationExecuted: [reservationId U256, optionId U256, buyer ADDRESS, btcAmount U256]
+    const f = parseEventData(event.data, [
+        { name: 'reservationId', type: 'u256'    },
+        { name: 'optionId',      type: 'u256'    },
+        { name: 'buyer',         type: 'address' },
+        { name: 'btcAmount',     type: 'u256'    },
+    ]);
+    if (!f) return [];
+
+    // Transition RESERVED → PURCHASED, set buyer
+    return [
+        stmtUpdateOptionStatus(db, event.contractAddress, Number(f['optionId']), OptionStatus.PURCHASED, f['buyer'] ?? null, blockNumber, txId),
+        stmtUpdateOptionBuyer(db, event.contractAddress, Number(f['optionId']), f['buyer'] ?? '', blockNumber, txId),
+    ];
+}
+
+function handleReservationCancelled(
+    db: D1Database,
+    event: TxEvent,
+    blockNumber: number,
+    txId: string,
+): D1PreparedStatement[] {
+    // ReservationCancelled: [reservationId U256, optionId U256]
+    const f = parseEventData(event.data, [
+        { name: 'reservationId', type: 'u256' },
+        { name: 'optionId',      type: 'u256' },
+    ]);
+    if (!f) return [];
+
+    // Transition RESERVED → OPEN (reservation expired, option available again)
+    return [
+        stmtUpdateOptionStatus(db, event.contractAddress, Number(f['optionId']), OptionStatus.OPEN, null, blockNumber, txId),
+    ];
+}
+
+function handleWrittenBtc(
+    db: D1Database,
+    event: TxEvent,
+    blockNumber: number,
+    txId: string,
+): D1PreparedStatement[] {
+    // OptionWrittenBtc: [optionId U256, writer ADDRESS, optionType U8,
+    //   strikePrice U256, underlyingAmount U256, premium U256, expiryBlock U64,
+    //   btcCollateralAmount U256, escrowScriptHash ADDRESS]
+    const f = parseEventData(event.data, [
+        { name: 'optionId',            type: 'u256'    },
+        { name: 'writer',              type: 'address' },
+        { name: 'optionType',          type: 'u8'      },
+        { name: 'strikePrice',         type: 'u256'    },
+        { name: 'underlyingAmount',    type: 'u256'    },
+        { name: 'premium',             type: 'u256'    },
+        { name: 'expiryBlock',         type: 'u64'     },
+        { name: 'btcCollateralAmount', type: 'u256'    },
+        { name: 'escrowScriptHash',    type: 'address' },
+    ]);
+    if (!f) return [];
+
+    // Insert option same as regular write, with BTC collateral info in premium field
+    const row: OptionRow = {
+        pool_address:    event.contractAddress,
+        option_id:       Number(f['optionId']),
+        writer:          f['writer'] ?? '',
+        buyer:           null,
+        option_type:     Number(f['optionType']),
+        strike_price:    f['strikePrice'] ?? '0',
+        underlying_amt:  f['underlyingAmount'] ?? '0',
+        premium:         f['premium'] ?? '0',
+        expiry_block:    Number(f['expiryBlock']),
+        grace_end_block: Number(f['expiryBlock']) + GRACE_PERIOD_BLOCKS,
+        status:          OptionStatus.OPEN,
+        created_block:   blockNumber,
+        created_tx:      txId,
+        updated_block:   null,
+        updated_tx:      null,
+    };
+    return [stmtInsertOption(db, row)];
 }
 
 // ---------------------------------------------------------------------------
