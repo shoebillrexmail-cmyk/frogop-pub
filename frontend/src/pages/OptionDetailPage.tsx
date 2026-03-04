@@ -47,7 +47,7 @@ export function OptionDetailPage() {
     const { poolInfo, options, loading, error } = usePool(addr ?? null, readProvider);
     const { currentBlock } = useBlockTracker(readProvider, wsBlockInfo?.blockNumber);
 
-    const { motoPillRatio } = usePriceRatio(null, null, null, null, null);
+    const { motoPillRatio } = usePriceRatio(null, null, null, null, null, null);
 
     const option = useMemo(() => {
         if (!id || !options) return null;

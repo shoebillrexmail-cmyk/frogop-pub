@@ -17,17 +17,17 @@ All user flows in the FroGop options platform frontend.
 ### 3. Exercise Option (2-step)
 **Component**: `ExerciseModal.tsx`
 **Steps**: Approve strike value in PILL → Exercise on-chain
-**Available on**: PoolsPage and PortfolioPage (grace period active, buyer only)
+**Available on**: PoolDetailPage and PortfolioPage (grace period active, buyer only)
 
 ### 4. Cancel Option (1-step)
 **Component**: `CancelModal.tsx`
 **Steps**: Cancel option → collateral returned (minus cancel fee)
-**Available on**: PoolsPage and PortfolioPage (OPEN status, writer only)
+**Available on**: PoolDetailPage and PortfolioPage (OPEN status, writer only)
 
 ### 5. Settle Option (1-step)
 **Component**: `SettleModal.tsx`
 **Steps**: Settle expired/unexercised option → collateral returned
-**Available on**: PoolsPage and PortfolioPage (after grace period, any user)
+**Available on**: PoolDetailPage and PortfolioPage (after grace period, any user)
 
 ### 6. Transfer Option (1-step)
 **Component**: `TransferModal.tsx`
@@ -37,17 +37,17 @@ All user flows in the FroGop options platform frontend.
 ### 7. Roll Option (1-step)
 **Component**: `RollModal.tsx`
 **Steps**: Cancel + re-write with new expiry → extends position
-**Available on**: PoolsPage and PortfolioPage (OPEN status, writer only)
+**Available on**: PoolDetailPage and PortfolioPage (OPEN status, writer only)
 
 ### 8. Batch Cancel (1-step)
 **Component**: `BatchCancelModal.tsx`
 **Steps**: Select multiple OPEN options → Cancel all in one TX
-**Available on**: PoolsPage (checkbox selection)
+**Available on**: PoolDetailPage (checkbox selection)
 
 ### 9. Batch Settle (1-step)
 **Component**: `BatchSettleModal.tsx`
 **Steps**: Select multiple expired options → Settle all in one TX
-**Available on**: PoolsPage (checkbox selection)
+**Available on**: PoolDetailPage (checkbox selection)
 
 ## Strategy Flows
 
@@ -57,7 +57,7 @@ All user flows in the FroGop options platform frontend.
 **Goal**: Earn premium on MOTO holdings
 
 ### 11. Protective Put
-**Entry**: Inline card on Buy tab (PoolsPage) → opens BuyOptionModal with best PUT
+**Entry**: Inline card on Buy tab (PoolDetailPage) → opens BuyOptionModal with best PUT
 **Params**: PUT at 80-95% spot
 **Goal**: Insure MOTO against price drops
 
@@ -69,7 +69,7 @@ All user flows in the FroGop options platform frontend.
 **Status**: Surfaced on PortfolioPage when in-progress via `CollarProgressCard`
 
 ### QuickStrategies Component
-Located on PoolsPage Write tab. Contains 3 cards:
+Located on PoolDetailPage Write tab. Accepts `underlyingSymbol`/`premiumSymbol` props for dynamic token labels. Contains 3 cards:
 - **Covered Call** — pre-fills WriteOptionPanel with CALL defaults
 - **Collar** — opens CollarModal for 2-leg strategy
 - **Write Custom** — focuses WriteOptionPanel for manual entry
@@ -104,9 +104,10 @@ Displays live network data in header:
 ## Navigation Flows
 
 ### Pool Discovery
-- Factory-based pool enumeration on PoolsPage
-- Pool selector when multiple pools exist
-- Selection persisted in sessionStorage
+- **PoolListPage** (`/pools`): Searchable grid of all pools discovered via factory enumeration
+- Each pool card links to `/pools/:address` (PoolDetailPage)
+- Search filters by token symbol, pool ID, or address
+- NativeSwap address resolved per-pool from `pools.config.json` (no global env var)
 
 ### Option Detail
 - Route: `/pools/:addr/options/:id`

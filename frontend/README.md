@@ -7,7 +7,7 @@ Decentralized Options on Bitcoin - Frontend Application
 - **Framework**: React 18 + TypeScript
 - **Build**: Vite
 - **Styling**: Tailwind CSS
-- **State**: Zustand
+- **State**: React Context
 - **Routing**: React Router
 
 ## Getting Started
@@ -37,7 +37,6 @@ npm run dev
 src/
 ├── components/     # Reusable UI components
 ├── pages/          # Page components
-├── stores/         # Zustand stores
 ├── hooks/          # Custom React hooks
 ├── services/       # Contract interaction services
 └── config/         # Configuration and utilities
@@ -48,7 +47,9 @@ src/
 | Route | Description |
 |-------|-------------|
 | `/` | Landing page |
-| `/pools` | Pool browser |
+| `/pools` | Searchable pool listing |
+| `/pools/:address` | Pool detail — options chain, write/buy tabs, strategies |
+| `/pools/:addr/options/:id` | Single option detail |
 | `/portfolio` | User's options |
 | `/about` | About & roadmap |
 

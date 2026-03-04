@@ -171,7 +171,7 @@ frogop/
 │       └── index.ts
 ├── frontend/                  # React 19 + Vite 7 + Tailwind 4 SPA
 │   ├── src/components/        # UI (modals, tables, charts, strategies)
-│   ├── src/pages/             # Landing, Pools, Portfolio, About
+│   ├── src/pages/             # Landing, PoolList, PoolDetail, Portfolio, About
 │   ├── src/hooks/             # Contract interaction & WS hooks
 │   ├── src/services/          # RPC service layer, ABI encoding
 │   └── src/utils/             # Option math, Black-Scholes, strategies

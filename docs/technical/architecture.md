@@ -295,7 +295,7 @@ public batchExercise(calldata: Calldata): BytesWriter {
 │                      Frontend (React 19 + Vite 7)                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  Pages:   Landing │ Pools │ Portfolio │ About                       │
+│  Pages:   Landing │ Pool List │ Pool Detail │ Portfolio │ About      │
 │                                                                      │
 │  Components:                                                         │
 │  ├── WriteOptionPanel    (create options, strategy templates)        │
@@ -318,7 +318,7 @@ public batchExercise(calldata: Calldata): BytesWriter {
 │  ├── IndexerService      (REST: /pools, /user, /prices)             │
 │  └── FactoryService      (RPC: getPoolCount, getPoolByIndex)        │
 │                                                                      │
-│  State: Zustand (optionFilters) │ React Context (WS, TX, Wallet)    │
+│  State: React Context (WS, TX, Wallet)                              │
 │  Wallet: @btc-vision/walletconnect (OPWallet browser extension)     │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘

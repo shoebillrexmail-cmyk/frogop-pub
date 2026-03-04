@@ -118,7 +118,7 @@ export function PortfolioPage() {
     });
 
     // MOTO/PILL price ratio (indexer first, on-chain fallback)
-    const { motoPillRatio } = usePriceRatio(null, null, null, null, null);
+    const { motoPillRatio } = usePriceRatio(null, null, null, null, null, null);
 
     // Unrealized P&L for purchased options
     const { totalPnlPill, perOption: pnlMap } = usePnL(

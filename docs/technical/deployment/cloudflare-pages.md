@@ -81,7 +81,6 @@ JS bundle at build time. They are **not** set in the Cloudflare dashboard.
 | `VITE_FACTORY_ADDRESS` | *(empty)* | No* | Factory for pool discovery |
 | `VITE_INDEXER_URL` | `https://api.frogop.net` | No | Falls back to on-chain RPC |
 | `VITE_POOL_TEMPLATE_ADDRESS` | *(empty)* | No | Unused currently |
-| `VITE_NATIVESWAP_ADDRESS` | *(empty)* | No | Price ratio display |
 
 *At least one of `VITE_POOL_ADDRESS` or `VITE_FACTORY_ADDRESS` must be set.
 

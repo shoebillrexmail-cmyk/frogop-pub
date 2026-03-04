@@ -59,7 +59,7 @@ frogop/
 │   └── pool/               # OptionsPool — full options lifecycle
 ├── frontend/               # React 19 + Vite + Tailwind SPA
 │   ├── src/components/     # UI components (modals, tables, charts, strategies)
-│   ├── src/pages/          # Landing, Pools, Portfolio, OptionDetail, Transactions, About
+│   ├── src/pages/          # Landing, PoolList, PoolDetail, Portfolio, OptionDetail, Transactions, About
 │   ├── src/hooks/          # Contract interaction hooks
 │   ├── src/services/       # RPC service layer, ABI encoding
 │   └── src/utils/          # Option math, Black-Scholes, strategy helpers
@@ -155,9 +155,10 @@ npm run test:integration
 
 ## Frontend
 
-The frontend is a React 19 SPA with 6 pages:
+The frontend is a React 19 SPA with 7 pages:
 - **Landing** — Protocol overview and getting started
-- **Pools** — Browse options, view pool info, price charts, Buy/Write tabs, strategy templates
+- **Pool List** (`/pools`) — Searchable grid of all discovered pools with fee summaries
+- **Pool Detail** (`/pools/:address`) — Options chain, price charts, Buy/Write tabs, strategy templates
 - **Portfolio** — Track your written/bought options, P&L chart, position breakdown
 - **Option Detail** — Deep-dive into a single option with action buttons
 - **Transactions** — Full paginated TX history with filters and CSV export
