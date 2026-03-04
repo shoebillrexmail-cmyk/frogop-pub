@@ -55,3 +55,42 @@ export class FeeRecipientUpdatedEvent extends NetEvent {
         super('FeeRecipientUpdated', data);
     }
 }
+
+// =============================================================================
+// BTC POOL EVENTS (Type 1 & Type 2)
+// =============================================================================
+
+/** Emitted when an option is reserved for two-phase BTC commit */
+export class OptionReservedEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('OptionReserved', data);
+    }
+}
+
+/** Emitted when a reservation is executed (BTC payment verified) */
+export class ReservationExecutedEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('ReservationExecuted', data);
+    }
+}
+
+/** Emitted when a reservation is cancelled (expired) */
+export class ReservationCancelledEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('ReservationCancelled', data);
+    }
+}
+
+/** Emitted when an option is written with BTC collateral (type 2) */
+export class OptionWrittenBtcEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('OptionWrittenBtc', data);
+    }
+}
+
+/** Emitted when BTC collateral becomes claimable after exercise */
+export class BtcClaimableEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('BtcClaimable', data);
+    }
+}

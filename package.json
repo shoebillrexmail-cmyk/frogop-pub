@@ -9,6 +9,7 @@
     "build:factory": "npx asc src/contracts/factory/index.ts --target factory --measure",
     "build:pool": "npx asc src/contracts/pool/index.ts --target pool --measure",
     "build:bridge": "npx asc src/contracts/bridge/index.ts --target bridge --measure",
+    "build:pool-btc-quote": "npx asc src/contracts/pool/btc-quote-index.ts --target pool-btc-quote --measure",
     "build:debug": "npx asc src/index.ts --target debug",
     "build:tests": "tsc -p tests/tsconfig.json",
     "test": "npm run test:all",
