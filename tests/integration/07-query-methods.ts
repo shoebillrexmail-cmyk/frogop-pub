@@ -18,15 +18,18 @@
 
 import 'dotenv/config';
 import { JSONRpcProvider } from 'opnet';
-import type { CallResult, ICallRequestError } from 'opnet';
 import { Address, BinaryWriter } from '@btc-vision/transaction';
 import {
+    createTestHarness,
+    isCallError,
     getConfig,
     loadDeployedContracts,
     getLogger,
+    POOL_SELECTORS,
+} from './test-harness.js';
+import {
     formatAddress,
     waitForBlock,
-    POOL_SELECTORS,
     FACTORY_SELECTORS,
 } from './config.js';
 import {
@@ -35,49 +38,7 @@ import {
 } from './deployment.js';
 
 const log = getLogger('07-query-methods');
-
-// =========================================================================
-// Test harness
-// =========================================================================
-
-interface TestResult {
-    name: string;
-    passed: boolean;
-    error?: string;
-    duration?: number;
-    data?: Record<string, unknown>;
-    skipped?: boolean;
-}
-
-const results: TestResult[] = [];
-
-async function runTest(
-    name: string,
-    testFn: () => Promise<Record<string, unknown> | void>,
-): Promise<void> {
-    log.info(`Running: ${name}...`);
-    const start = Date.now();
-    try {
-        const data = await testFn();
-        const duration = Date.now() - start;
-        results.push({ name, passed: true, duration, data: data as Record<string, unknown> | undefined });
-        log.success(`${name} (${duration}ms)`);
-    } catch (error) {
-        const duration = Date.now() - start;
-        const msg = error instanceof Error ? error.message : String(error);
-        results.push({ name, passed: false, error: msg, duration });
-        log.error(`${name} (${duration}ms): ${msg}`);
-    }
-}
-
-function skipTest(name: string, reason: string): void {
-    log.warn(`SKIP: ${name} - ${reason}`);
-    results.push({ name, passed: true, skipped: true, data: { skipped: reason } });
-}
-
-function isCallError(result: CallResult | ICallRequestError): result is ICallRequestError {
-    return 'error' in result;
-}
+const { runTest, skipTest, printSummary } = createTestHarness('07-query-methods');
 
 // =========================================================================
 // Main
@@ -534,38 +495,6 @@ async function main() {
     }
 
     printSummary();
-}
-
-function printSummary(): void {
-    log.info('\n=== Test Results ===');
-    const passed = results.filter((r) => r.passed && !r.skipped).length;
-    const skipped = results.filter((r) => r.skipped).length;
-    const failed = results.filter((r) => !r.passed).length;
-    const total = results.length;
-
-    log.info(`Total: ${total}`);
-    log.success(`Passed: ${passed}`);
-    if (skipped > 0) log.warn(`Skipped: ${skipped}`);
-    if (failed > 0) {
-        log.error(`Failed: ${failed}`);
-        results
-            .filter((r) => !r.passed)
-            .forEach((r) => log.error(`  - ${r.name}: ${r.error}`));
-    }
-
-    log.info('\n=== Test Data ===');
-    results.forEach((r) => {
-        if (r.data && !r.skipped) {
-            log.info(`${r.name}: ${JSON.stringify(r.data)}`);
-        }
-    });
-
-    const runCount = total - skipped;
-    log.info('\n=== Summary ===');
-    log.info(`Success rate: ${runCount > 0 ? ((passed / runCount) * 100).toFixed(1) : 0}%`);
-    log.info(`Total time: ${results.reduce((sum, r) => sum + (r.duration || 0), 0)}ms`);
-
-    process.exit(failed > 0 ? 1 : 0);
 }
 
 main().catch((error) => {

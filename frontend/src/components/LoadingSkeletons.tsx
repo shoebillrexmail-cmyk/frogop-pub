@@ -113,6 +113,31 @@ export function PoolsSkeleton() {
     );
 }
 
+/** Skeleton for PoolListPage: grid of shimmer cards. */
+export function PoolListSkeleton() {
+    return (
+        <div className="max-w-7xl mx-auto px-4 py-8 space-y-4">
+            <LoadingPill />
+            <Sk className="h-10 w-full max-w-sm rounded" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                    <div
+                        key={i}
+                        className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-5 space-y-3"
+                        style={{ animationDelay: `${i * 80}ms` }}
+                    >
+                        <div className="flex items-center justify-between">
+                            <Sk className="h-5 w-28" />
+                            <Sk className="h-4 w-16 rounded" />
+                        </div>
+                        <Sk className="h-3.5 w-36" />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 /** Skeleton for PortfolioPage: BalancesCard + Written section + Purchased section. */
 export function PortfolioSkeleton() {
     return (

@@ -63,6 +63,7 @@ function mapOptionRow(row: OptionRow): OptionData {
         premium: BigInt(row.premium),
         expiryBlock: BigInt(row.expiry_block),
         status: row.status,
+        poolAddress: row.pool_address,
     };
 }
 

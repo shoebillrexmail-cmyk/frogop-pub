@@ -14,6 +14,8 @@ import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { usePriceRatio } from '../hooks/usePriceRatio.ts';
 import { usePnL } from '../hooks/usePnL.ts';
+import { useFallbackProvider } from '../hooks/useFallbackProvider.ts';
+import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
 import { PortfolioSkeleton } from '../components/LoadingSkeletons.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
 import { BalancesCard } from '../components/BalancesCard.tsx';
@@ -24,7 +26,7 @@ import { ExerciseModal } from '../components/ExerciseModal.tsx';
 import { SettleModal } from '../components/SettleModal.tsx';
 import { RollModal } from '../components/RollModal.tsx';
 import { TransferModal } from '../components/TransferModal.tsx';
-import { CONTRACT_ADDRESSES } from '../config/index.ts';
+import { formatAddress } from '../config/index.ts';
 import { NotificationBanner } from '../components/NotificationBanner.tsx';
 import { ExpiryAlertBanner } from '../components/ExpiryAlertBanner.tsx';
 import { useExpiryAlerts } from '../hooks/useExpiryAlerts.ts';
@@ -34,19 +36,45 @@ import { OptionStatus } from '../services/types.ts';
 import type { OptionData } from '../services/types.ts';
 import type { ResumeRequest } from '../contexts/flowDefs.ts';
 
-const POOL_ADDRESS = CONTRACT_ADDRESSES.pool;
-
 export function PortfolioPage() {
     const wsBlockInfo = useWsBlock();
     const { walletAddress, address, provider, network, openConnectModal } = useWalletConnect();
+    const readProvider = useFallbackProvider();
 
     const walletHex = address ? address.toString() : null;
 
     const { currentBlock } = useBlockTracker(provider ?? null, wsBlockInfo?.blockNumber);
 
+    // Discover all pools via factory (or env fallback)
+    const {
+        pools,
+        loading: discoveryLoading,
+    } = useDiscoverPools(readProvider);
+
+    // Pool selector state — persisted to sessionStorage
+    const [userSelectedPool, setUserSelectedPool] = useState<string | null>(() => {
+        try { return sessionStorage.getItem('frogop_selected_portfolio_pool'); } catch { return null; }
+    });
+
+    // Derive effective selected pool: user choice if valid, else first pool
+    const selectedPoolAddr = useMemo(() => {
+        if (pools.length === 0) return null;
+        if (userSelectedPool && pools.some((p) => p.address === userSelectedPool)) {
+            return userSelectedPool;
+        }
+        return pools[0].address;
+    }, [pools, userSelectedPool]);
+
+    // Persist pool selection
+    useEffect(() => {
+        if (selectedPoolAddr) {
+            try { sessionStorage.setItem('frogop_selected_portfolio_pool', selectedPoolAddr); } catch { /* noop */ }
+        }
+    }, [selectedPoolAddr]);
+
     // Pool config only (fees, grace period, token addresses)
     const { poolInfo, loading: poolLoading, error: poolError, refetch: poolRefetch } = usePool(
-        walletAddress && POOL_ADDRESS ? POOL_ADDRESS : null
+        walletAddress && selectedPoolAddr ? selectedPoolAddr : null
     );
 
     // User's options — indexer fast path, chain fallback
@@ -54,9 +82,9 @@ export function PortfolioPage() {
         writtenOptions, purchasedOptions,
         loading: optLoading, error: optError,
         source, refetch: optRefetch,
-    } = useUserOptions(walletHex, walletAddress ? POOL_ADDRESS : null);
+    } = useUserOptions(walletHex, walletAddress ? selectedPoolAddr : null);
 
-    const loading = poolLoading || optLoading;
+    const loading = discoveryLoading || poolLoading || optLoading;
     const error   = poolError ?? optError;
     const refetch = useCallback(() => { poolRefetch(); optRefetch(); }, [poolRefetch, optRefetch]);
 
@@ -64,15 +92,15 @@ export function PortfolioPage() {
     const { transactions, resumeRequest, clearResumeRequest, abandonFlow: abandonFlowById } = useTransactionContext();
     const confirmedCountRef = useRef(0);
     useEffect(() => {
-        if (!POOL_ADDRESS) return;
+        if (!selectedPoolAddr) return;
         const confirmed = transactions.filter(
-            (tx) => tx.poolAddress === POOL_ADDRESS && tx.status === 'confirmed',
+            (tx) => tx.poolAddress === selectedPoolAddr && tx.status === 'confirmed',
         ).length;
         if (confirmed > confirmedCountRef.current) {
             refetch();
         }
         confirmedCountRef.current = confirmed;
-    }, [transactions, refetch]);
+    }, [transactions, refetch, selectedPoolAddr]);
 
     // Token balances (only when wallet connected)
     const { info: motoInfo, loading: motoLoading } = useTokenInfo({
@@ -155,11 +183,11 @@ export function PortfolioPage() {
     // Handle exercise resume from flow card
     useEffect(() => {
         if (!resumeRequest || resumeRequest.actionType !== 'exercise') return;
-        if (!POOL_ADDRESS || resumeRequest.poolAddress !== POOL_ADDRESS) return;
+        if (!selectedPoolAddr || resumeRequest.poolAddress !== selectedPoolAddr) return;
         clearResumeRequest();
         // eslint-disable-next-line react-hooks/set-state-in-effect -- resume routing: one-shot signal from TransactionContext
         applyResume(resumeRequest);
-    }, [resumeRequest, clearResumeRequest, applyResume]);
+    }, [resumeRequest, clearResumeRequest, applyResume, selectedPoolAddr]);
 
     // -------------------------------------------------------------------------
     // Connect gate
@@ -185,11 +213,12 @@ export function PortfolioPage() {
     // -------------------------------------------------------------------------
     // No pool configured
     // -------------------------------------------------------------------------
-    if (!POOL_ADDRESS) {
+    if (!discoveryLoading && pools.length === 0) {
         return (
             <div className="max-w-7xl mx-auto px-4 py-16 text-center">
                 <p className="text-terminal-text-muted font-mono text-sm">
-                    No pool configured. Set{' '}
+                    No pools discovered. Set{' '}
+                    <code className="neon-orange">VITE_FACTORY_ADDRESS</code> or{' '}
                     <code className="neon-orange">VITE_POOL_ADDRESS</code> in your{' '}
                     <code className="neon-orange">.env</code> file.
                 </p>
@@ -229,6 +258,29 @@ export function PortfolioPage() {
         <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
             <NotificationBanner notifications={notifications} onDismiss={dismissNotification} />
             <ExpiryAlertBanner alerts={expiryAlerts} />
+
+            {/* Pool selector when multiple pools */}
+            {pools.length > 1 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-terminal-text-muted font-mono">Pool:</span>
+                    {pools.map((p) => (
+                        <button
+                            key={p.address}
+                            data-testid={`portfolio-pool-selector-${p.address}`}
+                            onClick={() => setUserSelectedPool(p.address)}
+                            className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
+                                selectedPoolAddr === p.address
+                                    ? 'bg-accent text-terminal-bg-primary'
+                                    : 'bg-terminal-bg-elevated text-terminal-text-secondary hover:bg-terminal-bg-secondary'
+                            }`}
+                        >
+                            {p.underlyingSymbol && p.premiumSymbol
+                                ? `${p.underlyingSymbol}/${p.premiumSymbol}`
+                                : formatAddress(p.address)}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {/* Grace period warning banner */}
             {activePurchased.length > 0 && (
@@ -307,7 +359,7 @@ export function PortfolioPage() {
                                         </span>
                                     </div>
                                 </div>
-                                <Link to="/pools" className="btn-secondary px-3 py-1 text-xs rounded">
+                                <Link to={selectedPoolAddr ? `/pools/${selectedPoolAddr}` : '/pools'} className="btn-secondary px-3 py-1 text-xs rounded">
                                     Continue
                                 </Link>
                             </div>
@@ -328,7 +380,7 @@ export function PortfolioPage() {
                                     Go to Pools to write a CALL or PUT option.
                                 </p>
                                 <Link
-                                    to="/pools"
+                                    to={selectedPoolAddr ? `/pools/${selectedPoolAddr}` : '/pools'}
                                     className="btn-primary px-4 py-2 text-sm rounded inline-block"
                                     data-testid="go-to-pools-written"
                                 >
@@ -343,7 +395,7 @@ export function PortfolioPage() {
                                 gracePeriodBlocks={poolInfo?.gracePeriodBlocks}
                                 showFilter={false}
                                 userStatusLabel={(opt) => getUserStatusLabel(opt, walletHex)}
-                                poolAddress={POOL_ADDRESS ?? undefined}
+                                poolAddress={selectedPoolAddr ?? undefined}
                                 onBuy={() => {}}
                                 onCancel={handleCancel}
                                 onExercise={handleExercise}
@@ -387,7 +439,7 @@ export function PortfolioPage() {
                                     Browse open options on the Pools page to buy one.
                                 </p>
                                 <Link
-                                    to="/pools"
+                                    to={selectedPoolAddr ? `/pools/${selectedPoolAddr}` : '/pools'}
                                     className="btn-primary px-4 py-2 text-sm rounded inline-block"
                                     data-testid="go-to-pools-purchased"
                                 >
@@ -403,7 +455,7 @@ export function PortfolioPage() {
                                 pnlMap={pnlMap.size > 0 ? pnlMap : undefined}
                                 showFilter={false}
                                 userStatusLabel={(opt) => getUserStatusLabel(opt, walletHex)}
-                                poolAddress={POOL_ADDRESS ?? undefined}
+                                poolAddress={selectedPoolAddr ?? undefined}
                                 onBuy={() => {}}
                                 onCancel={handleCancel}
                                 onExercise={handleExercise}
@@ -420,7 +472,7 @@ export function PortfolioPage() {
                 <CancelModal
                     option={cancelTarget}
                     poolInfo={poolInfo}
-                    poolAddress={POOL_ADDRESS!}
+                    poolAddress={selectedPoolAddr!}
                     walletAddress={walletAddress}
                     address={address}
                     provider={provider}
@@ -438,7 +490,7 @@ export function PortfolioPage() {
                 <ExerciseModal
                     option={exerciseTarget}
                     poolInfo={poolInfo}
-                    poolAddress={POOL_ADDRESS!}
+                    poolAddress={selectedPoolAddr!}
                     walletAddress={walletAddress}
                     address={address}
                     provider={provider}
@@ -455,7 +507,7 @@ export function PortfolioPage() {
             {settleTarget && provider && network && (
                 <SettleModal
                     option={settleTarget}
-                    poolAddress={POOL_ADDRESS!}
+                    poolAddress={selectedPoolAddr!}
                     walletAddress={walletAddress}
                     address={address}
                     provider={provider}
@@ -473,7 +525,7 @@ export function PortfolioPage() {
                 <RollModal
                     option={rollTarget}
                     poolInfo={poolInfo}
-                    poolAddress={POOL_ADDRESS!}
+                    poolAddress={selectedPoolAddr!}
                     walletAddress={walletAddress}
                     address={address}
                     provider={provider}
@@ -490,7 +542,7 @@ export function PortfolioPage() {
             {transferTarget && provider && network && (
                 <TransferModal
                     option={transferTarget}
-                    poolAddress={POOL_ADDRESS!}
+                    poolAddress={selectedPoolAddr!}
                     walletAddress={walletAddress}
                     address={address}
                     provider={provider}

@@ -99,7 +99,10 @@ npm run test:pool          # Test OptionsPool only
 
 # Integration tests (testnet — requires OPNET_MNEMONIC in .env)
 npm run test:integration   # Run all integration tests (01–11)
-npm run test:integration:full   # Run 06-full-lifecycle only
+npm run test:integration:state          # Run 06a pool state only
+npm run test:integration:write-cancel   # Run 06b write+cancel only
+npm run test:integration:buy-exercise   # Run 06c buy+exercise only
+npm run test:integration:put            # Run 06f PUT lifecycle only
 
 # Frontend tests
 cd frontend && npm test                # Run all frontend tests

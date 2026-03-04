@@ -183,7 +183,13 @@ export function TransactionToast() {
                         <FlowResumeCard
                             key={flow.flowId}
                             flow={flow}
-                            onResume={() => { requestResume(flow.flowId); setExpanded(false); }}
+                            onResume={() => {
+                                requestResume(flow.flowId);
+                                setExpanded(false);
+                                if (flow.poolAddress) {
+                                    navigate(`/pools/${flow.poolAddress}`);
+                                }
+                            }}
                             onAbandon={() => abandonFlow(flow.flowId)}
                         />
                     ))}
@@ -192,7 +198,15 @@ export function TransactionToast() {
                             walletAddress={walletAddress}
                             onContinue={() => {
                                 setExpanded(false);
-                                navigate('/pools?openCollar=true');
+                                // Read poolAddress from collar localStorage
+                                let collarPoolAddr: string | undefined;
+                                try {
+                                    const raw = localStorage.getItem(`frogop_collar_${walletAddress}`);
+                                    if (raw) {
+                                        collarPoolAddr = (JSON.parse(raw) as { poolAddress?: string }).poolAddress;
+                                    }
+                                } catch { /* noop */ }
+                                navigate(collarPoolAddr ? `/pools/${collarPoolAddr}?openCollar=true` : '/pools');
                             }}
                             onDismiss={() => setCollarDismissed(true)}
                         />
@@ -206,6 +220,9 @@ export function TransactionToast() {
                                 onClick={() => {
                                     if (tx.flowId) {
                                         requestResume(tx.flowId);
+                                        if (tx.poolAddress) {
+                                            navigate(`/pools/${tx.poolAddress}`);
+                                        }
                                     } else {
                                         requestReopen(tx);
                                     }

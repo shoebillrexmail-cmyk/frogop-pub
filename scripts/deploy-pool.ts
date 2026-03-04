@@ -100,10 +100,10 @@ async function main() {
     log.info(`Deploying pool "${poolId}" on ${networkId}`);
 
     const config = getConfig();
-    const provider = new JSONRpcProvider(
-        process.env.OPNET_RPC_URL || `https://${networkId}.opnet.org`,
-        config.network,
-    );
+    const provider = new JSONRpcProvider({
+        url: process.env.OPNET_RPC_URL || `https://${networkId}.opnet.org`,
+        network: config.network,
+    });
 
     const deployer = new DeploymentHelper(provider, config.wallet, config.network);
     const balance = await deployer.checkBalance();

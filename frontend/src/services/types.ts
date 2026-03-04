@@ -30,6 +30,8 @@ export interface OptionData {
     expiryBlock: bigint;
     /** 0–4: OPEN / PURCHASED / EXERCISED / EXPIRED / CANCELLED */
     status: number;
+    /** Pool contract address this option belongs to (populated by indexer) */
+    poolAddress?: string;
 }
 
 /** Minimal pool entry from the factory registry */

@@ -1,14 +1,15 @@
 import 'dotenv/config';
-import { JSONRpcProvider } from 'opnet';
-import type { CallResult, ICallRequestError } from 'opnet';
-import { Address, AddressTypes, BinaryWriter } from '@btc-vision/transaction';
+import { Address, AddressTypes } from '@btc-vision/transaction';
 import {
+    createTestHarness,
+    readOption,
+    isCallError,
     getConfig,
     loadDeployedContracts,
     getLogger,
-    formatAddress,
     POOL_SELECTORS,
-} from './config.js';
+} from './test-harness.js';
+import { formatAddress } from './config.js';
 import {
     DeploymentHelper,
     createWriteOptionCalldata,
@@ -17,85 +18,10 @@ import {
     createIncreaseAllowanceCalldata,
     createTransferOptionCalldata,
 } from './deployment.js';
+import { JSONRpcProvider } from 'opnet';
 
 const log = getLogger('08-option-transfer');
-
-// =========================================================================
-// Test harness
-// =========================================================================
-
-interface TestResult {
-    name: string;
-    passed: boolean;
-    error?: string;
-    duration?: number;
-    data?: Record<string, unknown>;
-    skipped?: boolean;
-}
-
-const results: TestResult[] = [];
-
-async function runTest(
-    name: string,
-    testFn: () => Promise<Record<string, unknown> | void>,
-): Promise<void> {
-    log.info(`Running: ${name}...`);
-    const start = Date.now();
-    try {
-        const data = await testFn();
-        const duration = Date.now() - start;
-        results.push({ name, passed: true, duration, data: data as Record<string, unknown> | undefined });
-        log.success(`${name} (${duration}ms)`);
-    } catch (error) {
-        const duration = Date.now() - start;
-        const msg = error instanceof Error ? error.message : String(error);
-        results.push({ name, passed: false, error: msg, duration });
-        log.error(`${name} (${duration}ms): ${msg}`);
-    }
-}
-
-function isCallError(result: CallResult | ICallRequestError): result is ICallRequestError {
-    return 'error' in result;
-}
-
-// =========================================================================
-// Helpers
-// =========================================================================
-
-async function readOption(
-    provider: JSONRpcProvider,
-    poolCallAddr: string,
-    optionId: bigint,
-): Promise<{
-    id: bigint;
-    writer: Address;
-    buyer: Address;
-    optionType: number;
-    strikePrice: bigint;
-    underlyingAmount: bigint;
-    premium: bigint;
-    expiryBlock: bigint;
-    status: number;
-}> {
-    const w = new BinaryWriter();
-    w.writeU256(optionId);
-    const cd = Buffer.from(w.getBuffer() as Uint8Array).toString('hex');
-    const result = await provider.call(poolCallAddr, POOL_SELECTORS.getOption + cd);
-    if (isCallError(result)) throw new Error(`Call error: ${result.error}`);
-    if (result.revert) throw new Error(`Revert: ${result.revert}`);
-    const reader = result.result;
-    return {
-        id: reader.readU256(),
-        writer: reader.readAddress(),
-        buyer: reader.readAddress(),
-        optionType: reader.readU8(),
-        strikePrice: reader.readU256(),
-        underlyingAmount: reader.readU256(),
-        premium: reader.readU256(),
-        expiryBlock: reader.readU64(),
-        status: reader.readU8(),
-    };
-}
+const { runTest, printSummary } = createTestHarness('08-option-transfer');
 
 // =========================================================================
 // Main
@@ -109,7 +35,7 @@ async function main() {
     const deployed = loadDeployedContracts();
 
     if (!deployed?.pool) {
-        log.error('Pool not deployed. Run 06-full-lifecycle first.');
+        log.error('Pool not deployed. Run 06a-pool-state first.');
         process.exit(1);
     }
 
@@ -272,27 +198,7 @@ async function main() {
         }
     });
 
-    // =====================================================================
-    // Summary
-    // =====================================================================
-
-    log.info('\n=== Test Results ===');
-    const passed = results.filter(r => r.passed && !r.skipped).length;
-    const failed = results.filter(r => !r.passed).length;
-    const skipped = results.filter(r => r.skipped).length;
-
-    for (const r of results) {
-        const icon = r.skipped ? 'SKIP' : r.passed ? 'PASS' : 'FAIL';
-        const duration = r.duration ? ` (${r.duration}ms)` : '';
-        const extra = r.error ? ` — ${r.error}` : '';
-        log.info(`  [${icon}] ${r.name}${duration}${extra}`);
-    }
-
-    log.info(`\nTotal: ${results.length} | Passed: ${passed} | Failed: ${failed} | Skipped: ${skipped}`);
-
-    if (failed > 0) {
-        process.exit(1);
-    }
+    printSummary();
 }
 
 main().catch((error) => {

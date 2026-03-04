@@ -87,8 +87,8 @@ export function OptionDetailPage() {
                 <p className="text-rose-400 font-mono text-sm mb-4">
                     {error ?? 'Option not found.'}
                 </p>
-                <Link to="/pools" className="btn-secondary px-4 py-2 text-sm rounded inline-block">
-                    Back to Pools
+                <Link to={addr ? `/pools/${addr}` : '/pools'} className="btn-secondary px-4 py-2 text-sm rounded inline-block">
+                    Back to Pool
                 </Link>
             </div>
         );
@@ -109,7 +109,7 @@ export function OptionDetailPage() {
             <nav className="text-xs font-mono text-terminal-text-muted flex items-center gap-1" data-testid="breadcrumb">
                 <Link to="/pools" className="hover:text-terminal-text-primary transition-colors">Pools</Link>
                 <span>/</span>
-                <Link to="/pools" className="hover:text-terminal-text-primary transition-colors">
+                <Link to={addr ? `/pools/${addr}` : '/pools'} className="hover:text-terminal-text-primary transition-colors">
                     {addr ? `${addr.slice(0, 8)}...` : 'Pool'}
                 </Link>
                 <span>/</span>
@@ -203,10 +203,10 @@ export function OptionDetailPage() {
 
             {/* Back link */}
             <Link
-                to="/pools"
+                to={addr ? `/pools/${addr}` : '/pools'}
                 className="btn-secondary px-4 py-2 text-sm rounded inline-block"
             >
-                Back to Pools
+                Back to Pool
             </Link>
         </div>
     );

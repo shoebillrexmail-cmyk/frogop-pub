@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 // Mock walletconnect so tests don't rely on window.opwallet / browser extension
 vi.mock('@btc-vision/walletconnect', () => ({
@@ -24,6 +24,10 @@ vi.mock('../hooks/usePool.ts', () => ({
     usePool: () => ({ poolInfo: null, options: [], loading: false, error: null, refetch: vi.fn() }),
 }));
 
+vi.mock('../hooks/useDiscoverPools.ts', () => ({
+    useDiscoverPools: () => ({ pools: [], loading: false, error: null, source: null, refetch: vi.fn() }),
+}));
+
 vi.mock('../hooks/useUserOptions.ts', () => ({
     useUserOptions: () => ({
         writtenOptions: [], purchasedOptions: [], loading: false, error: null, source: null, refetch: vi.fn(),
@@ -34,7 +38,8 @@ vi.mock('../hooks/useTokenInfo.ts', () => ({
     useTokenInfo: () => ({ info: null, loading: false, error: null, refetch: vi.fn() }),
 }));
 
-import { PoolsPage } from '../pages/PoolsPage';
+import { PoolListPage } from '../pages/PoolListPage';
+import { PoolDetailPage } from '../pages/PoolDetailPage';
 import { PortfolioPage } from '../pages/PortfolioPage';
 
 describe('Smoke tests — pages render without crashing', () => {
@@ -42,13 +47,23 @@ describe('Smoke tests — pages render without crashing', () => {
         vi.clearAllMocks();
     });
 
-    it('PoolsPage renders', () => {
+    it('PoolListPage renders', () => {
         const { container } = render(
             <MemoryRouter>
-                <PoolsPage />
+                <PoolListPage />
             </MemoryRouter>
         );
-        // Page renders a container (pool configured, no data yet — shows empty state)
+        expect(container.firstChild).toBeInTheDocument();
+    });
+
+    it('PoolDetailPage renders', () => {
+        const { container } = render(
+            <MemoryRouter initialEntries={['/pools/opt1test']}>
+                <Routes>
+                    <Route path="pools/:address" element={<PoolDetailPage />} />
+                </Routes>
+            </MemoryRouter>
+        );
         expect(container.firstChild).toBeInTheDocument();
     });
 

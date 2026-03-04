@@ -4,7 +4,7 @@
       "id": "moto-pill",
       "underlying": {
         "symbol": "MOTO",
-        "name": "Frogop Underlying",
+        "name": "Moto",
         "decimals": 18,
         "addresses": {
           "testnet": "0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd",
@@ -13,7 +13,7 @@
       },
       "premium": {
         "symbol": "PILL",
-        "name": "Frogop Premium",
+        "name": "Pill",
         "decimals": 18,
         "addresses": {
           "testnet": "0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb",
@@ -29,6 +29,33 @@
       "nativeSwap": {
         "addresses": {
           "testnet": "0x4397befe4e067390596b3c296e77fe86589487bf3bf3f0a9a93ce794e2d78fb5",
+          "mainnet": ""
+        }
+      }
+    },
+    {
+      "id": "alpha-beta",
+      "underlying": {
+        "symbol": "ALPHA",
+        "name": "Alpha Test Token",
+        "decimals": 18,
+        "addresses": {
+          "testnet": "0xfe744a4c6abae6b3d5aeebd857df477bf6a29697e8b0acfadbe35b03379d084d",
+          "mainnet": ""
+        }
+      },
+      "premium": {
+        "symbol": "BETA",
+        "name": "Beta Test Token",
+        "decimals": 18,
+        "addresses": {
+          "testnet": "0xddd0f5fe100518b8bba7c7babe82f0957704a0a76449e74549b20bd3751e2917",
+          "mainnet": ""
+        }
+      },
+      "pool": {
+        "addresses": {
+          "testnet": "opt1sqrjvgtdwt5y5cyatd6yzhvcggsz34gp48u5uc88d",
           "mainnet": ""
         }
       }

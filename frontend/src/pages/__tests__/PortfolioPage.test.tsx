@@ -39,6 +39,16 @@ vi.mock('../../hooks/useTokenInfo.ts', () => ({
     useTokenInfo: (...args: unknown[]) => mockUseTokenInfo(...args),
 }));
 
+vi.mock('../../hooks/useDiscoverPools.ts', () => ({
+    useDiscoverPools: () => ({
+        pools: [{ address: 'opt1pftest000', underlying: '', premiumToken: '' }],
+        loading: false,
+        error: null,
+        source: 'env',
+        refetch: vi.fn(),
+    }),
+}));
+
 vi.mock('../../config/index.ts', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../config/index.ts')>();
     return {

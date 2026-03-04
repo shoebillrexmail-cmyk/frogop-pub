@@ -16,6 +16,7 @@ import { formatTokenAmount } from '../config/index.ts';
 
 interface CollarModalProps {
     poolInfo: PoolInfo;
+    poolAddress?: string;
     options: OptionData[];
     motoPillRatio: number | null;
     motoBal: number | null;
@@ -26,6 +27,7 @@ interface CollarModalProps {
 }
 
 export function CollarModal({
+    poolAddress,
     options,
     motoPillRatio,
     motoBal,
@@ -54,8 +56,8 @@ export function CollarModal({
     // Persist step progress to wallet-scoped localStorage
     useEffect(() => {
         if (!storageKey) return;
-        localStorage.setItem(storageKey, JSON.stringify({ callDone, putDone }));
-    }, [callDone, putDone, storageKey]);
+        localStorage.setItem(storageKey, JSON.stringify({ callDone, putDone, poolAddress }));
+    }, [callDone, putDone, storageKey, poolAddress]);
 
     const handleReset = useCallback(() => {
         setCallDone(false);

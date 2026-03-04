@@ -114,6 +114,13 @@ export function formatAddress(address: string): string {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
 }
 
+/** Get the NativeSwap contract address for a specific pool config on the current network. */
+export function getNativeSwapAddress(config: PoolConfig | null): string | null {
+    if (!config?.nativeSwap) return null;
+    const net = currentNetwork as NetworkId;
+    return config.nativeSwap.addresses[net] || null;
+}
+
 export function formatTokenAmount(amount: bigint, decimals: number = 18): string {
   const divisor = BigInt(10 ** decimals);
   const whole = amount / divisor;

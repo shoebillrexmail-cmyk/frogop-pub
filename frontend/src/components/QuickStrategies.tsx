@@ -18,6 +18,8 @@ interface QuickStrategiesProps {
     motoPillRatio: number | null;
     motoBal: number | null;
     walletConnected?: boolean;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
     onCoveredCall: (values: WriteOptionInitialValues) => void;
     onWritePut: (values: WriteOptionInitialValues) => void;
     onCollar: () => void;
@@ -83,6 +85,8 @@ export function QuickStrategies({
     motoPillRatio,
     motoBal,
     walletConnected = true,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
     onCoveredCall,
     onWritePut,
     onCollar,
@@ -110,7 +114,7 @@ export function QuickStrategies({
             {/* Covered Call */}
             <StrategyCard
                 title="Covered Call"
-                tagline="Earn on MOTO you hold"
+                tagline={`Earn on ${underlyingSymbol} you hold`}
                 tooltip="Write a CALL above the current price. You earn premium upfront but cap your upside if the price rises past the strike."
                 disabled={noPrice}
                 testId="strategy-covered-call"
@@ -132,11 +136,11 @@ export function QuickStrategies({
                     <div className="text-xs font-mono space-y-1">
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Strike</span>
-                            <span className="text-terminal-text-secondary">{coveredCall.strikeStr} PILL (120%)</span>
+                            <span className="text-terminal-text-secondary">{coveredCall.strikeStr} {premiumSymbol} (120%)</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Est. premium</span>
-                            <span className="text-green-400">{coveredCall.premiumStr} PILL</span>
+                            <span className="text-green-400">{coveredCall.premiumStr} {premiumSymbol}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Duration</span>
@@ -172,16 +176,16 @@ export function QuickStrategies({
                     <div className="text-xs font-mono space-y-1">
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Write CALL</span>
-                            <span className="text-green-400">{collar.callLeg.strikeStr} PILL</span>
+                            <span className="text-green-400">{collar.callLeg.strikeStr} {premiumSymbol}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Buy PUT</span>
-                            <span className="text-rose-400">{collar.putStrikeStr} PILL</span>
+                            <span className="text-rose-400">{collar.putStrikeStr} {premiumSymbol}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Net premium</span>
                             <span className={collar.netPremiumDisplay.startsWith('+') ? 'text-green-400' : 'text-amber-400'}>
-                                {collar.netPremiumDisplay} PILL
+                                {collar.netPremiumDisplay} {premiumSymbol}
                             </span>
                         </div>
                     </div>
@@ -192,7 +196,7 @@ export function QuickStrategies({
             <StrategyCard
                 title="Write Protective Put"
                 tagline="Supply downside protection"
-                tooltip="Write a PUT at 87.5% of spot. Earn premium from buyers hedging their MOTO. Your collateral (PILL) is locked until expiry."
+                tooltip={`Write a PUT at 87.5% of spot. Earn premium from buyers hedging their ${underlyingSymbol}. Your collateral (${premiumSymbol}) is locked until expiry.`}
                 disabled={noPrice}
                 testId="strategy-write-put"
                 action={
@@ -213,11 +217,11 @@ export function QuickStrategies({
                     <div className="text-xs font-mono space-y-1">
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Strike</span>
-                            <span className="text-terminal-text-secondary">{writePut.strikeStr} PILL (87.5%)</span>
+                            <span className="text-terminal-text-secondary">{writePut.strikeStr} {premiumSymbol} (87.5%)</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Est. premium</span>
-                            <span className="text-green-400">{writePut.premiumStr} PILL</span>
+                            <span className="text-green-400">{writePut.premiumStr} {premiumSymbol}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Duration</span>

@@ -52,7 +52,7 @@ export function Layout() {
                 to={link.path}
                 data-testid={link.testId}
                 className={`text-sm font-medium transition-colors font-mono ${
-                  location.pathname === link.path
+                  (link.path === '/' ? location.pathname === '/' : location.pathname.startsWith(link.path))
                     ? 'text-accent'
                     : 'text-[#a0a0a0] hover:text-accent'
                 }`}
@@ -112,7 +112,7 @@ export function Layout() {
                 data-testid={`mobile-${link.testId}`}
                 onClick={() => setMenuOpen(false)}
                 className={`py-2 text-sm font-medium font-mono transition-colors ${
-                  location.pathname === link.path
+                  (link.path === '/' ? location.pathname === '/' : location.pathname.startsWith(link.path))
                     ? 'text-accent'
                     : 'text-[#a0a0a0] hover:text-accent'
                 }`}
