@@ -10,6 +10,8 @@
     "build:pool": "npx asc src/contracts/pool/index.ts --target pool --measure",
     "build:bridge": "npx asc src/contracts/bridge/index.ts --target bridge --measure",
     "build:pool-btc-quote": "npx asc src/contracts/pool/btc-quote-index.ts --target pool-btc-quote --measure",
+    "build:pool-btc-underlying": "npx asc src/contracts/pool/btc-underlying-index.ts --target pool-btc-underlying --measure",
+    "build:router": "npx asc src/contracts/router/index.ts --target router --measure",
     "build:debug": "npx asc src/index.ts --target debug",
     "build:tests": "tsc -p tests/tsconfig.json",
     "test": "npm run test:all",

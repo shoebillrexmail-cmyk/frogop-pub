@@ -33,6 +33,22 @@
       "converge": true,
       "noAssert": true
     },
+    "pool-btc-underlying": {
+      "outFile": "build/OptionsPoolBtcUnderlying.wasm",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true
+    },
+    "router": {
+      "outFile": "build/SpreadRouter.wasm",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true
+    },
     "debug": {
       "outFile": "build/debug/frogop.wasm",
       "textMap": "build/debug/frogop.wat",
