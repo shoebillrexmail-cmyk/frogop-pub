@@ -33,28 +33,27 @@ const DEFAULT_TOKEN_META: Record<string, { unit: string; title: string }> = {
 };
 
 /** Build token options + metadata from symbol pair.
- *  BTC is not a standalone token on NativeSwap — it only exists as part of
- *  cross-rate pairs (MOTO_BTC, PILL_BTC). For BTC pools we show the base
- *  token, the cross-rate, and the inverse cross-rate instead. */
+ *  BTC is not a standalone NativeSwap token — only cross-rate pairs exist
+ *  (MOTO_BTC, PILL_BTC). For BTC pools we show the OP20 token + its BTC
+ *  cross-rate (2 buttons). The inverse is just 1/price — no added info. */
 function buildTokenOptions(uSym: string, pSym: string) {
-    const pairKey = `${uSym}_${pSym}`;
-    const inversePairKey = `${pSym}_${uSym}`;
+    // Identify the OP20 token for BTC pools (works for both type 1 and type 2)
+    const op20 = uSym === 'BTC' ? pSym : pSym === 'BTC' ? uSym : null;
 
-    if (pSym === 'BTC') {
-        // BTC pools: show underlying token + both cross-rate directions
+    if (op20) {
+        const crossKey = `${op20}_BTC`;
         const tokens = [
-            { value: uSym, label: uSym },
-            { value: pairKey, label: `${uSym}/BTC` },
-            { value: inversePairKey, label: `BTC/${uSym}` },
+            { value: op20, label: op20 },
+            { value: crossKey, label: `${op20}/BTC` },
         ];
         const meta: Record<string, { unit: string; title: string }> = {
-            [uSym]: { unit: 'sats', title: `${uSym} (tokens per 100k sats)` },
-            [pairKey]: { unit: 'sats', title: `${uSym}/BTC (sats per ${uSym})` },
-            [inversePairKey]: { unit: uSym, title: `BTC/${uSym} (${uSym} per sat)` },
+            [op20]: { unit: 'sats', title: `${op20} (tokens per 100k sats)` },
+            [crossKey]: { unit: 'sats', title: `${op20}/BTC (sats per ${op20})` },
         };
         return { tokens, meta };
     }
 
+    const pairKey = `${uSym}_${pSym}`;
     const tokens = [
         { value: uSym, label: uSym },
         { value: pSym, label: pSym },
