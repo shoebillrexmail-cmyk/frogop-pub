@@ -280,7 +280,7 @@ describe('pollPrices — single token config', () => {
 
 // ---------------------------------------------------------------------------
 describe('pollPrices — BTC cross-rates', () => {
-    it('computes satsPerToken = (100_000 * 1e18) / tokensPerQuote for each token', async () => {
+    it('computes 1e18-scaled satsPerToken = (100_000 * 1e36) / tokensPerQuote', async () => {
         const env = makeEnv();
         const motoTokensPerQuote = 2_000_000_000_000_000_000n; // 2e18
         const pillTokensPerQuote = 8_000_000_000_000_000_000n; // 8e18
@@ -297,14 +297,14 @@ describe('pollPrices — BTC cross-rates', () => {
         );
         expect(motoBtc).toBeTruthy();
         const precision = 10n ** 18n;
-        const expectedMoto = (100_000n * precision) / motoTokensPerQuote;
+        const expectedMoto = (100_000n * precision * precision) / motoTokensPerQuote;
         expect(motoBtc!.price).toBe(expectedMoto.toString());
 
         const pillBtc = db.queryFirst<PriceSnapshotRow>(
             "SELECT * FROM price_snapshots WHERE token = 'PILL_BTC'",
         );
         expect(pillBtc).toBeTruthy();
-        const expectedPill = (100_000n * precision) / pillTokensPerQuote;
+        const expectedPill = (100_000n * precision * precision) / pillTokensPerQuote;
         expect(pillBtc!.price).toBe(expectedPill.toString());
     });
 

@@ -341,13 +341,15 @@ export async function pollPrices(
         }
     }
 
-    // BTC cross-rates: sats per token = (100_000 * 1e18) / tokensPerQuote
-    // Each token already has a "tokens per 100k sats" quote — invert to get BTC price.
+    // BTC cross-rates: sats per token = (100_000 * 1e36) / tokensPerQuote
+    // Numerator uses PRECISION² (1e36) so the result is 1e18-scaled, matching
+    // the convention used by MOTO_PILL and expected by toFloat() / invertPrice().
+    // One PRECISION cancels with the token's 18-decimal encoding; the second remains.
     const BTC_QUOTE_SATS = 100_000n;
     for (const [label, priceStr] of Object.entries(prices)) {
         const tokensPerQuote = BigInt(priceStr);
         if (tokensPerQuote > 0n) {
-            const satsPerToken = (BTC_QUOTE_SATS * PRECISION) / tokensPerQuote;
+            const satsPerToken = (BTC_QUOTE_SATS * PRECISION * PRECISION) / tokensPerQuote;
             const pairKey = `${label}_BTC`;
             stmts.push(stmtInsertPriceSnapshot(env.DB, {
                 token: pairKey,
