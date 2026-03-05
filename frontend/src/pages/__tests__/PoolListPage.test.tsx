@@ -94,11 +94,11 @@ describe('PoolListPage', () => {
         expect(screen.getByText(/No pools discovered/)).toBeInTheDocument();
     });
 
-    it('renders pool cards in a grid', () => {
+    it('renders pool groups', () => {
         mockUseDiscoverPools.mockReturnValue({
             pools: [
                 { address: 'opt1poolA', underlying: '0xaa', premiumToken: '0xbb', poolId: 'moto-pill', underlyingSymbol: 'MOTO', premiumSymbol: 'PILL' },
-                { address: 'opt1poolB', underlying: '0xcc', premiumToken: '0xdd', poolId: 'alpha-beta', underlyingSymbol: 'ALPHA', premiumSymbol: 'BETA' },
+                { address: 'opt1poolB', underlying: '0xbb', premiumToken: '0xaa', poolId: 'pill-moto', underlyingSymbol: 'PILL', premiumSymbol: 'MOTO' },
             ],
             loading: false,
             error: null,
@@ -107,11 +107,14 @@ describe('PoolListPage', () => {
         });
         renderPage();
         expect(screen.getByTestId('pool-grid')).toBeInTheDocument();
+        // Both cards rendered inside one group
         expect(screen.getByTestId('pool-card-opt1poolA')).toBeInTheDocument();
         expect(screen.getByTestId('pool-card-opt1poolB')).toBeInTheDocument();
+        // Group header with market label
+        expect(screen.getByText('MOTO ↔ PILL')).toBeInTheDocument();
     });
 
-    it('search filters pools by symbol', () => {
+    it('search filters at group level — matching pool keeps entire group', () => {
         mockUseDiscoverPools.mockReturnValue({
             pools: [
                 { address: 'opt1poolA', underlying: '0xaa', premiumToken: '0xbb', poolId: 'moto-pill', underlyingSymbol: 'MOTO', premiumSymbol: 'PILL' },

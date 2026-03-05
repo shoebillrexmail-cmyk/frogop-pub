@@ -1,13 +1,19 @@
 /**
- * PoolListPage — searchable grid of all discovered pools.
+ * PoolListPage — searchable grouped list of all discovered pools.
  * Route: /pools
+ *
+ * Pools are grouped into inverse pairs (e.g. MOTO/BTC ↔ BTC/MOTO) for
+ * clearer navigation. Each group shows a shared market header with
+ * side-by-side pool cards.
  */
 import { useState, useMemo } from 'react';
 import { useFallbackProvider } from '../hooks/useFallbackProvider.ts';
 import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
-import { CONTRACT_ADDRESSES } from '../config/index.ts';
-import { PoolCard } from '../components/PoolCard.tsx';
+import { CONTRACT_ADDRESSES, findPoolConfigByAddress } from '../config/index.ts';
+import { PoolGroupRow } from '../components/PoolGroupRow.tsx';
+import { groupInversePairs } from '../utils/poolGrouping.ts';
 import { PoolListSkeleton } from '../components/LoadingSkeletons.tsx';
+import type { PoolEntry } from '../services/types.ts';
 
 export function PoolListPage() {
     const readProvider = useFallbackProvider();
@@ -25,6 +31,11 @@ export function PoolListPage() {
                 (p.premiumSymbol && p.premiumSymbol.toLowerCase().includes(q)),
         );
     }, [pools, search]);
+
+    const groups = useMemo(
+        () => groupInversePairs(filtered, (p: PoolEntry) => findPoolConfigByAddress(p.address)),
+        [filtered],
+    );
 
     // No pool source configured
     if (!CONTRACT_ADDRESSES.factory && !CONTRACT_ADDRESSES.pool) {
@@ -65,7 +76,7 @@ export function PoolListPage() {
                 </div>
             )}
 
-            {/* Search + grid */}
+            {/* Search + grouped list */}
             {!error && pools.length > 0 && (
                 <>
                     <input
@@ -77,17 +88,18 @@ export function PoolListPage() {
                         data-testid="pool-search"
                     />
 
-                    {filtered.length === 0 ? (
+                    {groups.length === 0 ? (
                         <p className="text-terminal-text-muted font-mono text-sm" data-testid="no-match">
                             No pools match &quot;{search}&quot;
                         </p>
                     ) : (
-                        <div
-                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-                            data-testid="pool-grid"
-                        >
-                            {filtered.map((pool) => (
-                                <PoolCard key={pool.address} pool={pool} provider={readProvider} />
+                        <div className="space-y-4" data-testid="pool-grid">
+                            {groups.map((group) => (
+                                <PoolGroupRow
+                                    key={group.sortKey}
+                                    group={group}
+                                    provider={readProvider}
+                                />
                             ))}
                         </div>
                     )}

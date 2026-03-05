@@ -7,15 +7,18 @@ import { Link } from 'react-router-dom';
 import { formatAddress, bpsToPct, findPoolConfigByAddress, getPoolType } from '../config/index.ts';
 import { usePool } from '../hooks/usePool.ts';
 import { PoolTypeBadge } from './PoolTypeBadge.tsx';
+import { directionLabel } from '../utils/poolGrouping.ts';
 import type { AbstractRpcProvider } from 'opnet';
 import type { PoolEntry } from '../services/types.ts';
 
 interface PoolCardProps {
     pool: PoolEntry;
     provider?: AbstractRpcProvider | null;
+    /** Compact mode: no outer border/rounding, used inside PoolGroupRow. */
+    compact?: boolean;
 }
 
-export function PoolCard({ pool, provider }: PoolCardProps) {
+export function PoolCard({ pool, provider, compact = false }: PoolCardProps) {
     const { poolInfo, loading } = usePool(pool.address, provider ?? null);
     const poolConfig = findPoolConfigByAddress(pool.address);
     const poolType = getPoolType(poolConfig);
@@ -25,18 +28,22 @@ export function PoolCard({ pool, provider }: PoolCardProps) {
             ? `${pool.underlyingSymbol} / ${pool.premiumSymbol}`
             : formatAddress(pool.address);
 
+    const outerClass = compact
+        ? 'block p-4 hover:bg-terminal-bg-secondary/50 transition-colors group'
+        : 'block bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-5 hover:border-accent/50 transition-colors group';
+
     return (
         <Link
             to={`/pools/${pool.address}`}
-            className="block bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-5 hover:border-accent/50 transition-colors group"
+            className={outerClass}
             data-testid={`pool-card-${pool.address}`}
         >
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                     <h3 className="text-sm font-bold text-terminal-text-primary font-mono group-hover:text-accent transition-colors">
                         {pairLabel}
                     </h3>
-                    <PoolTypeBadge poolType={poolType} />
+                    {!compact && <PoolTypeBadge poolType={poolType} />}
                 </div>
                 {pool.poolId && (
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-terminal-bg-primary border border-terminal-border-subtle text-terminal-text-muted">
@@ -45,9 +52,16 @@ export function PoolCard({ pool, provider }: PoolCardProps) {
                 )}
             </div>
 
-            <p className="text-xs text-terminal-text-muted font-mono truncate mb-3" title={pool.address}>
-                {formatAddress(pool.address)}
+            {/* Direction subtitle */}
+            <p className="text-[10px] text-terminal-text-muted font-mono mb-2" data-testid="direction-label">
+                {directionLabel(pool, poolType)}
             </p>
+
+            {!compact && (
+                <p className="text-xs text-terminal-text-muted font-mono truncate mb-3" title={pool.address}>
+                    {formatAddress(pool.address)}
+                </p>
+            )}
 
             {/* Pool details */}
             {loading && (
