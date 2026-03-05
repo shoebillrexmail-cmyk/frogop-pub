@@ -52,6 +52,8 @@ export function usePool(poolAddress: string | null | undefined, providerOverride
         async function load() {
             setLoading(true);
             setError(null);
+            setPoolInfo(null);
+            setOptions([]);
             try {
                 const [info, opts] = await Promise.all([
                     service.getPoolInfo(),

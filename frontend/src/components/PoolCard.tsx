@@ -36,7 +36,7 @@ export function PoolCard({ pool, provider }: PoolCardProps) {
                     <h3 className="text-sm font-bold text-terminal-text-primary font-mono group-hover:text-accent transition-colors">
                         {pairLabel}
                     </h3>
-                    {poolType !== 0 && <PoolTypeBadge poolType={poolType} />}
+                    <PoolTypeBadge poolType={poolType} />
                 </div>
                 {pool.poolId && (
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-terminal-bg-primary border border-terminal-border-subtle text-terminal-text-muted">

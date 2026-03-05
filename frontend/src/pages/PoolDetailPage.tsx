@@ -30,7 +30,7 @@ import { QuickStrategies } from '../components/QuickStrategies.tsx';
 import { YieldOverview } from '../components/YieldOverview.tsx';
 import { WriterHowItWorks } from '../components/WriterHowItWorks.tsx';
 import { CollarModal } from '../components/CollarModal.tsx';
-import { currentNetwork, findPoolConfig, getNativeSwapAddress, getPricePairKey, formatTokenAmount, getPoolType } from '../config/index.ts';
+import { currentNetwork, findPoolConfigByAddress, getNativeSwapAddress, getPricePairKey, formatTokenAmount, getPoolType } from '../config/index.ts';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
 import { NotificationBanner } from '../components/NotificationBanner.tsx';
 import { useNotifications } from '../hooks/useNotifications.ts';
@@ -56,11 +56,11 @@ export function PoolDetailPage() {
 
     const { currentBlock } = useBlockTracker(readProvider, wsBlockInfo?.blockNumber);
 
-    // Derive pool metadata from config
+    // Derive pool metadata from config (match by pool bech32 address, not token hex)
     const poolConfig = useMemo(() => {
-        if (poolInfo) return findPoolConfig(poolInfo.underlying, poolInfo.premiumToken);
+        if (poolAddress) return findPoolConfigByAddress(poolAddress);
         return null;
-    }, [poolInfo]);
+    }, [poolAddress]);
     const underlyingSymbol = poolConfig?.underlying.symbol ?? 'MOTO';
     const premiumSymbol = poolConfig?.premium.symbol ?? 'PILL';
     const poolType = getPoolType(poolConfig);
