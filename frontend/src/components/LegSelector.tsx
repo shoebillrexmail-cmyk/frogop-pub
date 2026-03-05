@@ -2,11 +2,15 @@
  * LegSelector — select an existing option to buy or configure a new option to write.
  *
  * Used in the Strategies page to build multi-leg strategies.
+ * Shows moneyness badge and Black-Scholes suggested premium when spot price is available.
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { OptionData } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { formatTokenAmount } from '../config/index.ts';
+import { classifyMoneyness } from '../utils/optionsChain.ts';
+import { useSuggestedPremium } from '../hooks/useSuggestedPremium.ts';
+import { BLOCK_CONSTANTS } from '../config/index.ts';
 
 export interface LegConfig {
     /** 'buy' an existing option or 'write' a new one */
@@ -29,6 +33,8 @@ interface LegSelectorProps {
     /** Current leg config */
     value: LegConfig;
     onChange: (config: LegConfig) => void;
+    /** Current spot price (underlying/premium ratio), or null */
+    spotPrice?: number | null;
     underlyingSymbol?: string;
     premiumSymbol?: string;
     disabled?: boolean;
@@ -40,6 +46,7 @@ export function LegSelector({
     availableOptions,
     value,
     onChange,
+    spotPrice = null,
     underlyingSymbol = 'MOTO',
     premiumSymbol = 'PILL',
     disabled = false,
@@ -47,6 +54,23 @@ export function LegSelector({
     const [expanded, setExpanded] = useState(true);
 
     const openOptions = availableOptions.filter((o) => o.status === 0); // OPEN
+
+    // Moneyness classification (write mode only)
+    const moneynessResult = useMemo(() => {
+        if (!spotPrice || value.action !== 'write' || !value.strikeStr || value.optionType === undefined) return null;
+        const strikeNum = Number(value.strikeStr);
+        return classifyMoneyness(value.optionType, strikeNum, spotPrice);
+    }, [spotPrice, value.action, value.strikeStr, value.optionType]);
+
+    // Black-Scholes suggested premium (write mode only)
+    const expiryBlocks = (value.selectedDays ?? 7) * BLOCK_CONSTANTS.BLOCKS_PER_DAY;
+    const { suggestedPremium } = useSuggestedPremium(
+        value.optionType ?? OptionType.CALL,
+        value.strikeStr ?? '',
+        value.amountStr ?? '',
+        expiryBlocks,
+        spotPrice ?? null,
+    );
 
     return (
         <div
@@ -146,18 +170,42 @@ export function LegSelector({
                                     </button>
                                 ))}
                             </div>
-                            {/* Strike */}
-                            <div className="flex items-center gap-2">
-                                <label className="text-[10px] text-terminal-text-muted font-mono w-12">Strike</label>
-                                <input
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={value.strikeStr ?? ''}
-                                    onChange={(e) => onChange({ ...value, strikeStr: e.target.value })}
-                                    disabled={disabled}
-                                    className="flex-1 bg-transparent border border-terminal-border-subtle rounded px-2 py-1 text-xs font-mono text-terminal-text-primary outline-none disabled:opacity-50"
-                                    placeholder={`e.g. 50 ${premiumSymbol}`}
-                                />
+                            {/* Strike + spot + moneyness */}
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <label className="text-[10px] text-terminal-text-muted font-mono w-12">Strike</label>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={value.strikeStr ?? ''}
+                                        onChange={(e) => onChange({ ...value, strikeStr: e.target.value })}
+                                        disabled={disabled}
+                                        className="flex-1 bg-transparent border border-terminal-border-subtle rounded px-2 py-1 text-xs font-mono text-terminal-text-primary outline-none disabled:opacity-50"
+                                        placeholder={`e.g. 50 ${premiumSymbol}`}
+                                    />
+                                </div>
+                                {/* Spot price + moneyness badge */}
+                                {spotPrice != null && spotPrice > 0 && (
+                                    <div className="flex items-center gap-2 ml-14" data-testid={`leg-${legNumber}-moneyness`}>
+                                        <span className="text-[10px] text-terminal-text-muted font-mono">
+                                            Spot: <span className="text-terminal-text-secondary">{spotPrice.toFixed(2)} {premiumSymbol}</span>
+                                        </span>
+                                        {moneynessResult && (
+                                            <span
+                                                className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded ${
+                                                    moneynessResult.moneyness === 'ITM'
+                                                        ? 'bg-green-900/40 text-green-400'
+                                                        : moneynessResult.moneyness === 'ATM'
+                                                            ? 'bg-cyan-900/40 text-cyan-400'
+                                                            : 'bg-orange-900/40 text-orange-400'
+                                                }`}
+                                                data-testid={`leg-${legNumber}-moneyness-badge`}
+                                            >
+                                                {moneynessResult.label}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             {/* Amount */}
                             <div className="flex items-center gap-2">
@@ -172,18 +220,36 @@ export function LegSelector({
                                     placeholder={`e.g. 1 ${underlyingSymbol}`}
                                 />
                             </div>
-                            {/* Premium */}
-                            <div className="flex items-center gap-2">
-                                <label className="text-[10px] text-terminal-text-muted font-mono w-12">Premium</label>
-                                <input
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={value.premiumStr ?? ''}
-                                    onChange={(e) => onChange({ ...value, premiumStr: e.target.value })}
-                                    disabled={disabled}
-                                    className="flex-1 bg-transparent border border-terminal-border-subtle rounded px-2 py-1 text-xs font-mono text-terminal-text-primary outline-none disabled:opacity-50"
-                                    placeholder={`e.g. 5 ${premiumSymbol}`}
-                                />
+                            {/* Premium + BS suggestion */}
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <label className="text-[10px] text-terminal-text-muted font-mono w-12">Premium</label>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={value.premiumStr ?? ''}
+                                        onChange={(e) => onChange({ ...value, premiumStr: e.target.value })}
+                                        disabled={disabled}
+                                        className="flex-1 bg-transparent border border-terminal-border-subtle rounded px-2 py-1 text-xs font-mono text-terminal-text-primary outline-none disabled:opacity-50"
+                                        placeholder={`e.g. 5 ${premiumSymbol}`}
+                                    />
+                                </div>
+                                {/* BS suggested premium */}
+                                {suggestedPremium !== null && suggestedPremium > 0n && (
+                                    <div className="flex items-center gap-2 ml-14" data-testid={`leg-${legNumber}-bs-suggestion`}>
+                                        <span className="text-[10px] text-terminal-text-muted font-mono">
+                                            Fair value: <span className="text-cyan-400">{formatTokenAmount(suggestedPremium)} {premiumSymbol}</span>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => onChange({ ...value, premiumStr: formatTokenAmount(suggestedPremium) })}
+                                            className="text-[10px] text-cyan-400 hover:text-cyan-300 font-mono underline cursor-pointer"
+                                            data-testid={`leg-${legNumber}-use-bs`}
+                                        >
+                                            [Use]
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

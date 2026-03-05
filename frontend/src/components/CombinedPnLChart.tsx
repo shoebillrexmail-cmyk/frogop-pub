@@ -119,6 +119,17 @@ export function CombinedPnLChart({
         return data;
     }, [legs, options, spotPrice, points]);
 
+    // Net premium (sum of premiums across legs) — must be before early return
+    const netPremium = useMemo(() => {
+        let net = 0;
+        for (const leg of legs) {
+            const p = parseLegPremium(leg, options);
+            if (p === null) continue;
+            net += leg.action === 'write' ? p : -p;
+        }
+        return net;
+    }, [legs, options]);
+
     if (pnlData.length === 0) {
         return (
             <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-4 text-xs font-mono text-terminal-text-muted text-center">
@@ -143,6 +154,24 @@ export function CombinedPnLChart({
         const y = padding + ((maxPnl - d.pnl) / range) * chartHeight;
         return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
     }).join(' ');
+
+    // Find break-even points (where P&L crosses zero)
+    const breakEvens: number[] = [];
+    for (let i = 1; i < pnlData.length; i++) {
+        const prev = pnlData[i - 1]!;
+        const curr = pnlData[i]!;
+        if ((prev.pnl <= 0 && curr.pnl > 0) || (prev.pnl >= 0 && curr.pnl < 0)) {
+            // Linear interpolation for crossing point
+            const frac = Math.abs(prev.pnl) / (Math.abs(prev.pnl) + Math.abs(curr.pnl));
+            breakEvens.push(prev.price + frac * (curr.price - prev.price));
+        }
+    }
+
+    // Helper to convert price to X coordinate
+    function priceToX(price: number): number {
+        const idx = (price - pnlData[0]!.price) / (pnlData[pnlData.length - 1]!.price - pnlData[0]!.price) * pnlData.length;
+        return padding + (idx / pnlData.length) * (chartWidth - padding * 2);
+    }
 
     return (
         <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3" data-testid="combined-pnl-chart">
@@ -184,6 +213,18 @@ export function CombinedPnLChart({
                         />
                     );
                 })()}
+                {/* Break-even markers */}
+                {breakEvens.map((be, i) => {
+                    const x = priceToX(be);
+                    return (
+                        <g key={`be-${i}`} data-testid={`breakeven-${i}`}>
+                            <line x1={x} x2={x} y1={padding} y2={height - padding} stroke="rgba(255,200,0,0.5)" strokeDasharray="3,3" />
+                            <text x={x - 15} y={padding - 4} fontSize="8" fill="rgba(255,200,0,0.8)" fontFamily="monospace">
+                                BE: {be.toFixed(1)}
+                            </text>
+                        </g>
+                    );
+                })}
                 {/* Labels */}
                 <text x={padding} y={height - 4} fontSize="9" fill="rgba(255,255,255,0.4)" fontFamily="monospace">
                     {(pnlData[0]?.price ?? 0).toFixed(1)}
@@ -197,7 +238,41 @@ export function CombinedPnLChart({
                 <text x={2} y={height - padding - 2} fontSize="9" fill="rgba(255,100,100,0.6)" fontFamily="monospace">
                     {minPnl.toFixed(2)}
                 </text>
+                {/* Spot price label */}
+                {(() => {
+                    const spotIdx = pnlData.findIndex((d) => d.price >= spotPrice);
+                    if (spotIdx < 0) return null;
+                    const x = padding + (spotIdx / pnlData.length) * (chartWidth - padding * 2);
+                    return (
+                        <text x={x - 10} y={height - 4} fontSize="8" fill="rgba(0,200,255,0.7)" fontFamily="monospace">
+                            Spot
+                        </text>
+                    );
+                })()}
             </svg>
+            {/* Summary line below chart */}
+            <div className="flex items-center justify-between mt-1.5 text-[10px] font-mono text-terminal-text-muted">
+                <span>
+                    Max profit: <span className="text-green-400">+{maxPnl.toFixed(2)} {premiumSymbol}</span>
+                </span>
+                <span>
+                    Max loss: <span className="text-rose-400">{minPnl.toFixed(2)} {premiumSymbol}</span>
+                </span>
+                {breakEvens.length > 0 && (
+                    <span>
+                        BE: <span className="text-yellow-400">
+                            {breakEvens.map((be) => be.toFixed(1)).join(', ')} {premiumSymbol}
+                        </span>
+                    </span>
+                )}
+                {netPremium !== 0 && (
+                    <span>
+                        Net premium: <span className={netPremium > 0 ? 'text-green-400' : 'text-rose-400'}>
+                            {netPremium > 0 ? '+' : ''}{netPremium.toFixed(2)} {premiumSymbol}
+                        </span>
+                    </span>
+                )}
+            </div>
         </div>
     );
 }

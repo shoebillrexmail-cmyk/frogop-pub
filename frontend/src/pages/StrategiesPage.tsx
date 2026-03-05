@@ -6,8 +6,9 @@
  *
  * Route: /strategies
  */
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useWalletConnect } from '@btc-vision/walletconnect';
+import { useSearchParams } from 'react-router-dom';
 import { useFallbackProvider } from '../hooks/useFallbackProvider.ts';
 import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
 import { usePool } from '../hooks/usePool.ts';
@@ -63,6 +64,7 @@ const ROUTER_ADDRESS = '';
 export function StrategiesPage() {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
+    const [searchParams] = useSearchParams();
     const { walletAddress, address, provider, network } = useWalletConnect();
     const readProvider = useFallbackProvider();
     const { pools } = useDiscoverPools(readProvider);
@@ -100,6 +102,45 @@ export function StrategiesPage() {
     // Leg configs
     const [leg1, setLeg1] = useState<LegConfig>({ action: 'write', optionType: OptionType.CALL });
     const [leg2, setLeg2] = useState<LegConfig>({ action: 'buy' });
+
+    // Read URL params on mount: ?pool=X&strategy=Y&strike=Z
+    const [urlSeeded, setUrlSeeded] = useState(false);
+    useEffect(() => {
+        if (urlSeeded) return;
+        const poolParam = searchParams.get('pool');
+        const strategyParam = searchParams.get('strategy') as StrategyType | null;
+        if (poolParam) setSelectedPoolAddress(poolParam);
+        if (strategyParam && strategyParam in STRATEGY_INFO) {
+            setStrategyType(strategyParam);
+        }
+        setUrlSeeded(true);
+    }, [searchParams, urlSeeded]);
+
+    // When spot price becomes available + URL has strategy, seed smart defaults
+    useEffect(() => {
+        if (!motoPillRatio || motoPillRatio <= 0 || !urlSeeded) return;
+        const strategyParam = searchParams.get('strategy') as StrategyType | null;
+        if (!strategyParam) return;
+        // Only seed once when price arrives
+        if (leg1.strikeStr || leg2.strikeStr) return;
+        const spot = motoPillRatio;
+        switch (strategyParam) {
+            case 'collar':
+                setLeg1({ action: 'write', optionType: OptionType.CALL, strikeStr: (spot * 1.2).toFixed(2), amountStr: '1', selectedDays: 7 });
+                setLeg2({ action: 'write', optionType: OptionType.PUT, strikeStr: (spot * 0.8).toFixed(2), amountStr: '1', selectedDays: 7 });
+                break;
+            case 'bull-call-spread':
+                setLeg1({ action: 'write', optionType: OptionType.CALL, strikeStr: (spot * 1.1).toFixed(2), amountStr: '1', selectedDays: 7 });
+                setLeg2({ action: 'buy' }); // User picks from available options
+                break;
+            case 'bear-put-spread':
+                setLeg1({ action: 'write', optionType: OptionType.PUT, strikeStr: (spot * 0.9).toFixed(2), amountStr: '1', selectedDays: 7 });
+                setLeg2({ action: 'buy' });
+                break;
+            default:
+                break;
+        }
+    }, [motoPillRatio, urlSeeded]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Seed legs based on strategy type
     function selectStrategy(type: StrategyType) {
@@ -288,6 +329,7 @@ export function StrategiesPage() {
                         availableOptions={options}
                         value={leg1}
                         onChange={setLeg1}
+                        spotPrice={motoPillRatio}
                         underlyingSymbol={underlyingSymbol}
                         premiumSymbol={premiumSymbol}
                         disabled={!selectedPoolAddress}
@@ -298,6 +340,7 @@ export function StrategiesPage() {
                         availableOptions={options}
                         value={leg2}
                         onChange={setLeg2}
+                        spotPrice={motoPillRatio}
                         underlyingSymbol={underlyingSymbol}
                         premiumSymbol={premiumSymbol}
                         disabled={!selectedPoolAddress}
