@@ -225,7 +225,10 @@ TX), which the `DeploymentHelper.callContract()` doesn't support yet.
 
 **Root blocker:** `DeploymentHelper.callContract()` sends transactions without
 `extraOutputs`. BTC pool operations need to include BTC outputs (P2WSH escrow
-payments) in the same transaction.
+payments) in the same transaction. This is a trivial fix — `signInteraction()`
+from `@btc-vision/transaction` already supports `extraOutputs` (the frontend's
+`BuyOptionModal` uses it for type 1 buys). We just need to pass the parameter
+through in our test helper. No OPNet team dependency.
 
 ### User Stories
 
@@ -243,14 +246,15 @@ that all future BTC-related tests can send native BTC alongside contract calls.*
 ### Tasks
 
 - [ ] **Task 1: Add extraOutputs support to DeploymentHelper**
-  - Extend `callContract()` to accept an optional `extraOutputs` parameter:
-    `Array<{ address: string, value: bigint }>`
-  - These get passed through to `sendTransaction({ extraOutputs })` alongside
-    the existing `signer`, `mldsaSigner`, `maximumAllowedSatToSpend`
+  - Extend `callContract()` signature: add optional 4th param
+    `extraOutputs?: Array<{ address: string, value: bigint }>`
+  - Pass it through to `factory.signInteraction({ ..., extraOutputs })`
+    (the API already supports it — same mechanism the frontend wallet uses)
   - Add a helper `deriveBtcEscrowAddress(bridgeAddr, provider)` that fetches
     the bridge's CSV script hash and derives the P2WSH address (same logic
     BuyOptionModal uses in frontend)
   - Update `deployment.ts` with new exports
+  - ~10 lines of code change total
   - **Key files:** `tests/integration/deployment.ts`
 
 - [ ] **Task 2: Test 14 — Complete BTC quote pool (type 1) lifecycle**
