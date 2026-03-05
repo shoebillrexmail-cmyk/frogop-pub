@@ -121,8 +121,8 @@ describe('pollPrices — successful getQuote', () => {
         await pollPrices(env, provider as never, config, 1000);
 
         const snapshots = db.queryAll<PriceSnapshotRow>('SELECT * FROM price_snapshots');
-        // 2 tokens + 1 cross-rate = 3 snapshots
-        expect(snapshots.length).toBe(3);
+        // 2 tokens + 1 token cross-rate + 2 BTC cross-rates = 5 snapshots
+        expect(snapshots.length).toBe(5);
 
         const moto = snapshots.find(s => s.token === 'MOTO');
         expect(moto).toBeTruthy();
@@ -271,8 +271,86 @@ describe('pollPrices — single token config', () => {
         await pollPrices(env, provider as never, config, 1000);
 
         const snapshots = db.queryAll<PriceSnapshotRow>('SELECT * FROM price_snapshots');
-        // Only MOTO, no cross-rate (PILL not present)
-        expect(snapshots.length).toBe(1);
-        expect(snapshots[0]!.token).toBe('MOTO');
+        // MOTO + MOTO_BTC (no token cross-rate since only 1 token)
+        expect(snapshots.length).toBe(2);
+        expect(snapshots.find(s => s.token === 'MOTO')).toBeTruthy();
+        expect(snapshots.find(s => s.token === 'MOTO_BTC')).toBeTruthy();
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('pollPrices — BTC cross-rates', () => {
+    it('computes satsPerToken = (100_000 * 1e18) / tokensPerQuote for each token', async () => {
+        const env = makeEnv();
+        const motoTokensPerQuote = 2_000_000_000_000_000_000n; // 2e18
+        const pillTokensPerQuote = 8_000_000_000_000_000_000n; // 8e18
+        const provider = {
+            call: vi.fn()
+                .mockResolvedValueOnce(makeCallResult(motoTokensPerQuote))
+                .mockResolvedValueOnce(makeCallResult(pillTokensPerQuote)),
+        };
+
+        await pollPrices(env, provider as never, makeSwapConfig(), 1000);
+
+        const motoBtc = db.queryFirst<PriceSnapshotRow>(
+            "SELECT * FROM price_snapshots WHERE token = 'MOTO_BTC'",
+        );
+        expect(motoBtc).toBeTruthy();
+        const precision = 10n ** 18n;
+        const expectedMoto = (100_000n * precision) / motoTokensPerQuote;
+        expect(motoBtc!.price).toBe(expectedMoto.toString());
+
+        const pillBtc = db.queryFirst<PriceSnapshotRow>(
+            "SELECT * FROM price_snapshots WHERE token = 'PILL_BTC'",
+        );
+        expect(pillBtc).toBeTruthy();
+        const expectedPill = (100_000n * precision) / pillTokensPerQuote;
+        expect(pillBtc!.price).toBe(expectedPill.toString());
+    });
+
+    it('skips BTC cross-rate when tokensPerQuote is 0 (div-by-zero guard)', async () => {
+        const env = makeEnv();
+        const provider = {
+            call: vi.fn()
+                .mockResolvedValueOnce(makeCallResult(0n))            // MOTO = 0
+                .mockResolvedValueOnce(makeCallResult(8_000_000n)),   // PILL OK
+        };
+
+        await pollPrices(env, provider as never, makeSwapConfig(), 1000);
+
+        const motoBtc = db.queryFirst<PriceSnapshotRow>(
+            "SELECT * FROM price_snapshots WHERE token = 'MOTO_BTC'",
+        );
+        // tokensPerQuote = 0 → skip (guard: if tokensPerQuote > 0n)
+        expect(motoBtc).toBeNull();
+
+        // PILL_BTC should still be present
+        const pillBtc = db.queryFirst<PriceSnapshotRow>(
+            "SELECT * FROM price_snapshots WHERE token = 'PILL_BTC'",
+        );
+        expect(pillBtc).toBeTruthy();
+    });
+
+    it('handles partial failure — BTC rate only for successful tokens', async () => {
+        const env = makeEnv();
+        const provider = {
+            call: vi.fn()
+                .mockResolvedValueOnce(makeCallResult(5_000_000n))
+                .mockRejectedValueOnce(new Error('PILL RPC error')),
+        };
+
+        await pollPrices(env, provider as never, makeSwapConfig(), 1000);
+
+        // MOTO_BTC should exist
+        const motoBtc = db.queryFirst<PriceSnapshotRow>(
+            "SELECT * FROM price_snapshots WHERE token = 'MOTO_BTC'",
+        );
+        expect(motoBtc).toBeTruthy();
+
+        // PILL_BTC should NOT exist (PILL quote failed)
+        const pillBtc = db.queryFirst<PriceSnapshotRow>(
+            "SELECT * FROM price_snapshots WHERE token = 'PILL_BTC'",
+        );
+        expect(pillBtc).toBeNull();
     });
 });

@@ -25,7 +25,7 @@ vi.mock('../../db/queries.js', () => ({
 
 import { handleFetch } from '../../api/router.js';
 import * as queries    from '../../db/queries.js';
-import type { Env, PoolRow, OptionRow } from '../../types/index.js';
+import type { Env, PoolRow, OptionRow, PriceCandleRow, PriceSnapshotRow } from '../../types/index.js';
 
 // ---- Typed mock helpers ---------------------------------------------------
 const mockGetAllPools         = vi.mocked(queries.getAllPools);
@@ -430,5 +430,99 @@ describe('GET /user/:addr/transfers', () => {
         const body = await res.json() as unknown[];
         expect(body).toHaveLength(1);
         expect(mockGetTransfersByUser).toHaveBeenCalledWith(mockDb, '0xuser');
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('BTC pair price routes', () => {
+    it('MOTO_BTC candles — queries DB directly (canonical token)', async () => {
+        mockGetCandles.mockResolvedValue([]);
+        const res = await handleFetch(req('/prices/MOTO_BTC/candles?interval=1h'), mockEnv);
+        expect(res.status).toBe(200);
+        expect(mockGetCandles).toHaveBeenCalledWith(mockDb, 'MOTO_BTC', '1h', expect.anything());
+    });
+
+    it('BTC_MOTO candles — queries DB with MOTO_BTC and inverts OHLC', async () => {
+        const canonical: PriceCandleRow = {
+            token: 'MOTO_BTC', interval: '1d', open_time: '2026-03-01T00:00:00Z',
+            open: '50000', high: '60000', low: '40000', close: '55000',
+            volume_sats: '1000', volume_tokens: '500', trade_count: 5,
+        };
+        mockGetCandles.mockResolvedValue([canonical]);
+        const res = await handleFetch(req('/prices/BTC_MOTO/candles?interval=1d'), mockEnv);
+        expect(res.status).toBe(200);
+        // DB query uses canonical token
+        expect(mockGetCandles).toHaveBeenCalledWith(mockDb, 'MOTO_BTC', '1d', expect.anything());
+        const body = await res.json() as PriceCandleRow[];
+        expect(body).toHaveLength(1);
+        // Inverted: open = 1e36/50000, high = 1e36/40000 (swap H/L)
+        const inverted = body[0]!;
+        expect(inverted.open).toBe((10n ** 36n / 50000n).toString());
+        expect(inverted.close).toBe((10n ** 36n / 55000n).toString());
+        expect(inverted.high).toBe((10n ** 36n / 40000n).toString());  // low→high
+        expect(inverted.low).toBe((10n ** 36n / 60000n).toString());   // high→low
+    });
+
+    it('PILL_BTC latest — queries DB directly', async () => {
+        mockGetLatestPrice.mockResolvedValue({
+            token: 'PILL_BTC', block_number: 2000,
+            timestamp: '2026-03-01T12:00:00Z', price: '25000',
+        });
+        const res = await handleFetch(req('/prices/PILL_BTC/latest'), mockEnv);
+        expect(res.status).toBe(200);
+        expect(mockGetLatestPrice).toHaveBeenCalledWith(mockDb, 'PILL_BTC');
+    });
+
+    it('BTC_PILL latest — queries DB with PILL_BTC and inverts price', async () => {
+        mockGetLatestPrice.mockResolvedValue({
+            token: 'PILL_BTC', block_number: 2000,
+            timestamp: '2026-03-01T12:00:00Z', price: '25000',
+        });
+        const res = await handleFetch(req('/prices/BTC_PILL/latest'), mockEnv);
+        expect(res.status).toBe(200);
+        expect(mockGetLatestPrice).toHaveBeenCalledWith(mockDb, 'PILL_BTC');
+        const body = await res.json() as PriceSnapshotRow;
+        expect(body.price).toBe((10n ** 36n / 25000n).toString());
+    });
+
+    it('BTC_MOTO history — queries with MOTO_BTC and inverts', async () => {
+        mockGetPriceHistory.mockResolvedValue([
+            { token: 'MOTO_BTC', block_number: 100, timestamp: '2026-03-01T10:00:00Z', price: '50000' },
+        ]);
+        const res = await handleFetch(req('/prices/BTC_MOTO/history'), mockEnv);
+        expect(res.status).toBe(200);
+        expect(mockGetPriceHistory).toHaveBeenCalledWith(mockDb, 'MOTO_BTC', expect.anything());
+        const body = await res.json() as PriceSnapshotRow[];
+        expect(body[0]!.price).toBe((10n ** 36n / 50000n).toString());
+    });
+});
+
+// ---------------------------------------------------------------------------
+describe('PILL_MOTO reverse resolution (existing bug fix)', () => {
+    it('PILL_MOTO candles — queries DB with MOTO_PILL and inverts', async () => {
+        const canonical: PriceCandleRow = {
+            token: 'MOTO_PILL', interval: '1d', open_time: '2026-03-01T00:00:00Z',
+            open: '4000000000000000000', high: '5000000000000000000',
+            low: '3000000000000000000', close: '4500000000000000000',
+            volume_sats: '0', volume_tokens: '0', trade_count: 0,
+        };
+        mockGetCandles.mockResolvedValue([canonical]);
+        const res = await handleFetch(req('/prices/PILL_MOTO/candles?interval=1d'), mockEnv);
+        expect(res.status).toBe(200);
+        expect(mockGetCandles).toHaveBeenCalledWith(mockDb, 'MOTO_PILL', '1d', expect.anything());
+        const body = await res.json() as PriceCandleRow[];
+        expect(body).toHaveLength(1);
+    });
+
+    it('PILL_MOTO latest — queries DB with MOTO_PILL and inverts', async () => {
+        mockGetLatestPrice.mockResolvedValue({
+            token: 'MOTO_PILL', block_number: 1000,
+            timestamp: '2026-03-01T12:00:00Z', price: '4000000000000000000',
+        });
+        const res = await handleFetch(req('/prices/PILL_MOTO/latest'), mockEnv);
+        expect(res.status).toBe(200);
+        expect(mockGetLatestPrice).toHaveBeenCalledWith(mockDb, 'MOTO_PILL');
+        const body = await res.json() as PriceSnapshotRow;
+        expect(body.price).toBe((10n ** 36n / 4000000000000000000n).toString());
     });
 });

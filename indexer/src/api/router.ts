@@ -5,7 +5,7 @@
  * CORS is handled here (not in nginx) since api.frogop.net maps directly
  * to this Worker via Cloudflare custom domains.
  */
-import type { Env } from '../types/index.js';
+import type { Env, PriceCandleRow, PriceSnapshotRow } from '../types/index.js';
 import {
     getAllPools, getPool, getOptionsByPool,
     getOption, getOptionsByWriter, getOptionsByBuyer, getOptionsByUser,
@@ -158,6 +158,8 @@ async function route(
     if (candlesMatch) {
         const token = normalizeToken(candlesMatch[1] ?? '');
         if (!isValidToken(token)) return badRequest('Invalid token');
+        const canonicalToken = REVERSE_PAIR[token] ?? token;
+        const isReversed = canonicalToken !== token;
         const interval = params.get('interval') ?? '1d';
         if (!['1h', '4h', '1d', '1w'].includes(interval)) {
             return badRequest('Invalid interval. Use 1h, 4h, 1d, or 1w');
@@ -168,8 +170,8 @@ async function route(
         const toParam = params.get('to');
         if (fromParam) opts.from = fromParam;
         if (toParam) opts.to = toParam;
-        const candles = await getCandles(env.DB, token, interval, opts);
-        return json(candles);
+        const candles = await getCandles(env.DB, canonicalToken, interval, opts);
+        return json(isReversed ? candles.map(invertCandleRow) : candles);
     }
 
     // GET /prices/:token/latest
@@ -177,8 +179,11 @@ async function route(
     if (latestMatch) {
         const token = normalizeToken(latestMatch[1] ?? '');
         if (!isValidToken(token)) return badRequest('Invalid token');
-        const price = await getLatestPrice(env.DB, token);
-        return price ? json(price) : notFound('No price data');
+        const canonicalToken = REVERSE_PAIR[token] ?? token;
+        const isReversed = canonicalToken !== token;
+        const price = await getLatestPrice(env.DB, canonicalToken);
+        if (!price) return notFound('No price data');
+        return json(isReversed ? invertSnapshotRow(price) : price);
     }
 
     // GET /prices/:token/history?from=ISO&to=ISO&limit=200
@@ -186,21 +191,61 @@ async function route(
     if (historyMatch) {
         const token = normalizeToken(historyMatch[1] ?? '');
         if (!isValidToken(token)) return badRequest('Invalid token');
+        const canonicalToken = REVERSE_PAIR[token] ?? token;
+        const isReversed = canonicalToken !== token;
         const limit = Math.min(1000, Math.max(1, parseInt(params.get('limit') ?? '200', 10)));
         const hOpts: { from?: string; to?: string; limit?: number } = { limit };
         const hFrom = params.get('from');
         const hTo = params.get('to');
         if (hFrom) hOpts.from = hFrom;
         if (hTo) hOpts.to = hTo;
-        const history = await getPriceHistory(env.DB, token, hOpts);
-        return json(history);
+        const history = await getPriceHistory(env.DB, canonicalToken, hOpts);
+        return json(isReversed ? history.map(invertSnapshotRow) : history);
     }
 
     return notFound();
 }
 
 /** Accepted token identifiers (uppercase, underscore-separated for pairs) */
-const VALID_TOKENS = new Set(['MOTO', 'PILL', 'MOTO_PILL', 'PILL_MOTO']);
+const VALID_TOKENS = new Set([
+    'MOTO', 'PILL',
+    'MOTO_PILL', 'PILL_MOTO',
+    'MOTO_BTC', 'BTC_MOTO',
+    'PILL_BTC', 'BTC_PILL',
+]);
+
+/**
+ * Reverse-pair map: tokens we don't store natively but can derive by inverting
+ * the canonical direction. E.g. BTC_MOTO → invert(MOTO_BTC).
+ */
+const REVERSE_PAIR: Readonly<Record<string, string>> = {
+    'PILL_MOTO': 'MOTO_PILL',
+    'BTC_MOTO':  'MOTO_BTC',
+    'BTC_PILL':  'PILL_BTC',
+};
+
+/** Invert a price: result = 1e36 / p  (maintains 1e18 precision). */
+function invertPrice(price: string): string {
+    const p = BigInt(price);
+    if (p === 0n) return '0';
+    return ((10n ** 36n) / p).toString();
+}
+
+/** Invert a candle row: swap high/low since inverting reverses direction. */
+function invertCandleRow(row: PriceCandleRow): PriceCandleRow {
+    return {
+        ...row,
+        open:  invertPrice(row.open),
+        close: invertPrice(row.close),
+        high:  invertPrice(row.low),   // inverted low becomes high
+        low:   invertPrice(row.high),  // inverted high becomes low
+    };
+}
+
+/** Invert a snapshot row. */
+function invertSnapshotRow(row: PriceSnapshotRow): PriceSnapshotRow {
+    return { ...row, price: invertPrice(row.price) };
+}
 
 function normalizeToken(raw: string): string {
     const decoded = decodeURIComponent(raw);

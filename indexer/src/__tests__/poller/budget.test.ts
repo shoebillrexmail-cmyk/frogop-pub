@@ -127,13 +127,15 @@ describe('Subrequest budget — caught up, 1 block', () => {
 
 // ---------------------------------------------------------------------------
 describe('Subrequest budget — catch-up, 20 blocks', () => {
-    it('stays under 50 subrequests when processing 20 blocks (max per run)', async () => {
+    it('stays under 50 subrequests when processing 12 blocks caught-up (with 5-token rollup)', async () => {
+        // With 5 candle tokens (MOTO, PILL, MOTO_PILL, MOTO_BTC, PILL_BTC), rollup uses
+        // 5×4=20 snapshot queries + 2×4=8 swap queries = 28 subrequests for candles alone.
+        // 12 caught-up blocks + rollup + prices fits under 50.
         const tip = 1000;
-        seedCursor(tip - 20);
+        seedCursor(tip - 12);
         mockProvider.getBlockNumber.mockResolvedValue(tip);
 
-        // All 20 blocks have events — worst case for subrequests
-        for (let n = tip - 19; n <= tip; n++) {
+        for (let n = tip - 11; n <= tip; n++) {
             mockProvider.getBlock.mockResolvedValueOnce(
                 buildOptionWrittenBlock(n, DEFAULT_POOL),
             );
@@ -157,7 +159,7 @@ describe('Subrequest budget — catch-up, 20 blocks', () => {
 
         // During catch-up, rollUpAllCandles is skipped (no getSnapshotsInRange calls)
         const allCalls = counter.calls.filter(c => c.label === 'd1.all');
-        // Candle rollup does 3 tokens × 4 intervals = 12+ d1.all calls
+        // Candle rollup does 5 tokens × 4 intervals = 20+ d1.all calls
         // When skipped, should have 0 d1.all calls
         expect(allCalls.length).toBe(0);
     });
@@ -217,7 +219,7 @@ describe('Subrequest budget — regression guard', () => {
 
         await pollNewBlocks(makeEnv({ MAX_BLOCKS_PER_RUN: '30' }));
 
-        // 30 getBlock + candle rollup (3×4 intervals × d1.all queries) → exceeds 50
+        // 30 getBlock + candle rollup (5×4 intervals × d1.all queries) → exceeds 50
         expect(counter.count).toBeGreaterThan(FREE_TIER_LIMIT);
     });
 

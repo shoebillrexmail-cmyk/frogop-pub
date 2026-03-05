@@ -29,6 +29,14 @@ import {
 } from '../db/queries.js';
 import { decodeBlock } from '../decoder/index.js';
 
+/** 18-decimal fixed-point precision constant for cross-rate math. */
+const PRECISION = 10n ** 18n;
+
+/** Cross-rate tokens contain an underscore (e.g. MOTO_PILL, MOTO_BTC). */
+function isCrossRate(token: string): boolean {
+    return token.includes('_');
+}
+
 export async function pollNewBlocks(env: Env): Promise<void> {
     const maxBlocksPerRun = parseInt(env.MAX_BLOCKS_PER_RUN, 10) || 20;
 
@@ -104,6 +112,11 @@ export async function pollNewBlocks(env: Env): Promise<void> {
         if (tokenLabels.length >= 2) {
             allTokens.push(`${tokenLabels[0]}_${tokenLabels[1]}`);
         }
+        // Add BTC cross-rate for each base token
+        for (const label of tokenLabels) {
+            allTokens.push(`${label}_BTC`);
+        }
+        // Result: ['MOTO', 'PILL', 'MOTO_PILL', 'MOTO_BTC', 'PILL_BTC']
         await rollUpAllCandles(env.DB, allTokens);
         await pruneOldData(env.DB, latestBlock);
     }
@@ -316,8 +329,7 @@ export async function pollPrices(
             const tokensA = BigInt(priceA);
             const tokensB = BigInt(priceB);
             if (tokensA > 0n) {
-                const precision = 10n ** 18n;
-                const crossRate = (tokensB * precision) / tokensA;
+                const crossRate = (tokensB * PRECISION) / tokensA;
                 const pairKey = `${labelA}_${labelB}`;
                 stmts.push(stmtInsertPriceSnapshot(env.DB, {
                     token: pairKey,
@@ -326,6 +338,24 @@ export async function pollPrices(
                     price: crossRate.toString(),
                 }));
             }
+        }
+    }
+
+    // BTC cross-rates: sats per token = (100_000 * 1e18) / tokensPerQuote
+    // Each token already has a "tokens per 100k sats" quote — invert to get BTC price.
+    const BTC_QUOTE_SATS = 100_000n;
+    for (const [label, priceStr] of Object.entries(prices)) {
+        const tokensPerQuote = BigInt(priceStr);
+        if (tokensPerQuote > 0n) {
+            const satsPerToken = (BTC_QUOTE_SATS * PRECISION) / tokensPerQuote;
+            const pairKey = `${label}_BTC`;
+            stmts.push(stmtInsertPriceSnapshot(env.DB, {
+                token: pairKey,
+                block_number: currentBlock,
+                timestamp,
+                price: satsPerToken.toString(),
+            }));
+            console.log(`[poller] ${pairKey} price: ${satsPerToken.toString()}`);
         }
     }
 
@@ -374,11 +404,11 @@ export async function rollUpAllCandles(db: D1Database, tokens: string[] = ['MOTO
                 if (p < low) low = p;
             }
 
-            // Volume from swap events (only for MOTO and PILL, not cross-rate)
+            // Volume from swap events (only for base tokens, not cross-rates)
             let volumeSats = 0n;
             let volumeTokens = 0n;
             let tradeCount = 0;
-            if (token !== 'MOTO_PILL') {
+            if (!isCrossRate(token)) {
                 // Estimate block range from timestamps (10 min per block)
                 const fromBlock = Math.floor(bucketStart.getTime() / 600_000);
                 const toBlock   = Math.ceil(bucketEnd.getTime() / 600_000);

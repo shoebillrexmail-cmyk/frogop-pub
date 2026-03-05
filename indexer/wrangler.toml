@@ -44,6 +44,8 @@ NATIVESWAP_CONTRACT = "0x4397befe4e067390596b3c296e77fe86589487bf3bf3f0a9a93ce79
 # MOTO = 0xfd44..., PILL = 0xb09f...
 NATIVESWAP_TOKEN_ADDRESSES = "0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd 0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb"
 # Token labels matching NATIVESWAP_TOKEN_ADDRESSES order (comma-separated)
+# BTC cross-rates (MOTO_BTC, PILL_BTC) are derived automatically from getQuote data.
+# Reverse pairs (BTC_MOTO, BTC_PILL, PILL_MOTO) are computed at query time via inversion.
 NATIVESWAP_LABELS = "MOTO,PILL"
 
 # ---------------------------------------------------------------------------

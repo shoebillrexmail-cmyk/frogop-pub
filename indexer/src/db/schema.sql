@@ -52,11 +52,14 @@ CREATE TABLE IF NOT EXISTS indexer_state (
 );
 
 -- Spot price snapshots from getQuote() polling
+-- Base tokens: MOTO, PILL (tokens per 100k sats)
+-- Cross-rates: MOTO_PILL (derived from base pair), MOTO_BTC, PILL_BTC (sats per token)
+-- Reverse pairs (PILL_MOTO, BTC_MOTO, BTC_PILL) are computed at query time via inversion.
 CREATE TABLE IF NOT EXISTS price_snapshots (
-    token         TEXT    NOT NULL,     -- "MOTO" or "PILL"
+    token         TEXT    NOT NULL,     -- "MOTO", "PILL", "MOTO_PILL", "MOTO_BTC", "PILL_BTC"
     block_number  INTEGER NOT NULL,
     timestamp     TEXT    NOT NULL,     -- ISO 8601
-    price         TEXT    NOT NULL,     -- tokens per 100k sats (decimal string)
+    price         TEXT    NOT NULL,     -- decimal string (meaning depends on token type)
     PRIMARY KEY (token, block_number)
 );
 
@@ -74,7 +77,7 @@ CREATE TABLE IF NOT EXISTS swap_events (
 
 -- Pre-aggregated OHLCV candles
 CREATE TABLE IF NOT EXISTS price_candles (
-    token         TEXT    NOT NULL,     -- "MOTO", "PILL", or "MOTO_PILL"
+    token         TEXT    NOT NULL,     -- "MOTO", "PILL", "MOTO_PILL", "MOTO_BTC", "PILL_BTC"
     interval      TEXT    NOT NULL,     -- "1h", "4h", "1d", "1w"
     open_time     TEXT    NOT NULL,     -- ISO 8601 bucket start
     open          TEXT    NOT NULL,
