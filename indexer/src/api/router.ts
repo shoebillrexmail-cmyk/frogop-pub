@@ -99,7 +99,14 @@ async function route(
     // GET /health
     if (path === '/health') {
         const lastBlock = await getLastIndexedBlock(env.DB);
-        return json({ status: 'ok', lastBlock, network: env.OPNET_NETWORK });
+        const poolCount = (await getAllPools(env.DB)).length;
+        return json({
+            status: 'ok',
+            lastBlock,
+            poolCount,
+            network: env.OPNET_NETWORK,
+            timestamp: new Date().toISOString(),
+        });
     }
 
     // GET /pools

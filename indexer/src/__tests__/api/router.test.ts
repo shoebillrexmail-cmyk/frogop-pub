@@ -102,14 +102,17 @@ beforeEach(() => {
 
 // ---------------------------------------------------------------------------
 describe('GET /health', () => {
-    it('returns 200 with status, lastBlock, network', async () => {
+    it('returns 200 with status, lastBlock, network, poolCount', async () => {
         mockGetLastIndexedBlock.mockResolvedValue(1234);
+        mockGetAllPools.mockResolvedValue([fakePool]);
         const res = await handleFetch(req('/health'), mockEnv);
         expect(res.status).toBe(200);
         const body = await res.json() as Record<string, unknown>;
         expect(body['status']).toBe('ok');
         expect(body['lastBlock']).toBe(1234);
         expect(body['network']).toBe('testnet');
+        expect(body['poolCount']).toBe(1);
+        expect(body['timestamp']).toBeDefined();
     });
 });
 

@@ -99,8 +99,11 @@ export async function pollNewBlocks(env: Env): Promise<void> {
     await env.DB.batch(allStmts);
     console.log(`[poller] Committed ${allStmts.length} statement(s) for blocks ${from}-${to}`);
 
-    // After block sync: poll spot prices
-    await pollPrices(env, provider, swapConfig, latestBlock);
+    // Post-sync tasks run with per-task isolation so partial failures
+    // don't cascade. E.g. if price polling fails, candles still roll up.
+    const postSyncTasks: Array<{ name: string; fn: () => Promise<void> }> = [
+        { name: 'pollPrices', fn: () => pollPrices(env, provider, swapConfig, latestBlock) },
+    ];
 
     // Only roll up candles + prune when near tip (saves ~20 D1 subrequests during catch-up)
     if (!catching_up) {
@@ -117,8 +120,18 @@ export async function pollNewBlocks(env: Env): Promise<void> {
             allTokens.push(`${label}_BTC`);
         }
         // Result: ['MOTO', 'PILL', 'MOTO_PILL', 'MOTO_BTC', 'PILL_BTC']
-        await rollUpAllCandles(env.DB, allTokens);
-        await pruneOldData(env.DB, latestBlock);
+        postSyncTasks.push(
+            { name: 'rollUpCandles', fn: () => rollUpAllCandles(env.DB, allTokens) },
+            { name: 'pruneOldData', fn: () => pruneOldData(env.DB, latestBlock) },
+        );
+    }
+
+    const results = await Promise.allSettled(postSyncTasks.map((t) => t.fn()));
+    for (let i = 0; i < results.length; i++) {
+        const r = results[i]!;
+        if (r.status === 'rejected') {
+            console.error(`[poller] ${postSyncTasks[i]!.name} failed:`, r.reason);
+        }
     }
 }
 
