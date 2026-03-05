@@ -18,6 +18,7 @@ import { usePriceCandles } from '../hooks/usePriceCandles.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { PoolHeaderBar } from '../components/PoolHeaderBar.tsx';
 import { OptionsTable } from '../components/OptionsTable.tsx';
+import { ErrorBoundary } from '../components/ErrorBoundary.tsx';
 import { OptionsChain } from '../components/OptionsChain.tsx';
 import { PriceChart } from '../components/PriceChart.tsx';
 import { WriteOptionPanel } from '../components/WriteOptionPanel.tsx';
@@ -389,21 +390,23 @@ export function PoolDetailPage() {
                                     onBuy={handleBuy}
                                 />
                             ) : (
-                                <OptionsTable
-                                    options={options}
-                                    walletHex={walletHex}
-                                    walletConnected={walletConnected}
-                                    currentBlock={currentBlock ?? undefined}
-                                    gracePeriodBlocks={poolInfo.gracePeriodBlocks}
-                                    motoPillRatio={motoPillRatio}
-                                    poolAddress={poolAddress}
-                                    underlyingSymbol={underlyingSymbol}
-                                    premiumSymbol={premiumSymbol}
-                                    onBuy={handleBuy}
-                                    onCancel={handleCancel}
-                                    onExercise={handleExercise}
-                                    onSettle={handleSettle}
-                                />
+                                <ErrorBoundary inline label="Options Table">
+                                    <OptionsTable
+                                        options={options}
+                                        walletHex={walletHex}
+                                        walletConnected={walletConnected}
+                                        currentBlock={currentBlock ?? undefined}
+                                        gracePeriodBlocks={poolInfo.gracePeriodBlocks}
+                                        motoPillRatio={motoPillRatio}
+                                        poolAddress={poolAddress}
+                                        underlyingSymbol={underlyingSymbol}
+                                        premiumSymbol={premiumSymbol}
+                                        onBuy={handleBuy}
+                                        onCancel={handleCancel}
+                                        onExercise={handleExercise}
+                                        onSettle={handleSettle}
+                                    />
+                                </ErrorBoundary>
                             )}
 
                             {/* Protective Put card */}
@@ -454,15 +457,17 @@ export function PoolDetailPage() {
                                     Price Chart
                                 </button>
                                 {chartOpen && (
-                                    <PriceChart
-                                        candles={candles}
-                                        token={chartToken}
-                                        interval={chartInterval}
-                                        onIntervalChange={setChartInterval}
-                                        onTokenChange={setChartToken}
-                                        underlyingSymbol={underlyingSymbol}
-                                        premiumSymbol={premiumSymbol}
-                                    />
+                                    <ErrorBoundary inline label="Price Chart">
+                                        <PriceChart
+                                            candles={candles}
+                                            token={chartToken}
+                                            interval={chartInterval}
+                                            onIntervalChange={setChartInterval}
+                                            onTokenChange={setChartToken}
+                                            underlyingSymbol={underlyingSymbol}
+                                            premiumSymbol={premiumSymbol}
+                                        />
+                                    </ErrorBoundary>
                                 )}
                             </div>
                         </div>
@@ -500,15 +505,17 @@ export function PoolDetailPage() {
                                         Price Chart
                                     </button>
                                     {chartOpen && (
-                                        <PriceChart
-                                            candles={candles}
-                                            token={chartToken}
-                                            interval={chartInterval}
-                                            onIntervalChange={setChartInterval}
-                                            onTokenChange={setChartToken}
-                                            underlyingSymbol={underlyingSymbol}
-                                            premiumSymbol={premiumSymbol}
-                                        />
+                                        <ErrorBoundary inline label="Price Chart">
+                                            <PriceChart
+                                                candles={candles}
+                                                token={chartToken}
+                                                interval={chartInterval}
+                                                onIntervalChange={setChartInterval}
+                                                onTokenChange={setChartToken}
+                                                underlyingSymbol={underlyingSymbol}
+                                                premiumSymbol={premiumSymbol}
+                                            />
+                                        </ErrorBoundary>
                                     )}
                                 </div>
                             )}

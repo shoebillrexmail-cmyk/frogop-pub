@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { formatAddress } from '../config';
+import { ErrorBoundary } from './ErrorBoundary';
 import { TransactionToast } from './TransactionToast';
 import { TransactionDetailModal } from './TransactionDetailModal';
 import { NetworkStatusBar } from './NetworkStatusBar';
@@ -128,7 +129,9 @@ export function Layout() {
       <NetworkStatusProvider provider={readProvider} wsConnected={wsConnected}>
         <main className="flex-1">
           <WsBlockContext.Provider value={wsBlockInfo}>
-            <Outlet />
+            <ErrorBoundary>
+              <Outlet />
+            </ErrorBoundary>
           </WsBlockContext.Provider>
         </main>
         {reopenRequest && (
