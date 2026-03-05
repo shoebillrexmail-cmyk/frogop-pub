@@ -569,6 +569,7 @@ export function PoolDetailPage() {
                     network={network}
                     underlyingSymbol={underlyingSymbol}
                     premiumSymbol={premiumSymbol}
+                    poolType={poolType}
                     onClose={() => setCancelTarget(null)}
                     onSuccess={() => {
                         setCancelTarget(null);
@@ -615,6 +616,7 @@ export function PoolDetailPage() {
                     }}
                     underlyingSymbol={underlyingSymbol}
                     premiumSymbol={premiumSymbol}
+                    poolType={poolType}
                 />
             )}
 

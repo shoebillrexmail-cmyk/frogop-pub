@@ -416,13 +416,311 @@ so that strategies are available on all pool types.**
 
 ---
 
+## Sprint: Indexer Cron Resilience
+
+> **Goal:** Ensure the indexer cron never silently dies. Wrap all top-level
+> poller work in structured error handling with retry logic and observability,
+> so transient RPC failures don't cause hours of missing data.
+
+### Context
+
+The indexer's `scheduled()` handler calls `pollNewBlocks()` which fans out to
+`pollPrices()`, `pollPools()`, and `pollCandles()`. If any of these throw an
+unhandled exception, the entire cron invocation fails and Cloudflare Workers
+logs it as a generic 500 — no structured error, no partial progress saved, no
+retry. A single RPC timeout can cause a full cycle of missed data.
+
+### Tasks
+
+- [ ] **Task 1: Top-level try/catch in scheduled handler**
+  - Wrap `pollNewBlocks()` call in try/catch inside `scheduled()` in `src/index.ts`
+  - On catch: log structured error with `{ error: e.message, stack: e.stack,
+    timestamp, cronCycle }` — don't swallow silently
+  - Return gracefully so the Worker doesn't crash (Cloudflare retries crashed
+    crons, but with exponential backoff that can cause gaps)
+  - **Key file:** `indexer/src/index.ts`
+
+- [ ] **Task 2: Per-task isolation in pollNewBlocks**
+  - Currently `pollNewBlocks()` runs price polling, pool polling, and candle
+    aggregation sequentially — if prices fail, pools and candles are skipped
+  - Wrap each sub-task in its own try/catch so partial failures don't cascade
+  - Log which sub-tasks succeeded and which failed per cycle
+  - Pattern: `const results = await Promise.allSettled([pollPrices(...),
+    pollPools(...), pollCandles(...)])`
+  - **Key file:** `indexer/src/poller/index.ts`
+
+- [ ] **Task 3: RPC call retry with exponential backoff**
+  - Create `retryRpc(fn, maxRetries=3, baseDelayMs=500)` utility in
+    `indexer/src/utils/retry.ts`
+  - Apply to all `provider.call()` invocations in price polling
+  - Log retry attempts with attempt number + error message
+  - Don't retry on non-transient errors (e.g. invalid calldata — 4xx errors)
+  - **Key file:** `indexer/src/utils/retry.ts`, `indexer/src/poller/index.ts`
+
+- [ ] **Task 4: Health check endpoint**
+  - Add a `GET /health` route to the worker that returns:
+    `{ status: 'ok', lastBlock, lastCronAt, priceCount, poolCount }`
+  - Query D1 for latest block number and snapshot count
+  - Enables external monitoring (Uptime Robot, Cloudflare Health Checks)
+  - **Key file:** `indexer/src/api/router.ts`
+
+- [ ] **Task 5: Tests**
+  - Unit test: `retryRpc` retries on transient error, stops on success, gives
+    up after maxRetries
+  - Unit test: `pollNewBlocks` with one sub-task failing — verify other sub-tasks
+    still execute and results are logged
+  - Unit test: `scheduled()` catches thrown error and doesn't re-throw
+  - **Key files:** `indexer/src/__tests__/utils/retry.test.ts`,
+    `indexer/src/__tests__/poller/resilience.test.ts`
+
+### Key files
+| File | Change |
+|------|--------|
+| `indexer/src/index.ts` | Top-level try/catch in scheduled handler |
+| `indexer/src/poller/index.ts` | Per-task isolation with Promise.allSettled |
+| `indexer/src/utils/retry.ts` | New — RPC retry utility |
+| `indexer/src/api/router.ts` | Add /health endpoint |
+
+---
+
+## Sprint: React Error Boundaries
+
+> **Goal:** Prevent white-screen crashes when a component throws. Add error
+> boundaries at strategic points so failures are contained and users see
+> actionable recovery UI instead of a blank page.
+
+### Context
+
+The frontend has zero `<ErrorBoundary>` components. Any unhandled render error
+(e.g. undefined property access from stale RPC data, malformed BigInt from
+indexer) crashes the entire React tree → white screen. Users lose all context
+and must manually reload. This is especially bad for BTC pools where indexer
+data formats recently changed.
+
+### Tasks
+
+- [ ] **Task 1: Create ErrorBoundary component**
+  - Create `frontend/src/components/ErrorBoundary.tsx` — class component
+    (React error boundaries require class componentDidCatch)
+  - Props: `fallback?: ReactNode`, `onError?: (error, info) => void`,
+    `children: ReactNode`
+  - Default fallback: dark-themed card matching terminal design with error
+    message, "Reload" button, and "Report Bug" link
+  - Log error details to console in development
+  - **Key file:** `frontend/src/components/ErrorBoundary.tsx`
+
+- [ ] **Task 2: Layout-level boundary**
+  - Wrap the `<Outlet>` in the root layout with `<ErrorBoundary>`
+  - This catches any page-level crash and shows recovery UI without losing
+    the header/navigation
+  - User can navigate to a different page without full reload
+  - **Key file:** `frontend/src/layouts/MainLayout.tsx` (or wherever Outlet lives)
+
+- [ ] **Task 3: Widget-level boundaries for critical sections**
+  - Wrap `<PriceChart>` in its own boundary — chart library errors shouldn't
+    crash the pool detail page
+  - Wrap `<OptionsTable>` — malformed option data shouldn't crash the page
+  - Wrap strategy execution panel on StrategiesPage
+  - Each gets a compact inline fallback: "Failed to load [widget]. [Retry]"
+  - **Key files:** `frontend/src/pages/PoolDetailPage.tsx`,
+    `frontend/src/pages/StrategiesPage.tsx`
+
+- [ ] **Task 4: Graceful degradation when RPC is down**
+  - When `provider` is null or RPC calls fail, pages should show skeleton UI
+    with "Connecting to network..." instead of crashing
+  - Add a `useNetworkStatus()` hook that tracks provider connectivity
+  - Show a persistent banner when RPC is unreachable: "Network unavailable —
+    data may be stale"
+  - **Key files:** `frontend/src/hooks/useNetworkStatus.ts`,
+    `frontend/src/components/NetworkBanner.tsx`
+
+- [ ] **Task 5: Tests**
+  - Unit test: ErrorBoundary catches render error, shows fallback, calls onError
+  - Unit test: ErrorBoundary "Reload" button resets error state
+  - Unit test: Child component throwing doesn't crash parent outside boundary
+  - Unit test: useNetworkStatus returns correct state for connected/disconnected
+  - **Key files:** `frontend/src/components/__tests__/ErrorBoundary.test.tsx`,
+    `frontend/src/hooks/__tests__/useNetworkStatus.test.ts`
+
+### Key files
+| File | Change |
+|------|--------|
+| `frontend/src/components/ErrorBoundary.tsx` | New — error boundary component |
+| `frontend/src/components/NetworkBanner.tsx` | New — RPC status banner |
+| `frontend/src/hooks/useNetworkStatus.ts` | New — provider connectivity hook |
+| `frontend/src/layouts/MainLayout.tsx` | Wrap Outlet in ErrorBoundary |
+| `frontend/src/pages/PoolDetailPage.tsx` | Widget-level boundaries |
+| `frontend/src/pages/StrategiesPage.tsx` | Widget-level boundary |
+
+---
+
+## Sprint: BTC Pool Frontend Flows — Complete extraOutputs
+
+> **Goal:** Make all BTC pool user flows (write, exercise, cancel, settle)
+> fully functional by wiring extraOutputs into every modal that needs native
+> BTC transfers. Currently only BuyOptionModal (type 1) works correctly.
+
+### Context
+
+Audit from 2026-03-05 found that BTC pool modals have detection scaffolding
+(poolType checks, "BTC required" warnings) but don't actually attach
+`extraOutputs` to `sendTransaction()`. This means:
+
+| Modal | Type 1 (BTC quote) | Type 2 (BTC underlying) |
+|-------|-------------------|------------------------|
+| BuyOptionModal | Works (extraOutputs) | Works (OP20 only) |
+| WriteOptionPanel | Works (OP20 only) | Broken (CALL needs BTC collateral) |
+| ExerciseModal | Broken (CALL needs BTC strike) | Broken (PUT needs BTC) |
+| CancelModal | No poolType prop | No poolType prop |
+| SettleModal | No poolType prop | No poolType prop |
+
+### Tasks
+
+- [ ] **Task 1: Create BTC escrow utility**
+  - Create `frontend/src/utils/btcEscrow.ts` with:
+    - `deriveBtcEscrowAddress(bridgeAddr, provider)` — fetch CSV script hash,
+      derive P2WSH address (reuse logic from BuyOptionModal)
+    - `buildBtcExtraOutput(escrowAddr, amountSats)` — returns extraOutput object
+  - Extract existing logic from BuyOptionModal into this shared utility
+  - Refactor BuyOptionModal to use the shared utility
+  - **Key files:** `frontend/src/utils/btcEscrow.ts`,
+    `frontend/src/components/BuyOptionModal.tsx`
+
+- [ ] **Task 2: WriteOptionPanel — type 2 CALL with BTC collateral**
+  - When `poolType === 2` and option type is CALL:
+    - Compute BTC collateral amount from underlyingAmount (bridge price lookup)
+    - Call `buildBtcExtraOutput()` for the escrow address
+    - Attach to `sendTransaction({ extraOutputs: [...] })`
+  - Show BTC amount in the confirmation summary
+  - **Key file:** `frontend/src/components/WriteOptionPanel.tsx`
+
+- [ ] **Task 3: ExerciseModal — BTC strike/payout flows**
+  - Type 1 CALL exercise: buyer pays BTC strike → add extraOutput with strike
+    amount in sats to escrow address
+  - Type 2 PUT exercise: buyer sends BTC to writer → add extraOutput with BTC
+    amount to writer's address (from option data)
+  - Show BTC amount required in modal before user confirms
+  - **Key file:** `frontend/src/components/ExerciseModal.tsx`
+
+- [ ] **Task 4: CancelModal + SettleModal — pass poolType**
+  - Thread `poolType` prop from PoolDetailPage through to CancelModal and
+    SettleModal (currently not passed)
+  - For type 2 CALL cancel: emit BTC reclaim info (CLTV script details) so
+    writer knows how to reclaim BTC collateral off-chain
+  - For type 2 settle: same pattern — show reclaim instructions
+  - Type 1 cancel/settle: OP20 only, no BTC needed — just needs poolType for
+    future-proofing
+  - **Key files:** `frontend/src/components/CancelModal.tsx`,
+    `frontend/src/components/SettleModal.tsx`,
+    `frontend/src/pages/PoolDetailPage.tsx`
+
+- [ ] **Task 5: Tests**
+  - Unit test: `deriveBtcEscrowAddress` returns valid P2WSH from mock bridge
+  - Unit test: `buildBtcExtraOutput` constructs correct output shape
+  - Unit test: WriteOptionPanel renders BTC collateral summary for type 2 CALL
+  - Unit test: ExerciseModal shows BTC strike amount for type 1 CALL
+  - Unit test: CancelModal receives and uses poolType prop
+  - **Key files:** `frontend/src/utils/__tests__/btcEscrow.test.ts`,
+    `frontend/src/components/__tests__/WriteOptionPanel.test.tsx`,
+    `frontend/src/components/__tests__/ExerciseModal.test.tsx`
+
+### Key files
+| File | Change |
+|------|--------|
+| `frontend/src/utils/btcEscrow.ts` | New — shared BTC escrow utilities |
+| `frontend/src/components/BuyOptionModal.tsx` | Refactor to use shared utility |
+| `frontend/src/components/WriteOptionPanel.tsx` | Add extraOutputs for type 2 CALL |
+| `frontend/src/components/ExerciseModal.tsx` | Add extraOutputs for type 1/2 |
+| `frontend/src/components/CancelModal.tsx` | Accept poolType, show BTC reclaim |
+| `frontend/src/components/SettleModal.tsx` | Accept poolType, show BTC reclaim |
+| `frontend/src/pages/PoolDetailPage.tsx` | Pass poolType to all modals |
+
+### Dependencies
+- Requires bridge contract deployed and accessible on testnet
+- BTC escrow logic already proven in BuyOptionModal — this sprint extracts and reuses it
+
+---
+
+## Sprint: Strategy UX Enhancement — Price-Aware Guidance
+
+> **Goal:** Bring the rich price-aware guidance from WriteOptionPanel (moneyness
+> classification, Black-Scholes premium, yield preview) into the StrategiesPage
+> LegSelector, so users configuring multi-leg strategies get the same quality
+> assistance as single-leg writers.
+
+### Context
+
+WriteOptionPanel offers excellent guidance: spot price display, ATM/ITM/OTM
+badges via `classifyMoneyness()`, Black-Scholes suggested premium via
+`useSuggestedPremium()`, yield-to-expiry preview, and pool reserve warnings.
+The StrategiesPage LegSelector has none of this — all inputs are manual with no
+market context. The hooks and math functions already exist; they just need to be
+wired into the strategy UI.
+
+### Tasks
+
+- [ ] **Task 1: Add spot price + moneyness to LegSelector**
+  - Import `usePoolPrices()` and `classifyMoneyness()` into LegSelector
+  - Show current spot price next to strike input
+  - Display moneyness badge (ATM/ITM/OTM/Deep ITM/Far OTM) that updates live
+    as strike is adjusted
+  - Color code: green for ITM, yellow for ATM, red for OTM
+  - **Key files:** `frontend/src/components/LegSelector.tsx`,
+    `frontend/src/hooks/usePoolPrices.ts`
+
+- [ ] **Task 2: Black-Scholes suggested premium per leg**
+  - Wire `useSuggestedPremium()` hook into each leg configuration
+  - Show "Suggested: X PILL" next to premium input with adjustable volatility
+    slider (20-200%, default 80%)
+  - "Use suggested" button auto-fills the premium field
+  - For spreads: show net premium (credit or debit) for the combined position
+  - **Key files:** `frontend/src/components/LegSelector.tsx`,
+    `frontend/src/hooks/useSuggestedPremium.ts`
+
+- [ ] **Task 3: Strategy-specific smart defaults via URL params**
+  - StrategiesPage reads URL params: `?pool=X&strategy=collar&strike=Y`
+  - Pre-populate: pool selection, strategy type, and initial strike prices
+  - For collar: default to ATM CALL + 10% OTM PUT (common hedge ratio)
+  - For bull call spread: default to ATM buy + 10% OTM write
+  - Pool detail page "Collar" link passes current pool + spot-derived defaults
+  - **Key files:** `frontend/src/pages/StrategiesPage.tsx`,
+    `frontend/src/components/QuickStrategies.tsx`
+
+- [ ] **Task 4: Combined P&L chart labels + break-even markers**
+  - Add numeric labels to key points on CombinedPnLChart: max profit, max loss,
+    break-even price(s), current spot price marker
+  - Show net premium paid/received for the combined strategy
+  - **Key file:** `frontend/src/components/CombinedPnLChart.tsx`
+
+- [ ] **Task 5: Tests**
+  - Unit test: LegSelector shows moneyness badge based on strike vs spot
+  - Unit test: Suggested premium auto-fills on button click
+  - Unit test: URL params pre-populate strategy configuration
+  - Unit test: CombinedPnLChart renders break-even and max profit labels
+  - **Key files:** `frontend/src/components/__tests__/LegSelector.test.tsx`,
+    `frontend/src/pages/__tests__/StrategiesPage.test.tsx`
+
+### Key files
+| File | Change |
+|------|--------|
+| `frontend/src/components/LegSelector.tsx` | Add price guidance, moneyness, premium |
+| `frontend/src/components/CombinedPnLChart.tsx` | Add numeric labels + markers |
+| `frontend/src/pages/StrategiesPage.tsx` | URL param pre-population |
+| `frontend/src/components/QuickStrategies.tsx` | Pass defaults via URL params |
+
+### Dependencies
+- Requires indexer price data available (deployed + running)
+- All hooks (`usePoolPrices`, `useSuggestedPremium`, `classifyMoneyness`) already exist
+
+---
+
 ## Backlog
 
 ### Contracts
 - [ ] **Update ABI documentation** — options-factory.md and options-pool.md have 23 discrepancies vs source code (see AUDIT notes)
 
 ### Frontend
-- [ ] **BTC pool user flows — complete extraOutputs** — WriteOptionPanel (type 2 CALL), ExerciseModal (type 1 CALL, type 2 PUT) have detection + UI warnings but don't attach `extraOutputs` to `sendTransaction()`. CancelModal/SettleModal don't receive `poolType` at all. Only BuyOptionModal (type 1) is correctly implemented. Needs: fetch bridge escrow script, derive P2WSH, attach extraOutputs. See audit from 2026-03-05.
+- [x] **BTC pool user flows — complete extraOutputs** — Promoted to sprint: "BTC Pool Frontend Flows — Complete extraOutputs"
 - [ ] **On-chain TX history** — Replace localStorage-only TX tracking with RPC/indexer queries for persistent data
 - [ ] **UX flow redesign** — Parallel TX support, modal persistence, per-TX status in pill ([research](../research/ux-flow-redesign.md))
 

@@ -15,6 +15,7 @@ import type { OptionData, PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount } from '../config/index.ts';
+import type { PoolType } from '../../../shared/pool-config.types.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { TxErrorBlock } from './TxErrorBlock.tsx';
@@ -31,6 +32,7 @@ interface CancelModalProps {
     network: WalletConnectNetwork;
     underlyingSymbol?: string;
     premiumSymbol?: string;
+    poolType?: PoolType;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -51,9 +53,11 @@ export function CancelModal({
     network,
     underlyingSymbol = 'MOTO',
     premiumSymbol = 'PILL',
+    poolType = 0,
     onClose,
     onSuccess,
 }: CancelModalProps) {
+    const isBtcUnderlying = poolType === 2;
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
     const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
@@ -185,6 +189,17 @@ export function CancelModal({
                         <p className="text-green-400 text-xs font-mono">
                             Option expired — no cancellation fee applies.
                         </p>
+                    )}
+
+                    {isBtcUnderlying && isCall && (
+                        <div className="bg-orange-900/20 border border-orange-700/50 rounded p-3 text-xs font-mono space-y-1">
+                            <p className="text-orange-400 font-semibold">BTC Collateral Reclaim</p>
+                            <p className="text-terminal-text-muted">
+                                Your BTC collateral is locked in a CLTV escrow. After the timelock
+                                expires, you can reclaim it using the CSV script from the original
+                                write transaction.
+                            </p>
+                        </div>
                     )}
 
                     {/* TX error with retry */}

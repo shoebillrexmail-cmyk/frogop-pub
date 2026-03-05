@@ -172,6 +172,29 @@ export const ROUTER_ABI: BitcoinInterfaceAbi = [
     },
 ];
 
+/** ABI for NativeSwapBridge — escrow script hash generation */
+export const BRIDGE_ABI: BitcoinInterfaceAbi = [
+    {
+        name: 'generateEscrowScriptHash',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'buyerPubkey', type: ABIDataTypes.BYTES32 },
+            { name: 'writerPubkey', type: ABIDataTypes.BYTES32 },
+            { name: 'cltvBlock', type: ABIDataTypes.UINT64 },
+        ],
+        outputs: [{ name: 'scriptHash', type: ABIDataTypes.BYTES32 }],
+    },
+    {
+        name: 'getBtcPrice',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'tokenAddress', type: ABIDataTypes.ADDRESS },
+            { name: 'amount', type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'btcAmount', type: ABIDataTypes.UINT256 }],
+    },
+];
+
 /** ABI for OP20 token approve (increaseAllowance) */
 export const TOKEN_APPROVE_ABI: BitcoinInterfaceAbi = [
     {

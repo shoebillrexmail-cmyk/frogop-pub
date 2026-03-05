@@ -13,6 +13,7 @@ import type { OptionData } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI } from '../services/poolAbi.ts';
 import { formatTokenAmount } from '../config/index.ts';
+import type { PoolType } from '../../../shared/pool-config.types.ts';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { TransactionReceipt } from './TransactionReceipt.tsx';
 import { TxErrorBlock } from './TxErrorBlock.tsx';
@@ -29,6 +30,7 @@ interface SettleModalProps {
     onSuccess: () => void;
     underlyingSymbol?: string;
     premiumSymbol?: string;
+    poolType?: PoolType;
 }
 
 const MAX_SAT = 10_000_000n;
@@ -48,7 +50,9 @@ export function SettleModal({
     onSuccess,
     underlyingSymbol = 'MOTO',
     premiumSymbol = 'PILL',
+    poolType = 0,
 }: SettleModalProps) {
+    const isBtcUnderlying = poolType === 2;
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
     const [txStatus, setTxStatus] = useState<'idle' | 'settling' | 'done' | 'error'>('idle');
@@ -158,6 +162,17 @@ export function SettleModal({
                         The option was not exercised within the grace period. Settling returns your
                         full collateral.
                     </p>
+
+                    {isBtcUnderlying && isCall && (
+                        <div className="bg-orange-900/20 border border-orange-700/50 rounded p-3 text-xs font-mono space-y-1">
+                            <p className="text-orange-400 font-semibold">BTC Collateral Reclaim</p>
+                            <p className="text-terminal-text-muted">
+                                Your BTC collateral is locked in a CLTV escrow. After the timelock
+                                expires, you can reclaim it using the CSV script from the original
+                                write transaction.
+                            </p>
+                        </div>
+                    )}
 
                     {/* TX error with retry */}
                     {txError && (
