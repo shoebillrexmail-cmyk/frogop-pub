@@ -5,7 +5,6 @@ export const NativeSwapBridgeEvents = [];
 export const NativeSwapBridgeAbi = [
     {
         name: 'getBtcPrice',
-        constant: true,
         inputs: [{ name: 'token', type: ABIDataTypes.ADDRESS }],
         outputs: [{ name: 'price', type: ABIDataTypes.UINT256 }],
         type: BitcoinAbiTypes.Function,
@@ -33,7 +32,6 @@ export const NativeSwapBridgeAbi = [
     },
     {
         name: 'verifyBtcOutput',
-        constant: true,
         inputs: [
             { name: 'expectedHash', type: ABIDataTypes.BYTES32 },
             { name: 'expectedAmount', type: ABIDataTypes.UINT64 },

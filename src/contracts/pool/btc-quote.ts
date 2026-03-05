@@ -11,6 +11,17 @@
  * Exercise (CALL): buyer pays BTC strike via UTXO, receives OP20 underlying
  * Exercise (PUT): same as base (OP20 collateral returned)
  * Cancel/Settle: same as base (OP20 collateral)
+ *
+ * HIGH-6: OPNet Transaction Output Model
+ * ----------------------------------------
+ * On OPNet, smart contract calls are embedded in Bitcoin transactions via
+ * Tapscript-encoded calldata. The same Bitcoin transaction that invokes the
+ * contract method also carries standard Bitcoin outputs (UTXOs). This means
+ * `Blockchain.tx.outputs` contains the BTC outputs of the calling transaction.
+ * For CALL exercise, the buyer constructs a Bitcoin transaction that:
+ *   (a) includes the exercise contract call in a Tapscript input, AND
+ *   (b) includes a P2WSH output paying the strike amount to the writer's CSV address.
+ * Both happen atomically within the same Bitcoin transaction.
  */
 
 import { u256 } from '@btc-vision/as-bignum/assembly';
@@ -26,6 +37,7 @@ import {
     EMPTY_BUFFER,
     encodeSelector,
 } from '@btc-vision/btc-runtime/runtime';
+import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
 
 import {
     CALL,
@@ -41,6 +53,8 @@ import {
     BUY_FEE_BPS,
     EXERCISE_FEE_BPS,
     PRECISION,
+    RESERVATION_EXPIRY_BLOCKS,
+    EXTENDED_SLOTS_POINTER,
 } from './constants';
 
 import { Option } from './storage';
@@ -54,6 +68,7 @@ import {
     OptionReservedEvent,
     ReservationExecutedEvent,
     ReservationCancelledEvent,
+    OptionRestoredEvent,
 } from './events';
 
 import { OptionsPoolBase } from './base';
@@ -72,8 +87,8 @@ const BRIDGE_POINTER: u16 = Blockchain.nextPointer;
 const NEXT_RESERVATION_ID_POINTER: u16 = Blockchain.nextPointer;
 const RESERVATIONS_BASE_POINTER: u16 = Blockchain.nextPointer;
 
-/** Reservation expiry: 144 blocks (~1 day) */
-const RESERVATION_EXPIRY_BLOCKS: u64 = 144;
+/** Extended option slot indices */
+const SLOT_CSV_HASH: u8 = 9;
 
 // =============================================================================
 // CONTRACT
@@ -112,10 +127,8 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
     // -------------------------------------------------------------------------
 
     public override onDeployment(calldata: Calldata): void {
-        // Base reads: underlying, premiumToken, feeRecipient
         super.onDeployment(calldata);
 
-        // Extended: read bridge address
         const bridgeAddr = calldata.readAddress();
         if (bridgeAddr.equals(Address.zero())) {
             throw new Revert('Bridge address cannot be zero');
@@ -167,6 +180,7 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
     // WRITE OPTION (same as type 0 — OP20 collateral)
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method(
         { name: 'optionType', type: ABIDataTypes.UINT8 },
         { name: 'strikePrice', type: ABIDataTypes.UINT256 },
@@ -248,6 +262,7 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
     // RESERVE OPTION — Phase 1 of two-phase BTC commit
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'reservationId', type: ABIDataTypes.UINT256 })
     @emit('OptionReserved')
@@ -270,6 +285,11 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
             throw new Revert('Already expired');
         }
 
+        // HIGH-5: Ensure option doesn't expire before reservation window ends
+        if (option.expiryBlock <= currentBlock + RESERVATION_EXPIRY_BLOCKS) {
+            throw new Revert('Option expires before reservation window');
+        }
+
         if (buyer.equals(option.writer)) {
             throw new Revert('Writer cannot buy own option');
         }
@@ -283,9 +303,13 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
             throw new Revert('BTC amount too small');
         }
 
-        // Generate CSV script hash for writer via bridge
-        // Writer will receive BTC locked by CSV after buyer pays
-        const writerPubkey = this.getWriterPubkey(option.writer);
+        // MED-1: Guard u256→u64 truncation
+        if (btcAmount.hi1 != 0 || btcAmount.hi2 != 0 || btcAmount.lo2 != 0) {
+            throw new Revert('BTC amount overflows u64');
+        }
+
+        // CRIT-2: Use registered pubkey instead of fake derived key
+        const writerPubkey = this.getRegisteredPubkeyInternal(option.writer);
         const csvScriptHash = this.queryCsvScriptHash(writerPubkey, 6);
 
         // Mark option as RESERVED
@@ -325,6 +349,7 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
     // EXECUTE RESERVATION — Phase 2 of two-phase BTC commit
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method({ name: 'reservationId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('ReservationExecuted')
@@ -346,8 +371,13 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
             throw new Revert('Reservation expired');
         }
 
+        // MED-1: Guard u256→u64 truncation
+        if (reservation.btcAmount.hi1 != 0 || reservation.btcAmount.hi2 != 0 || reservation.btcAmount.lo2 != 0) {
+            throw new Revert('BTC amount overflows u64');
+        }
+
         // Verify BTC output via bridge
-        const btcAmountSats = reservation.btcAmount.lo1; // Satoshis fit in u64
+        const btcAmountSats: u64 = reservation.btcAmount.lo1;
         const verified = this.queryVerifyBtcOutput(reservation.csvScriptHash, btcAmountSats);
         if (!verified) {
             throw new Revert('BTC output not found or insufficient');
@@ -358,10 +388,8 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
         this.options.setBuyer(optionId, reservation.buyer);
         this.options.setStatus(optionId, PURCHASED);
 
-        // Calculate and distribute buy fee from premium
-        // For BTC quote pools, the premium was in BTC (already paid via UTXO)
-        // The buy fee is taken from the BTC output to the writer's CSV address
-        // No additional OP20 transfers needed for premium
+        // HIGH-2: Store CSV script hash on the option for later use during exercise
+        this.setCsvScriptHashForOption(optionId, reservation.csvScriptHash);
 
         // Mark reservation as executed
         this.reservations.setStatus(reservationId, RESERVATION_EXECUTED);
@@ -382,6 +410,7 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
     // CANCEL RESERVATION — Cleanup expired reservations
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method({ name: 'reservationId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('ReservationCancelled')
@@ -409,11 +438,16 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
         // Clear reservation
         this.reservations.clear(reservationId);
 
-        // Emit event
-        const event = new BytesWriter(64);
-        event.writeU256(reservationId);
-        event.writeU256(reservation.optionId);
-        Blockchain.emit(new ReservationCancelledEvent(event));
+        // Emit cancellation event
+        const cancelEvent = new BytesWriter(64);
+        cancelEvent.writeU256(reservationId);
+        cancelEvent.writeU256(reservation.optionId);
+        Blockchain.emit(new ReservationCancelledEvent(cancelEvent));
+
+        // LOW-1: Emit OptionRestored event so watchers know the option is available again
+        const restoredEvent = new BytesWriter(32);
+        restoredEvent.writeU256(reservation.optionId);
+        Blockchain.emit(new OptionRestoredEvent(restoredEvent));
 
         const result = new BytesWriter(1);
         result.writeBoolean(true);
@@ -424,6 +458,7 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
     // EXERCISE — BTC strike payment for CALL, OP20 for PUT
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('OptionExercised')
@@ -462,10 +497,16 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
 
         if (option.optionType == CALL) {
             // CALL: buyer pays BTC strike via UTXO, receives OP20 underlying
-            // Verify BTC output to writer's CSV address
-            const writerPubkey = this.getWriterPubkey(option.writer);
-            const csvScriptHash = this.queryCsvScriptHash(writerPubkey, 6);
-            const strikeValueSats = strikeValue.lo1; // Satoshis
+
+            // HIGH-2: Use stored CSV hash from reservation instead of re-deriving
+            const csvScriptHash = this.getCsvScriptHashForOption(optionId);
+
+            // MED-1: Guard u256→u64 truncation for strikeValue
+            if (strikeValue.hi1 != 0 || strikeValue.hi2 != 0 || strikeValue.lo2 != 0) {
+                throw new Revert('Strike value overflows u64');
+            }
+            const strikeValueSats: u64 = strikeValue.lo1;
+
             const verified = this.queryVerifyBtcOutput(csvScriptHash, strikeValueSats);
             if (!verified) {
                 throw new Revert('BTC strike payment not found');
@@ -518,6 +559,7 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
     // CANCEL — Same as type 0 (OP20 collateral returned)
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('OptionCancelled')
@@ -587,6 +629,7 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
     // SETTLE — Same as type 0 (OP20 collateral returned after grace)
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('OptionExpired')
@@ -636,12 +679,35 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
     }
 
     // -------------------------------------------------------------------------
+    // EXTENDED STORAGE (HIGH-2: stored CSV hash per option)
+    // -------------------------------------------------------------------------
+
+    private extendedSlotKey(optionId: u256, slot: u8): Uint8Array {
+        const writer = new BytesWriter(35);
+        writer.writeU16(EXTENDED_SLOTS_POINTER);
+        writer.writeU256(optionId);
+        writer.writeU8(slot);
+        return sha256(writer.getBuffer());
+    }
+
+    private setCsvScriptHashForOption(optionId: u256, hash: Uint8Array): void {
+        const key = this.extendedSlotKey(optionId, SLOT_CSV_HASH);
+        Blockchain.setStorageAt(key, hash);
+    }
+
+    private getCsvScriptHashForOption(optionId: u256): Uint8Array {
+        const key = this.extendedSlotKey(optionId, SLOT_CSV_HASH);
+        const data = Blockchain.getStorageAt(key);
+        if (data.length == 0) {
+            throw new Revert('No CSV hash stored for option');
+        }
+        return data;
+    }
+
+    // -------------------------------------------------------------------------
     // BRIDGE HELPERS (cross-contract calls)
     // -------------------------------------------------------------------------
 
-    /**
-     * Query NativeSwapBridge for BTC price of a token.
-     */
     private queryBtcPrice(token: Address): u256 {
         const calldata = new BytesWriter(36);
         calldata.writeSelector(encodeSelector('getBtcPrice(address)'));
@@ -655,9 +721,6 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
         return result.data.readU256();
     }
 
-    /**
-     * Query NativeSwapBridge for CSV script hash.
-     */
     private queryCsvScriptHash(pubkey: Uint8Array, csvBlocks: u64): Uint8Array {
         const calldata = new BytesWriter(45);
         calldata.writeSelector(encodeSelector('generateCsvScriptHash(bytes32,uint64)'));
@@ -672,9 +735,6 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
         return result.data.readBytes(32);
     }
 
-    /**
-     * Query NativeSwapBridge for UTXO output verification.
-     */
     private queryVerifyBtcOutput(expectedHash: Uint8Array, expectedAmount: u64): bool {
         const calldata = new BytesWriter(44);
         calldata.writeSelector(encodeSelector('verifyBtcOutput(bytes32,uint64)'));
@@ -687,23 +747,5 @@ export class OptionsPoolBtcQuote extends OptionsPoolBase {
         }
 
         return result.data.readBoolean();
-    }
-
-    /**
-     * Get the writer's public key for CSV script generation.
-     * Uses the writer's address bytes as the pubkey (33-byte compressed).
-     * In practice, the frontend should provide the writer's actual pubkey.
-     * For now, we use the address as a placeholder — the bridge will hash it.
-     */
-    private getWriterPubkey(writer: Address): Uint8Array {
-        // Return the writer address bytes (32 bytes) padded to 33 for compressed pubkey format
-        // In production, this would be resolved from on-chain pubkey registration
-        const pubkey = new Uint8Array(33);
-        const addrBytes: Uint8Array = writer;
-        for (let i: i32 = 0; i < 32 && i < addrBytes.length; i++) {
-            pubkey[i + 1] = addrBytes[i];
-        }
-        pubkey[0] = 0x02; // Compressed pubkey prefix
-        return pubkey;
     }
 }

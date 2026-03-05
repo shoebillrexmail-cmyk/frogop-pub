@@ -31,6 +31,7 @@ import {
     pollForOptionCount,
     pollForOptionStatus,
     loadPoolState,
+    resolveCallAddress,
 } from './test-harness.js';
 import {
     DeploymentHelper,
@@ -91,8 +92,8 @@ async function main() {
     const feeRecipientHex = feeRecipientWallet.address.toString();
 
     // Get token hex addresses
-    const underlyingHex = (await provider.getPublicKeyInfo(underlyingBech32, true)).toString();
-    const premiumHex = (await provider.getPublicKeyInfo(premiumBech32, true)).toString();
+    const underlyingHex = await resolveCallAddress(provider, underlyingBech32);
+    const premiumHex = await resolveCallAddress(provider, premiumBech32);
 
     // -----------------------------------------------------------------------
     // 17.1 — Phase 1 tests pass on refactored OptionsPool (zero regressions)
@@ -112,7 +113,7 @@ async function main() {
         if (isCallError(feeResult)) throw new Error(`buyFeeBps() error: ${feeResult.error}`);
 
         const count = countResult.result.readU256();
-        const buyBps = feeResult.result.readU256();
+        const buyBps = feeResult.result.readU64();
 
         if (buyBps !== 100n) {
             throw new Error(`Expected buyFeeBps=100, got ${buyBps}`);
@@ -204,8 +205,8 @@ async function main() {
         // Verify cancel fee (1%) on an option via balance diff
         const poolAddr = Address.fromString(poolCallAddr);
 
-        // Read current fee recipient balance
-        const balanceBefore = await readTokenBalance(provider, underlyingHex, feeRecipientHex);
+        // Read current option count before writing
+        const countBefore = await readOptionCount(provider, poolCallAddr);
 
         // Approve + write a new CALL
         await deployer.callContract(underlyingBech32, createIncreaseAllowanceCalldata(poolAddr, OPTION_AMOUNT * 2n), 10_000n);
@@ -216,18 +217,21 @@ async function main() {
         const writeCalldata = createWriteOptionCalldata(CALL, STRIKE_PRICE, expiryBlock, OPTION_AMOUNT, PREMIUM);
         await deployer.callContract(poolAddress, writeCalldata, 30_000n);
 
-        const count = await pollForOptionCount(provider, poolCallAddr, 1n);
+        const count = await pollForOptionCount(provider, poolCallAddr, countBefore + 1n);
         const optionId = count - 1n;
 
         // Verify option is OPEN
         const option = await readOption(provider, poolCallAddr, optionId);
         if (option.status !== OPEN) throw new Error(`Expected OPEN, got ${option.status}`);
 
+        // Read fee recipient balance JUST BEFORE cancel (after write is confirmed)
+        const balanceBefore = await readTokenBalance(provider, underlyingHex, feeRecipientHex);
+
         // Cancel it
         await deployer.callContract(poolAddress, createCancelOptionCalldata(optionId), 20_000n);
         await pollForOptionStatus(provider, poolCallAddr, optionId, CANCELLED);
 
-        // Read fee recipient balance after
+        // Read fee recipient balance after cancel
         const balanceAfter = await readTokenBalance(provider, underlyingHex, feeRecipientHex);
         const feePaid = balanceAfter - balanceBefore;
 

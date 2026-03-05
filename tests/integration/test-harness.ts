@@ -279,6 +279,51 @@ export async function pollForOptionStatus(
 }
 
 // =========================================================================
+// Address resolution helpers
+// =========================================================================
+
+/**
+ * Poll getPublicKeyInfo until it returns a valid result.
+ * Newly deployed contracts aren't visible until mined (~10 min on signet).
+ */
+export async function pollForPublicKeyInfo(
+    provider: JSONRpcProvider,
+    address: string,
+    maxAttempts = 40,
+    intervalMs = 30_000,
+): Promise<string> {
+    const log = getLogger('poll-pubkey');
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+            const pk = await provider.getPublicKeyInfo(address, true);
+            if (pk) return pk.toString();
+        } catch {
+            // Not yet visible
+        }
+        if (attempt < maxAttempts - 1) {
+            log.info(`Waiting for ${address.slice(0, 20)}... to be mined (attempt ${attempt + 1}/${maxAttempts})`);
+            await new Promise((r) => setTimeout(r, intervalMs));
+        }
+    }
+    throw new Error(`getPublicKeyInfo(${address}) did not resolve after ${maxAttempts} attempts`);
+}
+
+/**
+ * Resolve a token/contract address to its hex call address.
+ * If the address is already hex (0x...), returns it directly.
+ * If bech32, calls getPublicKeyInfo to resolve.
+ */
+export async function resolveCallAddress(
+    provider: JSONRpcProvider,
+    address: string,
+): Promise<string> {
+    if (address.startsWith('0x')) return address;
+    const pk = await provider.getPublicKeyInfo(address, true);
+    if (!pk) throw new Error(`Could not resolve call address for ${address}`);
+    return pk.toString();
+}
+
+// =========================================================================
 // Shared test context initializer
 // =========================================================================
 

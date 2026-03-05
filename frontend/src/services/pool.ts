@@ -152,12 +152,13 @@ export class PoolService {
         try {
             const calldata = buildCalldata(BTC_QUOTE_SELECTORS.getReservation, reservationId);
             const reader = await this.callView(calldata);
+            const id = reader.readU256(); // consume r.id written first by contract
             return {
-                reservationId,
+                reservationId: id,
                 optionId: reader.readU256(),
                 buyer: reader.readAddress().toString(),
                 btcAmount: reader.readU256(),
-                csvScriptHash: reader.readAddress().toString(),
+                csvScriptHash: reader.readAddress().toString(), // bytes32 — readAddress reads same 32 bytes
                 expiryBlock: reader.readU64(),
                 status: reader.readU8(),
             };

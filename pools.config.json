@@ -2,6 +2,7 @@
   "pools": [
     {
       "id": "moto-pill",
+      "poolType": 0,
       "underlying": {
         "symbol": "MOTO",
         "name": "Moto",
@@ -34,28 +35,165 @@
       }
     },
     {
-      "id": "alpha-beta",
+      "id": "pill-moto",
+      "poolType": 0,
       "underlying": {
-        "symbol": "ALPHA",
-        "name": "Alpha Test Token",
+        "symbol": "PILL",
+        "name": "Pill",
         "decimals": 18,
         "addresses": {
-          "testnet": "0xfe744a4c6abae6b3d5aeebd857df477bf6a29697e8b0acfadbe35b03379d084d",
+          "testnet": "0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb",
           "mainnet": ""
         }
       },
       "premium": {
-        "symbol": "BETA",
-        "name": "Beta Test Token",
+        "symbol": "MOTO",
+        "name": "Moto",
         "decimals": 18,
         "addresses": {
-          "testnet": "0xddd0f5fe100518b8bba7c7babe82f0957704a0a76449e74549b20bd3751e2917",
+          "testnet": "0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd",
           "mainnet": ""
         }
       },
       "pool": {
         "addresses": {
-          "testnet": "opt1sqrjvgtdwt5y5cyatd6yzhvcggsz34gp48u5uc88d",
+          "testnet": "opt1sqqp2au6ns9kgyh86dc7q0z6hykzd6f6tccwp38s4",
+          "mainnet": ""
+        }
+      }
+    },
+    {
+      "id": "moto-btc",
+      "poolType": 1,
+      "underlying": {
+        "symbol": "MOTO",
+        "name": "Moto",
+        "decimals": 18,
+        "addresses": {
+          "testnet": "0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd",
+          "mainnet": ""
+        }
+      },
+      "premium": {
+        "symbol": "BTC",
+        "name": "Bitcoin",
+        "decimals": 8,
+        "addresses": {
+          "testnet": "",
+          "mainnet": ""
+        }
+      },
+      "pool": {
+        "addresses": {
+          "testnet": "opt1sqqgsmcsqjkrdnr3xl9p9ygt9pmt8zvfap5ln62gr",
+          "mainnet": ""
+        }
+      },
+      "bridge": {
+        "addresses": {
+          "testnet": "opt1sqznv4qdcaanu6hw44e8wksq0v6cgzjdumy4qqvrl",
+          "mainnet": ""
+        }
+      }
+    },
+    {
+      "id": "btc-moto",
+      "poolType": 2,
+      "underlying": {
+        "symbol": "BTC",
+        "name": "Bitcoin",
+        "decimals": 8,
+        "addresses": {
+          "testnet": "",
+          "mainnet": ""
+        }
+      },
+      "premium": {
+        "symbol": "MOTO",
+        "name": "Moto",
+        "decimals": 18,
+        "addresses": {
+          "testnet": "0xfd4473840751d58d9f8b73bdd57d6c5260453d5518bd7cd02d0a4cf3df9bf4dd",
+          "mainnet": ""
+        }
+      },
+      "pool": {
+        "addresses": {
+          "testnet": "opt1sqzxk23tvmg3kvttypp3y582hmlm69lt8sgr2tu44",
+          "mainnet": ""
+        }
+      },
+      "bridge": {
+        "addresses": {
+          "testnet": "opt1sqznv4qdcaanu6hw44e8wksq0v6cgzjdumy4qqvrl",
+          "mainnet": ""
+        }
+      }
+    },
+    {
+      "id": "pill-btc",
+      "poolType": 1,
+      "underlying": {
+        "symbol": "PILL",
+        "name": "Pill",
+        "decimals": 18,
+        "addresses": {
+          "testnet": "0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb",
+          "mainnet": ""
+        }
+      },
+      "premium": {
+        "symbol": "BTC",
+        "name": "Bitcoin",
+        "decimals": 8,
+        "addresses": {
+          "testnet": "",
+          "mainnet": ""
+        }
+      },
+      "pool": {
+        "addresses": {
+          "testnet": "opt1sqzfsd34xx00mfrvkqarznxpfueun6qu2dcv0c442",
+          "mainnet": ""
+        }
+      },
+      "bridge": {
+        "addresses": {
+          "testnet": "opt1sqznv4qdcaanu6hw44e8wksq0v6cgzjdumy4qqvrl",
+          "mainnet": ""
+        }
+      }
+    },
+    {
+      "id": "btc-pill",
+      "poolType": 2,
+      "underlying": {
+        "symbol": "BTC",
+        "name": "Bitcoin",
+        "decimals": 8,
+        "addresses": {
+          "testnet": "",
+          "mainnet": ""
+        }
+      },
+      "premium": {
+        "symbol": "PILL",
+        "name": "Pill",
+        "decimals": 18,
+        "addresses": {
+          "testnet": "0xb09fc29c112af8293539477e23d8df1d3126639642767d707277131352040cbb",
+          "mainnet": ""
+        }
+      },
+      "pool": {
+        "addresses": {
+          "testnet": "opt1sqrp8pt6gf3u8gpxy7p63vxqhezvvlfjccyjd0kx6",
+          "mainnet": ""
+        }
+      },
+      "bridge": {
+        "addresses": {
+          "testnet": "opt1sqznv4qdcaanu6hw44e8wksq0v6cgzjdumy4qqvrl",
           "mainnet": ""
         }
       }
@@ -71,7 +209,10 @@
     "mintAmount": "1000000",
     "wasmPaths": {
       "token": "build/MyToken.wasm",
-      "pool": "build/OptionsPool.wasm"
+      "pool": "build/OptionsPool.wasm",
+      "poolBtcQuote": "build/OptionsPoolBtcQuote.wasm",
+      "poolBtcUnderlying": "build/OptionsPoolBtcUnderlying.wasm",
+      "bridge": "build/NativeSwapBridge.wasm"
     }
   }
 }

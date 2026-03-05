@@ -10,6 +10,7 @@ import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import { Address } from '@btc-vision/transaction';
+import { payments, networks } from '@btc-vision/bitcoin';
 import type { OptionData, PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI, BTC_QUOTE_POOL_ABI } from '../services/poolAbi.ts';
@@ -27,6 +28,63 @@ import { TxErrorBlock } from './TxErrorBlock.tsx';
 import { ActiveFlowBanner } from './ActiveFlowBanner.tsx';
 import { EstimatedFee } from './EstimatedFee.tsx';
 import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
+
+/**
+ * Parse OptionReserved event from a transaction receipt.
+ * Event field order (from contract btc-quote.ts):
+ *   reservationId (U256), optionId (U256), buyer (Address/32 bytes),
+ *   btcAmount (U256), csvScriptHash (bytes32), expiryBlock (U64)
+ */
+function parseOptionReservedEvent(
+    receipt: { events?: Record<string, Array<{ type: string; data: string }>> },
+): { reservationId: bigint; btcAmount: bigint; csvScriptHash: string; expiryBlock: bigint } | null {
+    if (!receipt.events) return null;
+
+    // Search all contract addresses in events for the OptionReserved event
+    for (const contractAddr of Object.keys(receipt.events)) {
+        const eventList = receipt.events[contractAddr];
+        if (!Array.isArray(eventList)) continue;
+        for (const ev of eventList) {
+            if (ev.type !== 'OptionReserved') continue;
+            try {
+                const binary = atob(ev.data);
+                const buf = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+
+                let pos = 0;
+                const readU256 = (): bigint => {
+                    let v = 0n;
+                    for (let i = 0; i < 32; i++) v = (v << 8n) | BigInt(buf[pos++]);
+                    return v;
+                };
+                const readBytes32 = (): string => {
+                    const hex = Array.from(buf.slice(pos, pos + 32))
+                        .map(b => b.toString(16).padStart(2, '0'))
+                        .join('');
+                    pos += 32;
+                    return '0x' + hex;
+                };
+                const readU64 = (): bigint => {
+                    let v = 0n;
+                    for (let i = 0; i < 8; i++) v = (v << 8n) | BigInt(buf[pos++]);
+                    return v;
+                };
+
+                const reservationId = readU256();
+                readU256(); // optionId — skip
+                readBytes32(); // buyer address — skip
+                const btcAmount = readU256();
+                const csvScriptHash = readBytes32();
+                const expiryBlock = readU64();
+
+                return { reservationId, btcAmount, csvScriptHash, expiryBlock };
+            } catch {
+                // Continue searching other events
+            }
+        }
+    }
+    return null;
+}
 
 interface BuyOptionModalProps {
     option: OptionData;
@@ -144,14 +202,22 @@ export function BuyOptionModal({
             });
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
-            // TODO: Parse reservation info from receipt events once event format is finalized.
-            // For now, set placeholder values to advance the flow.
-            setReservationInfo({
-                reservationId: 0n,
-                btcAmount: 0n,
-                csvScriptHash: '',
-                expiryBlock: 0n,
+            // Parse OptionReserved event from the TX receipt
+            const parsed = parseOptionReservedEvent(receipt as unknown as {
+                events?: Record<string, Array<{ type: string; data: string }>>;
             });
+            if (parsed) {
+                setReservationInfo(parsed);
+            } else {
+                // Fallback: if event parsing fails, use reserveOption return value
+                // (only contains reservationId — other fields will be zero/empty)
+                setReservationInfo({
+                    reservationId: 0n,
+                    btcAmount: 0n,
+                    csvScriptHash: '',
+                    expiryBlock: 0n,
+                });
+            }
             setBtcPhase('awaiting');
         } catch (err) {
             if (!mounted.current) return;
@@ -178,13 +244,24 @@ export function BuyOptionModal({
             ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
 
             const call = await poolContract['executeReservation'](reservationInfo.reservationId);
+            // Derive P2WSH address from CSV script hash for the BTC payment output
+            const csvHashHex = reservationInfo.csvScriptHash.startsWith('0x')
+                ? reservationInfo.csvScriptHash.slice(2)
+                : reservationInfo.csvScriptHash;
+            const p2wshAddr = payments.p2wsh({
+                hash: Buffer.from(csvHashHex, 'hex'),
+                network: networks.testnet, // OPNet testnet uses signet (tb1 prefix)
+            }).address!;
             const receipt = await call.sendTransaction({
                 signer: null,
                 mldsaSigner: null,
                 refundTo: walletAddress ?? '',
                 maximumAllowedSatToSpend: MAX_SAT,
                 network,
-                // extraOutputs would include BTC payment to CSV script hash address
+                extraOutputs: [{
+                    address: p2wshAddr,
+                    value: reservationInfo.btcAmount as unknown as number, // Satoshi branded bigint
+                }],
             });
             if (!mounted.current) return;
             setTxId(receipt.transactionId);

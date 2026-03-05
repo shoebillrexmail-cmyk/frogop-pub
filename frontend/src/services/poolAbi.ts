@@ -103,9 +103,6 @@ export const BTC_QUOTE_POOL_ABI: BitcoinInterfaceAbi = [
         inputs: [{ name: 'optionId', type: ABIDataTypes.UINT256 }],
         outputs: [
             { name: 'reservationId', type: ABIDataTypes.UINT256 },
-            { name: 'btcAmount', type: ABIDataTypes.UINT256 },
-            { name: 'csvScriptHash', type: ABIDataTypes.BYTES32 },
-            { name: 'expiryBlock', type: ABIDataTypes.UINT64 },
         ],
     },
     {

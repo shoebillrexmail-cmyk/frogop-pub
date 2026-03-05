@@ -2,7 +2,7 @@
     "functions": [
         {
             "name": "getBtcPrice",
-            "type": "View",
+            "type": "Function",
             "payable": false,
             "onlyOwner": false,
             "inputs": [
@@ -68,7 +68,7 @@
         },
         {
             "name": "verifyBtcOutput",
-            "type": "View",
+            "type": "Function",
             "payable": false,
             "onlyOwner": false,
             "inputs": [

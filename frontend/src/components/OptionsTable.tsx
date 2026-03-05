@@ -8,7 +8,7 @@ import { type OptionData, OptionStatus, OptionType } from '../services/types.ts'
 import { formatTokenAmount, blocksToCountdown } from '../config/index.ts';
 import { calcBreakeven, calcYield } from '../utils/optionMath.js';
 
-type FilterStatus = 'ALL' | 'OPEN' | 'PURCHASED' | 'EXPIRED' | 'CANCELLED';
+type FilterStatus = 'ALL' | 'OPEN' | 'PURCHASED' | 'RESERVED' | 'EXPIRED' | 'CANCELLED';
 
 type SortKey = 'id' | 'strike' | 'premium' | 'expiry' | 'amount';
 type SortDir = 'asc' | 'desc';
@@ -95,7 +95,7 @@ const STATUS_BADGE_CLASSES: Record<number, string> = {
     [OptionStatus.RESERVED]: 'border border-yellow-500 text-yellow-400',
 };
 
-const FILTER_OPTIONS: FilterStatus[] = ['ALL', 'OPEN', 'PURCHASED', 'EXPIRED', 'CANCELLED'];
+const FILTER_OPTIONS: FilterStatus[] = ['ALL', 'OPEN', 'PURCHASED', 'RESERVED', 'EXPIRED', 'CANCELLED'];
 
 const ZERO_HEX = '0x' + '0'.repeat(64);
 

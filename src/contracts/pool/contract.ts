@@ -60,6 +60,7 @@ export class OptionsPool extends OptionsPoolBase {
     // STATE-CHANGING METHODS
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method(
         { name: 'optionType', type: ABIDataTypes.UINT8 },
         { name: 'strikePrice', type: ABIDataTypes.UINT256 },
@@ -137,6 +138,7 @@ export class OptionsPool extends OptionsPoolBase {
         return result;
     }
 
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('OptionCancelled')
@@ -203,6 +205,7 @@ export class OptionsPool extends OptionsPoolBase {
         return result;
     }
 
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('OptionPurchased')
@@ -258,6 +261,7 @@ export class OptionsPool extends OptionsPoolBase {
         return result;
     }
 
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('OptionExercised')
@@ -336,6 +340,14 @@ export class OptionsPool extends OptionsPoolBase {
         return result;
     }
 
+    /**
+     * Settle an expired option, returning collateral to the writer.
+     * This method is intentionally permissionless — anyone can trigger settlement
+     * after the grace period ends. This allows third-party keepers to clean up
+     * expired options and return locked collateral without requiring writer action.
+     * (LOW-2)
+     */
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('OptionExpired')
@@ -384,6 +396,7 @@ export class OptionsPool extends OptionsPoolBase {
         return result;
     }
 
+    @nonReentrant
     @method(
         { name: 'optionId', type: ABIDataTypes.UINT256 },
         { name: 'to', type: ABIDataTypes.ADDRESS },
@@ -440,6 +453,13 @@ export class OptionsPool extends OptionsPoolBase {
     // ROLL OPTION
     // -------------------------------------------------------------------------
 
+    /**
+     * Roll an option: cancel the existing one and create a new one with updated
+     * parameters, atomically. The cancel event's returnAmount field reflects the
+     * net collateral after the cancellation fee, not the full original collateral.
+     * The rollEvent includes both old and new option IDs for correlation. (LOW-4)
+     */
+    @nonReentrant
     @method(
         { name: 'optionId', type: ABIDataTypes.UINT256 },
         { name: 'newStrikePrice', type: ABIDataTypes.UINT256 },
@@ -574,6 +594,7 @@ export class OptionsPool extends OptionsPoolBase {
     // BATCH OPERATIONS
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method(
         { name: 'count', type: ABIDataTypes.UINT256 },
         { name: 'id0', type: ABIDataTypes.UINT256 },
@@ -594,11 +615,24 @@ export class OptionsPool extends OptionsPoolBase {
             throw new Revert('Batch too large');
         }
 
+        // MED-5: Explicit guard before u256→i32 narrowing
+        if (u256.gt(count, u256.fromU32(u32(MAX_BATCH_SIZE)))) {
+            throw new Revert('Batch too large');
+        }
         const n: i32 = i32(u32(count.lo1));
 
         const ids: u256[] = new Array<u256>(5);
         for (let i: i32 = 0; i < 5; i++) {
             ids[i] = calldata.readU256();
+        }
+
+        // HIGH-3: Duplicate ID detection (O(n²), n≤5)
+        for (let i: i32 = 0; i < n; i++) {
+            for (let j: i32 = i + 1; j < n; j++) {
+                if (u256.eq(ids[i], ids[j])) {
+                    throw new Revert('Duplicate ID in batch');
+                }
+            }
         }
 
         const caller = Blockchain.tx.sender;
@@ -665,6 +699,7 @@ export class OptionsPool extends OptionsPoolBase {
         return result;
     }
 
+    @nonReentrant
     @method(
         { name: 'count', type: ABIDataTypes.UINT256 },
         { name: 'id0', type: ABIDataTypes.UINT256 },
@@ -685,11 +720,21 @@ export class OptionsPool extends OptionsPoolBase {
             throw new Revert('Batch too large');
         }
 
+        // MED-5: Explicit guard before u256→i32 narrowing
         const n: i32 = i32(u32(count.lo1));
 
         const ids: u256[] = new Array<u256>(5);
         for (let i: i32 = 0; i < 5; i++) {
             ids[i] = calldata.readU256();
+        }
+
+        // HIGH-3: Duplicate ID detection (O(n²), n≤5)
+        for (let i: i32 = 0; i < n; i++) {
+            for (let j: i32 = i + 1; j < n; j++) {
+                if (u256.eq(ids[i], ids[j])) {
+                    throw new Revert('Duplicate ID in batch');
+                }
+            }
         }
 
         const currentBlock = Blockchain.block.number;

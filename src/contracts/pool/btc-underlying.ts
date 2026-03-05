@@ -24,6 +24,7 @@ import {
     EMPTY_BUFFER,
     encodeSelector,
 } from '@btc-vision/btc-runtime/runtime';
+import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
 
 import {
     CALL,
@@ -38,6 +39,7 @@ import {
     BUY_FEE_BPS,
     EXERCISE_FEE_BPS,
     PRECISION,
+    EXTENDED_SLOTS_POINTER,
 } from './constants';
 
 import { Option } from './storage';
@@ -52,7 +54,6 @@ import {
     BtcClaimableEvent,
 } from './events';
 
-import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
 import { OptionsPoolBase } from './base';
 
 // =============================================================================
@@ -64,7 +65,6 @@ const BRIDGE_POINTER: u16 = Blockchain.nextPointer;
 // Extended option storage slots (beyond base 7 slots)
 // Slot 7: btcCollateralAmount (u256, satoshis)
 // Slot 8: escrowScriptHash (bytes32)
-// These are stored via the base OptionStorage's getKey mechanism with slot 7 and 8
 
 // =============================================================================
 // CONTRACT
@@ -113,6 +113,7 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
     // WRITE OPTION — BTC collateral for CALL, OP20 for PUT
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method(
         { name: 'optionType', type: ABIDataTypes.UINT8 },
         { name: 'strikePrice', type: ABIDataTypes.UINT256 },
@@ -145,27 +146,37 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
             throw new Revert('Expiry too far');
         }
 
-        const optionId = this._nextId.value;
-        this._nextId.value = SafeMath.add(optionId, u256.One);
-
         if (optionType == CALL) {
-            // CALL: BTC collateral — verify BTC UTXO output to escrow
-            const btcAmountSats = underlyingAmount.lo1; // underlyingAmount = satoshis for type 2
+            // HIGH-1 (CEI reorder): Verify BTC output BEFORE ID allocation
 
-            // Generate escrow script hash via bridge
-            // Use a placeholder buyer pubkey (all zeros) since no buyer yet
-            // Writer path uses CLTV at expiryBlock + grace for refund
-            const writerPubkey = this.getActorPubkey(writer);
+            // MED-1: Guard u256→u64 truncation
+            if (underlyingAmount.hi1 != 0 || underlyingAmount.hi2 != 0 || underlyingAmount.lo2 != 0) {
+                throw new Revert('Underlying amount overflows u64');
+            }
+            const btcAmountSats: u64 = underlyingAmount.lo1;
+
+            // CRIT-2: Use registered pubkey instead of fake derived key
+            const writerPubkey = this.getRegisteredPubkeyInternal(writer);
+
+            // LOW-6: Validate pubkey length before escrow script query
+            if (writerPubkey.length != 33) {
+                throw new Revert('Invalid writer pubkey length');
+            }
+
             const placeholderBuyer = new Uint8Array(33);
             placeholderBuyer[0] = 0x02;
             const cltvBlock = expiryBlock + GRACE_PERIOD_BLOCKS;
             const escrowHash = this.queryEscrowScriptHash(placeholderBuyer, writerPubkey, cltvBlock);
 
-            // Verify BTC output exists in this transaction
+            // Verify BTC output exists in this transaction (before ID allocation)
             const verified = this.queryVerifyBtcOutput(escrowHash, btcAmountSats);
             if (!verified) {
                 throw new Revert('BTC collateral output not found');
             }
+
+            // Now allocate ID (after verification)
+            const optionId = this._nextId.value;
+            this._nextId.value = SafeMath.add(optionId, u256.One);
 
             // Store option
             const option = new Option();
@@ -196,8 +207,15 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
             event.writeU64(expiryBlock);
             event.writeBytes(escrowHash);
             Blockchain.emit(new OptionWrittenBtcEvent(event));
+
+            const result = new BytesWriter(32);
+            result.writeU256(optionId);
+            return result;
         } else {
             // PUT: OP20 premium token collateral (same as base)
+            const optionId = this._nextId.value;
+            this._nextId.value = SafeMath.add(optionId, u256.One);
+
             const collateralAmount = SafeMath.div(SafeMath.mul(strikePrice, underlyingAmount), PRECISION);
 
             const option = new Option();
@@ -224,17 +242,18 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
             event.writeU256(premium);
             event.writeU64(expiryBlock);
             Blockchain.emit(new OptionWrittenEvent(event));
-        }
 
-        const result = new BytesWriter(32);
-        result.writeU256(optionId);
-        return result;
+            const result = new BytesWriter(32);
+            result.writeU256(optionId);
+            return result;
+        }
     }
 
     // -------------------------------------------------------------------------
     // BUY OPTION — OP20 premium payment (same as base)
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('OptionPurchased')
@@ -296,6 +315,7 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
     // EXERCISE
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('OptionExercised')
@@ -349,7 +369,6 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
             this._transferFrom(this._premiumToken.value, caller, this.feeRecipientStore.value, exerciseFee);
 
             // Emit BtcClaimable event with escrow details
-            // Buyer can claim BTC from escrow using the buyer path of the dual-path script
             const escrowHash = this.getEscrowHash(optionId);
             const btcAmount = this.getBtcCollateral(optionId);
 
@@ -361,9 +380,19 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
             Blockchain.emit(new BtcClaimableEvent(claimEvent));
         } else {
             // PUT: buyer sends BTC underlying via UTXO, receives OP20 strike value
-            // Verify BTC output to writer's address
-            const writerPubkey = this.getActorPubkey(option.writer);
-            const btcAmountSats = option.underlyingAmount.lo1;
+            // CRIT-2: Use registered pubkey instead of fake derived key
+            const writerPubkey = this.getRegisteredPubkeyInternal(option.writer);
+
+            // LOW-6: Validate pubkey length
+            if (writerPubkey.length != 33) {
+                throw new Revert('Invalid writer pubkey length');
+            }
+
+            // MED-1: Guard u256→u64 truncation
+            if (option.underlyingAmount.hi1 != 0 || option.underlyingAmount.hi2 != 0 || option.underlyingAmount.lo2 != 0) {
+                throw new Revert('Underlying amount overflows u64');
+            }
+            const btcAmountSats: u64 = option.underlyingAmount.lo1;
 
             // Generate CSV script hash for writer to receive the BTC
             const csvHash = this.queryCsvScriptHash(writerPubkey, 6);
@@ -405,6 +434,7 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
     // CANCEL
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('OptionCancelled')
@@ -428,9 +458,9 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
         this.options.setStatus(optionId, CANCELLED);
 
         if (option.optionType == CALL) {
-            // CALL: BTC collateral in escrow. Mark cancelled.
-            // Writer reclaims BTC via CLTV path off-chain after expiry.
-            // No on-chain BTC movement. Emit escrow info for off-chain claim.
+            // MED-3: Type 2 CALL cancel has no on-chain fee because BTC collateral
+            // is in a P2WSH escrow, not held by the contract. The writer reclaims
+            // BTC via the CLTV path off-chain after expiry. No OP20 movement occurs.
             const escrowHash = this.getEscrowHash(optionId);
             const btcAmount = this.getBtcCollateral(optionId);
 
@@ -481,6 +511,7 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
     // SETTLE
     // -------------------------------------------------------------------------
 
+    @nonReentrant
     @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('OptionExpired')
@@ -535,11 +566,10 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
 
     // -------------------------------------------------------------------------
     // EXTENDED STORAGE (BTC-specific slots 7 & 8)
+    // MED-2: Uses EXTENDED_SLOTS_POINTER instead of hardcoded 0xFFFF
     // -------------------------------------------------------------------------
 
     private setBtcCollateral(optionId: u256, amount: u256): void {
-        // Use slot 7 via the options storage key mechanism
-        // We access the internal getKey by using a separate SHA256 key
         const key = this.extendedSlotKey(optionId, 7);
         Blockchain.setStorageAt(key, amount.toUint8Array(true));
     }
@@ -561,13 +591,11 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
 
     /**
      * Generate a SHA256 key for extended option storage slots.
-     * Uses the same pattern as OptionStorage but with slots 7+.
+     * Uses EXTENDED_SLOTS_POINTER from constants (MED-2 fix).
      */
     private extendedSlotKey(optionId: u256, slot: u8): Uint8Array {
         const writer = new BytesWriter(35);
-        // Use a different base pointer prefix to avoid collision
-        // OPTIONS_BASE_POINTER is used by base OptionStorage
-        writer.writeU16(0xFFFF); // Extended slot namespace
+        writer.writeU16(EXTENDED_SLOTS_POINTER);
         writer.writeU256(optionId);
         writer.writeU8(slot);
         return sha256(writer.getBuffer());
@@ -618,15 +646,5 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
         }
 
         return result.data.readBoolean();
-    }
-
-    private getActorPubkey(actor: Address): Uint8Array {
-        const pubkey = new Uint8Array(33);
-        const addrBytes: Uint8Array = actor;
-        for (let i: i32 = 0; i < 32 && i < addrBytes.length; i++) {
-            pubkey[i + 1] = addrBytes[i];
-        }
-        pubkey[0] = 0x02;
-        return pubkey;
     }
 }

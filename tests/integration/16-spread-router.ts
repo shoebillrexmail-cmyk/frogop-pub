@@ -26,6 +26,7 @@ import {
     initTestContext,
     readOptionCount,
     pollForOptionCount,
+    pollForPublicKeyInfo,
 } from './test-harness.js';
 import {
     DeploymentHelper,
@@ -141,11 +142,9 @@ async function main() {
         routerAddress = result.contractAddress;
         log.info(`SpreadRouter deployed at: ${routerAddress}`);
 
-        await sleep(30_000);
-
-        // Verify it's alive
-        const pk = await provider.getPublicKeyInfo(routerAddress, true);
-        log.info(`Router call addr: ${pk.toString()}`);
+        // Wait for mining and resolve call address
+        const routerCallAddr = await pollForPublicKeyInfo(provider, routerAddress);
+        log.info(`Router call addr: ${routerCallAddr}`);
 
         return { routerAddress };
     });
@@ -164,6 +163,7 @@ async function main() {
     await runTest('16.1b Pre-setup: Write a buyable option for spread tests', async () => {
         // Approve tokens for pool
         const poolAddr = Address.fromString(poolCallAddr);
+        const countBefore = await readOptionCount(provider, poolCallAddr);
         const approveAmount = 100n * PRECISION;
         await deployer.callContract(underlyingBech32, createIncreaseAllowanceCalldata(poolAddr, approveAmount), 10_000n);
         await sleep(15_000);
@@ -175,7 +175,7 @@ async function main() {
         const writeCalldata = createWriteOptionCalldata(CALL, 30n * PRECISION, expiryBlock, 1n * PRECISION, 3n * PRECISION);
         await deployer.callContract(poolAddress, writeCalldata, 30_000n);
 
-        const count = await pollForOptionCount(provider, poolCallAddr, 1n);
+        const count = await pollForOptionCount(provider, poolCallAddr, countBefore + 1n);
         buyableOptionId = count - 1n;
 
         return { buyableOptionId: buyableOptionId.toString() };

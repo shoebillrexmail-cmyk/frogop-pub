@@ -77,3 +77,8 @@ export const PREMIUM_TOKEN_POINTER: u16 = Blockchain.nextPointer;
 export const NEXT_ID_POINTER: u16 = Blockchain.nextPointer;
 export const FEE_RECIPIENT_POINTER: u16 = Blockchain.nextPointer;
 export const OPTIONS_BASE_POINTER: u16 = Blockchain.nextPointer;
+export const PUBKEY_REGISTRY_POINTER: u16 = Blockchain.nextPointer;
+export const EXTENDED_SLOTS_POINTER: u16 = Blockchain.nextPointer;
+
+/** Reservation expiry in blocks (~1 day on signet) */
+export const RESERVATION_EXPIRY_BLOCKS: u64 = 144;

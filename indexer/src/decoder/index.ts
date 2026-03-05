@@ -307,11 +307,11 @@ function handleOptionReserved(
     blockNumber: number,
     txId: string,
 ): D1PreparedStatement[] {
-    // OptionReserved: [optionId U256, reservationId U256, buyer ADDRESS,
+    // OptionReserved: [reservationId U256, optionId U256, buyer ADDRESS,
     //   btcAmount U256, csvScriptHash ADDRESS, expiryBlock U64]
     const f = parseEventData(event.data, [
-        { name: 'optionId',       type: 'u256'    },
         { name: 'reservationId',  type: 'u256'    },
+        { name: 'optionId',       type: 'u256'    },
         { name: 'buyer',          type: 'address' },
         { name: 'btcAmount',      type: 'u256'    },
         { name: 'csvScriptHash',  type: 'address' },
@@ -331,12 +331,11 @@ function handleReservationExecuted(
     blockNumber: number,
     txId: string,
 ): D1PreparedStatement[] {
-    // ReservationExecuted: [reservationId U256, optionId U256, buyer ADDRESS, btcAmount U256]
+    // ReservationExecuted: [reservationId U256, optionId U256, buyer ADDRESS]
     const f = parseEventData(event.data, [
         { name: 'reservationId', type: 'u256'    },
         { name: 'optionId',      type: 'u256'    },
         { name: 'buyer',         type: 'address' },
-        { name: 'btcAmount',     type: 'u256'    },
     ]);
     if (!f) return [];
 

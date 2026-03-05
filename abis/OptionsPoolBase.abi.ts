@@ -101,6 +101,19 @@ export const OptionsPoolBaseAbi = [
         type: BitcoinAbiTypes.Function,
     },
     {
+        name: 'registerBtcPubkey',
+        inputs: [{ name: 'pubkey', type: ABIDataTypes.BYTES32 }],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
+        name: 'getRegisteredPubkey',
+        constant: true,
+        inputs: [{ name: 'addr', type: ABIDataTypes.ADDRESS }],
+        outputs: [{ name: 'pubkey', type: ABIDataTypes.BYTES32 }],
+        type: BitcoinAbiTypes.Function,
+    },
+    {
         name: 'updateFeeRecipient',
         inputs: [{ name: 'newRecipient', type: ABIDataTypes.ADDRESS }],
         outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],

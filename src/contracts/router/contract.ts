@@ -69,6 +69,11 @@ export class SpreadRouter extends OP_NET {
             throw new Revert('Invalid pool address');
         }
 
+        // MED-6: Validate buyOptionId is not zero
+        if (buyOptionId.isZero()) {
+            throw new Revert('Invalid buy option ID');
+        }
+
         // Leg 1: Write option
         const writeCalldata = new BytesWriter(140);
         writeCalldata.writeSelector(encodeSelector('writeOption(uint8,uint256,uint64,uint256,uint256)'));

@@ -18,7 +18,6 @@ import {
     Calldata,
     Revert,
     StoredAddress,
-    StoredU256,
     OP_NET,
     encodeSelector,
     BitcoinScript,
@@ -31,12 +30,19 @@ import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
 // =============================================================================
 
 const NATIVE_SWAP_POINTER: u16 = Blockchain.nextPointer;
-const CACHED_PRICE_POINTER: u16 = Blockchain.nextPointer;
-const CACHED_BLOCK_POINTER: u16 = Blockchain.nextPointer;
-const CACHED_TOKEN_POINTER: u16 = Blockchain.nextPointer;
+
+/** Per-token price cache pointer (CRIT-4 fix) */
+const PRICE_CACHE_POINTER: u16 = Blockchain.nextPointer;
+
+/** Consumed-output registry pointer (CRIT-1 fix) */
+const CONSUMED_OUTPUTS_POINTER: u16 = Blockchain.nextPointer;
 
 /** Maximum staleness for cached price (6 blocks) */
 const MAX_PRICE_STALENESS: u64 = 6;
+
+/** Cache slot indices for per-token keyed storage */
+const CACHE_SLOT_PRICE: u8 = 0;
+const CACHE_SLOT_BLOCK: u8 = 1;
 
 // =============================================================================
 // CONTRACT
@@ -45,16 +51,10 @@ const MAX_PRICE_STALENESS: u64 = 6;
 @final
 export class NativeSwapBridge extends OP_NET {
     private _nativeSwap: StoredAddress;
-    private _cachedPrice: StoredU256;
-    private _cachedBlock: StoredU256;
-    private _cachedToken: StoredAddress;
 
     public constructor() {
         super();
         this._nativeSwap = new StoredAddress(NATIVE_SWAP_POINTER);
-        this._cachedPrice = new StoredU256(CACHED_PRICE_POINTER, new Uint8Array(32));
-        this._cachedBlock = new StoredU256(CACHED_BLOCK_POINTER, new Uint8Array(32));
-        this._cachedToken = new StoredAddress(CACHED_TOKEN_POINTER);
     }
 
     public override onDeployment(calldata: Calldata): void {
@@ -69,38 +69,39 @@ export class NativeSwapBridge extends OP_NET {
     }
 
     // -------------------------------------------------------------------------
-    // VIEW: getBtcPrice
+    // getBtcPrice (CRIT-4: per-token cache, MED-4: removed @view)
     // -------------------------------------------------------------------------
 
     /**
      * Get the BTC price for a token via NativeSwap cross-contract call.
      * Returns satoshis per token (u256, 18-decimal precision).
-     * Caches the result for 6 blocks to avoid redundant cross-contract calls.
+     * Caches the result per-token for 6 blocks to avoid redundant cross-contract calls.
+     *
+     * NOTE: Not @view because it writes cache state.
      */
-    @view
     @method({ name: 'token', type: ABIDataTypes.ADDRESS })
     @returns({ name: 'price', type: ABIDataTypes.UINT256 })
     public getBtcPrice(calldata: Calldata): BytesWriter {
         const token = calldata.readAddress();
         const currentBlock = u256.fromU64(Blockchain.block.number);
 
-        // Check cache: same token and within staleness window
-        const cachedBlock = this._cachedBlock.value;
-        const cachedToken = this._cachedToken.value;
+        // Per-token cache check (CRIT-4 fix)
+        const cachedBlockKey = this.priceCacheKey(token, CACHE_SLOT_BLOCK);
+        const cachedBlockData = Blockchain.getStorageAt(cachedBlockKey);
+        const cachedBlock = u256.fromUint8ArrayBE(cachedBlockData);
 
         if (
             !cachedBlock.isZero() &&
-            token.equals(cachedToken) &&
             u256.le(u256.sub(currentBlock, cachedBlock), u256.fromU64(MAX_PRICE_STALENESS))
         ) {
-            const price = this._cachedPrice.value;
+            const cachedPriceKey = this.priceCacheKey(token, CACHE_SLOT_PRICE);
+            const price = u256.fromUint8ArrayBE(Blockchain.getStorageAt(cachedPriceKey));
             const writer = new BytesWriter(32);
             writer.writeU256(price);
             return writer;
         }
 
         // Query NativeSwap: getQuote(address token, uint256 satoshis)
-        // We query with 1e18 satoshis to get the rate at full precision
         const queryCalldata = new BytesWriter(68);
         queryCalldata.writeSelector(encodeSelector('getQuote(address,uint256)'));
         queryCalldata.writeAddress(token);
@@ -111,16 +112,16 @@ export class NativeSwapBridge extends OP_NET {
             throw new Revert('NativeSwap getQuote failed');
         }
 
-        // Parse response: u256 price via BytesReader
         const price = result.data.readU256();
         if (price.isZero()) {
             throw new Revert('Zero price returned');
         }
 
-        // Update cache
-        this._cachedPrice.value = price;
-        this._cachedBlock.value = currentBlock;
-        this._cachedToken.value = token;
+        // Update per-token cache
+        const priceKey = this.priceCacheKey(token, CACHE_SLOT_PRICE);
+        Blockchain.setStorageAt(priceKey, price.toUint8Array(true));
+        const blockKey = this.priceCacheKey(token, CACHE_SLOT_BLOCK);
+        Blockchain.setStorageAt(blockKey, currentBlock.toUint8Array(true));
 
         const writer = new BytesWriter(32);
         writer.writeU256(price);
@@ -195,21 +196,23 @@ export class NativeSwapBridge extends OP_NET {
             throw new Revert('CLTV block must be > 0');
         }
 
-        // Build dual-path escrow script manually
-        // OP_IF <buyerPub> OP_CHECKSIG
-        // OP_ELSE <cltvBlock> OP_CHECKLOCKTIMEVERIFY OP_DROP <writerPub> OP_CHECKSIG
-        // OP_ENDIF
+        // LOW-6: Validate pubkey lengths
+        if (buyerPub.length != 33) {
+            throw new Revert('Buyer pubkey must be 33 bytes');
+        }
+        if (writerPub.length != 33) {
+            throw new Revert('Writer pubkey must be 33 bytes');
+        }
 
-        // Encode CLTV block as script number (little-endian, up to 5 bytes)
+        // Build dual-path escrow script manually
         const cltvEncoded = this.encodeScriptNumber(i64(cltvBlock));
         const cltvLen = cltvEncoded.length;
 
-        // Calculate script size
         const buyerPubLen = buyerPub.length;
         const writerPubLen = writerPub.length;
         const scriptSize: i32 =
             1 +                          // OP_IF
-            1 + buyerPubLen +            // push buyerPub (1-byte len prefix for 33-byte key)
+            1 + buyerPubLen +            // push buyerPub
             1 +                          // OP_CHECKSIG
             1 +                          // OP_ELSE
             1 + cltvLen +               // push cltvBlock
@@ -221,40 +224,20 @@ export class NativeSwapBridge extends OP_NET {
 
         const w = new BytesWriter(scriptSize);
 
-        // OP_IF
         w.writeU8(BitcoinOpcodes.OP_IF);
-
-        // <buyerPub> (data push: length byte + data for <= 75 bytes)
         w.writeU8(u8(buyerPubLen));
         w.writeBytes(buyerPub);
-
-        // OP_CHECKSIG
         w.writeU8(BitcoinOpcodes.OP_CHECKSIG);
-
-        // OP_ELSE
         w.writeU8(BitcoinOpcodes.OP_ELSE);
-
-        // <cltvBlock> (data push)
         w.writeU8(u8(cltvLen));
         w.writeBytes(cltvEncoded);
-
-        // OP_CHECKLOCKTIMEVERIFY
         w.writeU8(BitcoinOpcodes.OP_CHECKLOCKTIMEVERIFY);
-
-        // OP_DROP
         w.writeU8(BitcoinOpcodes.OP_DROP);
-
-        // <writerPub> (data push)
         w.writeU8(u8(writerPubLen));
         w.writeBytes(writerPub);
-
-        // OP_CHECKSIG
         w.writeU8(BitcoinOpcodes.OP_CHECKSIG);
-
-        // OP_ENDIF
         w.writeU8(BitcoinOpcodes.OP_ENDIF);
 
-        // SHA256 hash for P2WSH
         const script = w.getBuffer().subarray(0, <i32>w.getOffset());
         const hash = sha256(script);
 
@@ -264,19 +247,19 @@ export class NativeSwapBridge extends OP_NET {
     }
 
     // -------------------------------------------------------------------------
-    // VIEW: verifyBtcOutput
+    // verifyBtcOutput (CRIT-1: consumed-output registry, MED-4: removed @view)
     // -------------------------------------------------------------------------
 
     /**
      * Verify that the current transaction contains a P2WSH output matching
      * the expected script hash and minimum amount.
      *
-     * Scans Blockchain.tx.outputs for:
-     * - P2WSH format: OP_0 0x20 <32-byte-hash>
-     * - Script hash matches expectedHash
-     * - Value >= expectedAmount
+     * CRIT-1 fix: Marks consumed outputs to prevent double-spend within
+     * the same transaction. Each (scriptHash, value) pair can only be
+     * consumed once.
+     *
+     * NOTE: Not @view because it writes consumed-output state.
      */
-    @view
     @method(
         { name: 'expectedHash', type: ABIDataTypes.BYTES32 },
         { name: 'expectedAmount', type: ABIDataTypes.UINT64 },
@@ -292,7 +275,6 @@ export class NativeSwapBridge extends OP_NET {
         for (let i: i32 = 0; i < outputs.length; i++) {
             const output = outputs[i];
 
-            // Skip outputs without scriptPubKey
             if (!output.hasScriptPubKey || output.scriptPublicKey === null) {
                 continue;
             }
@@ -300,7 +282,6 @@ export class NativeSwapBridge extends OP_NET {
             const spk = output.scriptPublicKey!;
 
             // P2WSH format: OP_0 (0x00) + push 32 bytes (0x20) + <32-byte hash>
-            // Total: 34 bytes
             if (spk.length != 34) {
                 continue;
             }
@@ -322,10 +303,22 @@ export class NativeSwapBridge extends OP_NET {
             }
 
             // Check value
-            if (output.value >= expectedAmount) {
-                found = true;
-                break;
+            if (output.value < expectedAmount) {
+                continue;
             }
+
+            // CRIT-1: Check if this output is already consumed
+            const consumedKey = this.consumedOutputKey(expectedHash, output.value);
+            if (Blockchain.hasStorageAt(consumedKey)) {
+                continue; // Already consumed, skip
+            }
+
+            // Mark as consumed
+            const one = new Uint8Array(32);
+            one[31] = 1;
+            Blockchain.setStorageAt(consumedKey, one);
+            found = true;
+            break;
         }
 
         const writer = new BytesWriter(1);
@@ -350,6 +343,24 @@ export class NativeSwapBridge extends OP_NET {
     // INTERNAL HELPERS
     // -------------------------------------------------------------------------
 
+    /** Per-token price cache key: sha256(PRICE_CACHE_POINTER || token || slot) */
+    private priceCacheKey(token: Address, slot: u8): Uint8Array {
+        const w = new BytesWriter(35);
+        w.writeU16(PRICE_CACHE_POINTER);
+        w.writeAddress(token);
+        w.writeU8(slot);
+        return sha256(w.getBuffer());
+    }
+
+    /** Consumed-output key: sha256(CONSUMED_OUTPUTS_POINTER || scriptHash || value) */
+    private consumedOutputKey(scriptHash: Uint8Array, value: u64): Uint8Array {
+        const w = new BytesWriter(42);
+        w.writeU16(CONSUMED_OUTPUTS_POINTER);
+        w.writeBytes(scriptHash);
+        w.writeU64(value);
+        return sha256(w.getBuffer());
+    }
+
     /**
      * Encode an integer as a Bitcoin script number (little-endian with sign bit).
      * Used for CLTV/CSV block heights.
@@ -362,14 +373,12 @@ export class NativeSwapBridge extends OP_NET {
         const negative = value < 0;
         let absValue: u64 = negative ? u64(-value) : u64(value);
 
-        // Determine number of bytes needed
         const result: u8[] = [];
         while (absValue > 0) {
             result.push(u8(absValue & 0xff));
             absValue >>= 8;
         }
 
-        // If the most significant byte has the sign bit set, add an extra byte
         if (result[result.length - 1] & 0x80) {
             result.push(negative ? 0x80 : 0x00);
         } else if (negative) {

@@ -8,6 +8,7 @@
  * Phase 3: executeReservation() — verifies BTC UTXO on-chain and completes the purchase
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { payments, networks } from '@btc-vision/bitcoin';
 
 export type BtcPaymentPhase =
     | 'IDLE'
@@ -42,14 +43,21 @@ export interface UseBtcPaymentResult {
 }
 
 /**
- * Derive a bech32m P2WSH address from a CSV script hash.
- * For display purposes only — the actual verification happens on-chain.
+ * Derive a bech32 P2WSH address from a CSV script hash.
+ * The csvScriptHash is already a SHA256 of the witness script — we wrap it in
+ * a witness v0 program and encode with bech32 (not bech32m, which is for v1+).
+ *
+ * @param csvScriptHash - 0x-prefixed 64-char hex string (32 bytes)
+ * @param network - bitcoin network (defaults to testnet for OPNet signet)
  */
-function deriveP2wshAddress(csvScriptHash: string): string {
-    // In production, this would use bech32m encoding with the script hash.
-    // For now, return a placeholder — the actual BTC address is derived by the
-    // wallet or displayed from the on-chain event data.
-    return `bc1q${csvScriptHash.slice(2, 44)}`;
+function deriveP2wshAddress(
+    csvScriptHash: string,
+    network = networks.testnet, // OPNet testnet runs on signet — uses 'tb' bech32 HRP
+): string {
+    const hashHex = csvScriptHash.startsWith('0x') ? csvScriptHash.slice(2) : csvScriptHash;
+    const hash = Buffer.from(hashHex, 'hex');
+    const p2wsh = payments.p2wsh({ hash, network });
+    return p2wsh.address!;
 }
 
 interface UseBtcPaymentOptions {

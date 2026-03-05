@@ -49,6 +49,9 @@ export interface PoolsConfig {
         wasmPaths: {
             token: string;
             pool: string;
+            poolBtcQuote: string;
+            poolBtcUnderlying: string;
+            bridge: string;
         };
     };
 }

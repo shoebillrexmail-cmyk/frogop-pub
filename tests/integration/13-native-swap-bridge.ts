@@ -17,9 +17,8 @@ import {
     getLogger,
     computeSelector,
     computeSelectorU32,
-    sleep,
 } from './config.js';
-import { createTestHarness, isCallError } from './test-harness.js';
+import { createTestHarness, isCallError, pollForPublicKeyInfo, resolveCallAddress } from './test-harness.js';
 import { DeploymentHelper, getWasmPath } from './deployment.js';
 
 const log = getLogger('13-bridge');
@@ -32,10 +31,10 @@ const { runTest, skipTest, printSummary } = createTestHarness('13-bridge');
 const BRIDGE_SELECTORS = {
     getBtcPrice:               computeSelector('getBtcPrice(address)'),
     getBtcPriceU32:            computeSelectorU32('getBtcPrice(address)'),
-    generateCsvScriptHash:     computeSelector('generateCsvScriptHash(bytes,uint16)'),
-    generateCsvScriptHashU32:  computeSelectorU32('generateCsvScriptHash(bytes,uint16)'),
-    generateEscrowScriptHash:  computeSelector('generateEscrowScriptHash(bytes,bytes,uint64)'),
-    generateEscrowScriptHashU32: computeSelectorU32('generateEscrowScriptHash(bytes,bytes,uint64)'),
+    generateCsvScriptHash:     computeSelector('generateCsvScriptHash(bytes32,uint64)'),
+    generateCsvScriptHashU32:  computeSelectorU32('generateCsvScriptHash(bytes32,uint64)'),
+    generateEscrowScriptHash:  computeSelector('generateEscrowScriptHash(bytes32,bytes32,uint64)'),
+    generateEscrowScriptHashU32: computeSelectorU32('generateEscrowScriptHash(bytes32,bytes32,uint64)'),
     verifyBtcOutput:           computeSelector('verifyBtcOutput(bytes32,uint64)'),
     verifyBtcOutputU32:        computeSelectorU32('verifyBtcOutput(bytes32,uint64)'),
 };
@@ -50,29 +49,6 @@ function createGetBtcPriceCalldata(tokenAddress: Address): string {
     return Buffer.from(w.getBuffer()).toString('hex');
 }
 
-function createCsvScriptHashCalldata(pubkey: Uint8Array, csvBlocks: number): Uint8Array {
-    const w = new BinaryWriter();
-    w.writeU32(BRIDGE_SELECTORS.generateCsvScriptHashU32);
-    w.writeU16(pubkey.length);
-    w.writeBytes(pubkey);
-    w.writeU16(csvBlocks);
-    return w.getBuffer();
-}
-
-function createEscrowScriptHashCalldata(
-    buyerPub: Uint8Array,
-    writerPub: Uint8Array,
-    cltvBlock: bigint,
-): Uint8Array {
-    const w = new BinaryWriter();
-    w.writeU32(BRIDGE_SELECTORS.generateEscrowScriptHashU32);
-    w.writeU16(buyerPub.length);
-    w.writeBytes(buyerPub);
-    w.writeU16(writerPub.length);
-    w.writeBytes(writerPub);
-    w.writeU64(cltvBlock);
-    return w.getBuffer();
-}
 
 // ---------------------------------------------------------------------------
 // Main test flow
@@ -90,13 +66,20 @@ async function main() {
     let bridgeCallAddr = '';
 
     // Get underlying token address for price queries
-    const underlyingBech32 = deployed.tokens.frogU;
-    const underlyingHex = (await provider.getPublicKeyInfo(underlyingBech32, true)).toString();
+    const underlyingHex = await resolveCallAddress(provider, deployed.tokens.frogU);
 
     // -----------------------------------------------------------------------
-    // 13.1 — Deploy NativeSwapBridge
+    // 13.1 — Deploy NativeSwapBridge (reuses existing if in deployed-contracts.json)
     // -----------------------------------------------------------------------
     await runTest('13.1 Deploy NativeSwapBridge', async () => {
+        // Check for previously deployed bridge
+        if (deployed.bridge) {
+            bridgeAddress = deployed.bridge;
+            log.info(`Reusing existing bridge at: ${bridgeAddress}`);
+            bridgeCallAddr = await pollForPublicKeyInfo(provider, bridgeAddress, 3, 5_000);
+            return { bridgeAddress, bridgeCallAddr, source: 'existing' };
+        }
+
         // Bridge takes NativeSwap address as deployment calldata
         // Use a placeholder NativeSwap address (underlying token as stand-in for testnet)
         const w = new BinaryWriter();
@@ -107,15 +90,15 @@ async function main() {
         bridgeAddress = result.contractAddress;
         log.info(`Bridge deployed at: ${bridgeAddress}`);
 
-        // Wait for mining
-        const currentBlock = await provider.getBlockNumber();
-        await sleep(15_000);
+        // Wait for mining and resolve call address
+        bridgeCallAddr = await pollForPublicKeyInfo(provider, bridgeAddress);
 
-        // Resolve call address
-        const pk = await provider.getPublicKeyInfo(bridgeAddress, true);
-        bridgeCallAddr = pk.toString();
+        // Save for subsequent runs
+        deployed.bridge = bridgeAddress;
+        const { saveDeployedContracts } = await import('./config.js');
+        saveDeployedContracts(deployed);
 
-        return { bridgeAddress, bridgeCallAddr };
+        return { bridgeAddress, bridgeCallAddr, source: 'new_deployment' };
     });
 
     if (!bridgeCallAddr) {
@@ -179,16 +162,31 @@ async function main() {
         pubkey[0] = 0x02;
         for (let i = 1; i < 33; i++) pubkey[i] = i;
 
-        const csvBlocks = 6;
-        const calldata = createCsvScriptHashCalldata(pubkey, csvBlocks);
+        const csvBlocks = 6n;
 
-        // Call twice
-        const result1 = await deployer.callContract(bridgeAddress, calldata, 10_000n);
-        await sleep(15_000);
-        const result2 = await deployer.callContract(bridgeAddress, calldata, 10_000n);
+        // Build view call params: raw 33 bytes + U64 (matches calldata.readBytes(33) + readU64())
+        const w = new BinaryWriter();
+        w.writeBytes(pubkey);
+        w.writeU64(csvBlocks);
+        const paramsHex = Buffer.from(w.getBuffer()).toString('hex');
 
-        // Both should produce same hash (verified by comparing tx success)
-        return { tx1: result1.txId, tx2: result2.txId, status: 'both_succeeded' };
+        // Call twice via provider.call (view method — no TX needed)
+        const result1 = await provider.call(bridgeCallAddr, BRIDGE_SELECTORS.generateCsvScriptHash + paramsHex);
+        const result2 = await provider.call(bridgeCallAddr, BRIDGE_SELECTORS.generateCsvScriptHash + paramsHex);
+
+        if (isCallError(result1)) throw new Error(`Call 1 error: ${result1.error}`);
+        if (isCallError(result2)) throw new Error(`Call 2 error: ${result2.error}`);
+        if (result1.revert || result2.revert) throw new Error('View call reverted');
+
+        // Compare the returned hashes
+        const hash1 = result1.result.readBytes(32);
+        const hash2 = result2.result.readBytes(32);
+        const hex1 = Buffer.from(hash1).toString('hex');
+        const hex2 = Buffer.from(hash2).toString('hex');
+
+        if (hex1 !== hex2) throw new Error(`Hashes differ: ${hex1} vs ${hex2}`);
+
+        return { hash: hex1, status: 'deterministic_confirmed' };
     });
 
     // -----------------------------------------------------------------------
@@ -245,10 +243,22 @@ async function main() {
         for (let i = 1; i < 33; i++) writerPub[i] = 33 - i;
 
         const cltvBlock = 1000n;
-        const calldata = createEscrowScriptHashCalldata(buyerPub, writerPub, cltvBlock);
-        const result = await deployer.callContract(bridgeAddress, calldata, 10_000n);
 
-        return { txId: result.txId, status: 'escrow_hash_generated' };
+        // Build view call params: raw 33 bytes + raw 33 bytes + U64
+        // (matches calldata.readBytes(33) + readBytes(33) + readU64())
+        const w = new BinaryWriter();
+        w.writeBytes(buyerPub);
+        w.writeBytes(writerPub);
+        w.writeU64(cltvBlock);
+        const paramsHex = Buffer.from(w.getBuffer()).toString('hex');
+
+        const result = await provider.call(bridgeCallAddr, BRIDGE_SELECTORS.generateEscrowScriptHash + paramsHex);
+
+        if (isCallError(result)) throw new Error(`Call error: ${result.error}`);
+        if (result.revert) throw new Error('View call reverted');
+
+        const hash = Buffer.from(result.result.readBytes(32)).toString('hex');
+        return { escrowHash: hash, status: 'escrow_hash_generated' };
     });
 
     // -----------------------------------------------------------------------

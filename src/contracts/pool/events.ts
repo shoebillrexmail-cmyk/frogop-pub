@@ -94,3 +94,10 @@ export class BtcClaimableEvent extends NetEvent {
         super('BtcClaimable', data);
     }
 }
+
+/** Emitted when a reserved option is restored to OPEN state (LOW-1) */
+export class OptionRestoredEvent extends NetEvent {
+    constructor(data: BytesWriter) {
+        super('OptionRestored', data);
+    }
+}

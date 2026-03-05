@@ -30,8 +30,10 @@ database_id = "2a80cb38-da06-438b-9224-3cc1c71c5f2b"
 [vars]
 OPNET_NETWORK    = "opnetTestnet"
 OPNET_RPC_URL    = "https://testnet.opnet.org"
-# Space-separated bech32 pool addresses to track
-POOL_ADDRESSES   = "opt1sqze2thmp29pkkj8ft8qll0383k3ek4sgvvfqd9r5"
+# Space-separated bech32 pool addresses to track (6 pools: moto-pill, pill-moto, moto-btc, btc-moto, pill-btc, btc-pill)
+# After deploying new pools, run: npx tsx scripts/deploy-pool.ts --deploy-all --no-wait
+# The script prints all POOL_ADDRESSES at the end — paste them here.
+POOL_ADDRESSES   = "opt1sqze2thmp29pkkj8ft8qll0383k3ek4sgvvfqd9r5 opt1sqqp2au6ns9kgyh86dc7q0z6hykzd6f6tccwp38s4 opt1sqqgsmcsqjkrdnr3xl9p9ygt9pmt8zvfap5ln62gr opt1sqzxk23tvmg3kvttypp3y582hmlm69lt8sgr2tu44 opt1sqzfsd34xx00mfrvkqarznxpfueun6qu2dcv0c442 opt1sqrp8pt6gf3u8gpxy7p63vxqhezvvlfjccyjd0kx6"
 FACTORY_ADDRESS  = "opt1sqz4wm6z6gy2rrfsqxf0tuh6tkyn32eerkg57nrka"
 # Max blocks to process per cron invocation (prevents CPU timeout on catch-up)
 MAX_BLOCKS_PER_RUN = "20"

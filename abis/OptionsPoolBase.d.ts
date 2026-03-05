@@ -123,6 +123,26 @@ export type CalculateCollateral = CallResult<
 >;
 
 /**
+ * @description Represents the result of the registerBtcPubkey function call.
+ */
+export type RegisterBtcPubkey = CallResult<
+    {
+        success: boolean;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
+ * @description Represents the result of the getRegisteredPubkey function call.
+ */
+export type GetRegisteredPubkey = CallResult<
+    {
+        pubkey: Uint8Array;
+    },
+    OPNetEvent<never>[]
+>;
+
+/**
  * @description Represents the result of the updateFeeRecipient function call.
  */
 export type UpdateFeeRecipient = CallResult<
@@ -152,5 +172,7 @@ export interface IOptionsPoolBase extends IOP_NETContract {
         strikePrice: bigint,
         underlyingAmount: bigint,
     ): Promise<CalculateCollateral>;
+    registerBtcPubkey(pubkey: Uint8Array): Promise<RegisterBtcPubkey>;
+    getRegisteredPubkey(addr: Address): Promise<GetRegisteredPubkey>;
     updateFeeRecipient(newRecipient: Address): Promise<UpdateFeeRecipient>;
 }

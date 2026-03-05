@@ -26,11 +26,13 @@ import {
     readOptionCount,
     pollForOptionCount,
     pollForOptionStatus,
+    pollForPublicKeyInfo,
+    resolveCallAddress,
 } from './test-harness.js';
 import {
     DeploymentHelper,
     getWasmPath,
-    createPoolCalldata,
+    createBtcPoolCalldata,
     createWriteOptionCalldata,
     createIncreaseAllowanceCalldata,
     createBuyOptionCalldata,
@@ -99,9 +101,9 @@ async function main() {
     const provider = new JSONRpcProvider({ url: config.rpcUrl, network: config.network });
     const deployer = new DeploymentHelper(provider, config.wallet, config.network);
 
-    const premiumBech32 = deployed.tokens.frogP;
-    const premiumHex = (await provider.getPublicKeyInfo(premiumBech32, true)).toString();
-    const underlyingHex = (await provider.getPublicKeyInfo(deployed.tokens.frogU, true)).toString();
+    const premiumAddr = deployed.tokens.frogP;
+    const premiumHex = await resolveCallAddress(provider, premiumAddr);
+    const underlyingHex = await resolveCallAddress(provider, deployed.tokens.frogU);
 
     const feeRecipientWallet = config.mnemonic.deriveOPWallet(AddressTypes.P2TR, 2);
 
@@ -112,25 +114,47 @@ async function main() {
     // 15.1 — Deploy OptionsPoolBtcUnderlying
     // -----------------------------------------------------------------------
     await runTest('15.1 Deploy OptionsPoolBtcUnderlying with bridge address', async () => {
-        const calldata = createPoolCalldata(
+        // Check for previously deployed pool
+        if (deployed.btcUnderlyingPool) {
+            poolAddress = deployed.btcUnderlyingPool;
+            log.info(`Reusing existing BTC underlying pool at: ${poolAddress}`);
+            poolCallAddr = await pollForPublicKeyInfo(provider, poolAddress, 3, 5_000);
+
+            const countResult = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
+            if (isCallError(countResult)) throw new Error(`Pool not responding: ${countResult.error}`);
+
+            return { poolAddress, poolCallAddr, source: 'existing' };
+        }
+
+        if (!deployed.bridge) {
+            throw new Error('No bridge deployed. Run test 13 first.');
+        }
+        const bridgeHex = await resolveCallAddress(provider, deployed.bridge);
+
+        // Pool calldata: underlying + premiumToken + feeRecipient + bridge (4 addresses)
+        const calldata = createBtcPoolCalldata(
             Address.fromString(underlyingHex),
             Address.fromString(premiumHex),
             feeRecipientWallet.address,
+            Address.fromString(bridgeHex),
         );
 
         const result = await deployer.deployContract(getWasmPath('OptionsPoolBtcUnderlying'), calldata, 50_000n);
         poolAddress = result.contractAddress;
         log.info(`BTC underlying pool deployed at: ${poolAddress}`);
 
-        await sleep(30_000);
-
-        const pk = await provider.getPublicKeyInfo(poolAddress, true);
-        poolCallAddr = pk.toString();
+        // Wait for mining and resolve call address
+        poolCallAddr = await pollForPublicKeyInfo(provider, poolAddress);
 
         const countResult = await provider.call(poolCallAddr, POOL_SELECTORS.optionCount);
         if (isCallError(countResult)) throw new Error(`Pool not responding: ${countResult.error}`);
 
-        return { poolAddress, poolCallAddr };
+        // Save for reuse
+        deployed.btcUnderlyingPool = poolAddress;
+        const { saveDeployedContracts } = await import('./config.js');
+        saveDeployedContracts(deployed);
+
+        return { poolAddress, poolCallAddr, source: 'new_deployment' };
     });
 
     if (!poolCallAddr) {
@@ -172,18 +196,19 @@ async function main() {
     await runTest('15.4 PUT writeOption locks OP20 collateral', async () => {
         // PUT on type 2 uses OP20 premium token as collateral — same as base pool
         const poolAddr = Address.fromString(poolCallAddr);
-        await deployer.callContract(premiumBech32, createIncreaseAllowanceCalldata(poolAddr, PUT_COLLATERAL * 100n), 10_000n);
+        const countBefore = await readOptionCount(provider, poolCallAddr);
+        await deployer.callContract(premiumAddr, createIncreaseAllowanceCalldata(poolAddr, PUT_COLLATERAL * 100n), 10_000n);
         await sleep(15_000);
 
         const currentBlock = await provider.getBlockNumber();
         const expiryBlock = currentBlock + 1008n;
 
-        // PUT uses base writeOption (not writeOptionBtc)
-        const writeCalldata = createWriteOptionCalldata(PUT, STRIKE_PRICE, expiryBlock, PUT_COLLATERAL, PREMIUM);
+        // PUT on type 2 also uses writeOptionBtc (not writeOption — that selector doesn't exist)
+        const writeCalldata = createWriteOptionBtcCalldata(PUT, STRIKE_PRICE, expiryBlock, PUT_COLLATERAL, PREMIUM);
         const result = await deployer.callContract(poolAddress, writeCalldata, 30_000n);
 
         // Poll for option to appear
-        const count = await pollForOptionCount(provider, poolCallAddr, 1n);
+        const count = await pollForOptionCount(provider, poolCallAddr, countBefore + 1n);
 
         return { txId: result.txId, optionCount: count.toString() };
     });
@@ -197,7 +222,7 @@ async function main() {
 
         // Approve premium token for buyer
         const poolAddr = Address.fromString(poolCallAddr);
-        await buyerDeployer.callContract(premiumBech32, createIncreaseAllowanceCalldata(poolAddr, PREMIUM * 10n), 10_000n);
+        await buyerDeployer.callContract(premiumAddr, createIncreaseAllowanceCalldata(poolAddr, PREMIUM * 10n), 10_000n);
         await sleep(15_000);
 
         // Buy the PUT option (option 0)

@@ -2,7 +2,7 @@
  * OptionsPoolBase - Shared base class for all option pool types
  *
  * Contains: storage management, view methods, fee management,
- * token transfer helpers, and deployment logic.
+ * token transfer helpers, deployment logic, and pubkey registry.
  *
  * Subclasses:
  * - OptionsPool (type 0): OP20/OP20 pools
@@ -25,6 +25,7 @@ import {
     ReentrancyLevel,
     encodeSelector,
 } from '@btc-vision/btc-runtime/runtime';
+import { sha256 } from '@btc-vision/btc-runtime/runtime/env/global';
 
 import {
     CALL,
@@ -39,6 +40,7 @@ import {
     NEXT_ID_POINTER,
     FEE_RECIPIENT_POINTER,
     OPTIONS_BASE_POINTER,
+    PUBKEY_REGISTRY_POINTER,
 } from './constants';
 
 import { OptionStorage } from './storage';
@@ -291,9 +293,79 @@ export class OptionsPoolBase extends ReentrancyGuard {
     }
 
     // -------------------------------------------------------------------------
-    // FEE MANAGEMENT
+    // PUBKEY REGISTRY (CRIT-2)
     // -------------------------------------------------------------------------
 
+    /**
+     * Register a Bitcoin compressed public key for the caller.
+     * Must be 33 bytes with 0x02 or 0x03 prefix.
+     * Used by BTC pool types for CSV/escrow script generation.
+     */
+    @nonReentrant
+    @method({ name: 'pubkey', type: ABIDataTypes.BYTES32 })
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    public registerBtcPubkey(calldata: Calldata): BytesWriter {
+        const pubkey = calldata.readBytes(33);
+
+        if (pubkey.length != 33) {
+            throw new Revert('Pubkey must be 33 bytes');
+        }
+
+        const prefix = pubkey[0];
+        if (prefix != 0x02 && prefix != 0x03) {
+            throw new Revert('Invalid pubkey prefix');
+        }
+
+        const sender = Blockchain.tx.sender;
+        const key = this.pubkeyKey(sender);
+        Blockchain.setStorageAt(key, pubkey);
+
+        const result = new BytesWriter(1);
+        result.writeBoolean(true);
+        return result;
+    }
+
+    /**
+     * Get the registered Bitcoin pubkey for an address.
+     */
+    @view
+    @method({ name: 'addr', type: ABIDataTypes.ADDRESS })
+    @returns({ name: 'pubkey', type: ABIDataTypes.BYTES32 })
+    public getRegisteredPubkey(calldata: Calldata): BytesWriter {
+        const addr = calldata.readAddress();
+        const key = this.pubkeyKey(addr);
+        const data = Blockchain.getStorageAt(key);
+
+        const writer = new BytesWriter(33);
+        writer.writeBytes(data.subarray(0, 33));
+        return writer;
+    }
+
+    /**
+     * Internal helper for subclasses to read a registered pubkey.
+     * Reverts if no pubkey is registered.
+     */
+    protected getRegisteredPubkeyInternal(addr: Address): Uint8Array {
+        const key = this.pubkeyKey(addr);
+        if (!Blockchain.hasStorageAt(key)) {
+            throw new Revert('No pubkey registered');
+        }
+        const data = Blockchain.getStorageAt(key);
+        return data.subarray(0, 33);
+    }
+
+    private pubkeyKey(addr: Address): Uint8Array {
+        const w = new BytesWriter(34);
+        w.writeU16(PUBKEY_REGISTRY_POINTER);
+        w.writeAddress(addr);
+        return sha256(w.getBuffer());
+    }
+
+    // -------------------------------------------------------------------------
+    // FEE MANAGEMENT (CRIT-3: @nonReentrant, LOW-3: same-addr check)
+    // -------------------------------------------------------------------------
+
+    @nonReentrant
     @method('updateFeeRecipient', { name: 'newRecipient', type: ABIDataTypes.ADDRESS })
     @returns({ name: 'success', type: ABIDataTypes.BOOL })
     @emit('FeeRecipientUpdated')
@@ -306,6 +378,11 @@ export class OptionsPoolBase extends ReentrancyGuard {
         const newAddr = calldata.readAddress();
         if (newAddr.equals(Address.zero())) {
             throw new Revert('Zero address not allowed');
+        }
+
+        // LOW-3: Prevent no-op same-address update
+        if (newAddr.equals(this.feeRecipientStore.value)) {
+            throw new Revert('Same address');
         }
 
         this.feeRecipientStore.value = newAddr;

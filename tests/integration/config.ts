@@ -129,6 +129,14 @@ export interface DeployedContracts {
     pool?: string;
     /** Multi-pool array (preferred). */
     pools?: PoolDeployment[];
+    /** NativeSwapBridge address (phase 2). */
+    bridge?: string;
+    /** SpreadRouter address (phase 2). */
+    router?: string;
+    /** BTC quote pool address (phase 2). */
+    btcQuotePool?: string;
+    /** BTC underlying pool address (phase 2). */
+    btcUnderlyingPool?: string;
     deployedAt: string;
 }
 

@@ -292,6 +292,24 @@ export function createPoolCalldata(
     return writer.getBuffer();
 }
 
+/**
+ * Deployment calldata for BTC pool types (type 1 and type 2).
+ * These contracts read a 4th address (bridge) after the base 3.
+ */
+export function createBtcPoolCalldata(
+    underlying: Address,
+    premiumToken: Address,
+    feeRecipient: Address,
+    bridge: Address,
+): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeAddress(underlying);
+    writer.writeAddress(premiumToken);
+    writer.writeAddress(feeRecipient);
+    writer.writeAddress(bridge);
+    return writer.getBuffer();
+}
+
 export function createRegisterPoolCalldata(
     pool: Address,
     underlying: Address,

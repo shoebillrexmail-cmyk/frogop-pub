@@ -49,9 +49,11 @@ describe('OptionStatus enum matches contract constants', () => {
     it('EXPIRED = 3', () => expect(OptionStatus.EXPIRED).toBe(3));
     it('CANCELLED = 4', () => expect(OptionStatus.CANCELLED).toBe(4));
 
-    it('enum has exactly 5 members', () => {
+    it('RESERVED = 5', () => expect(OptionStatus.RESERVED).toBe(5));
+
+    it('enum has exactly 6 members', () => {
         const members = Object.values(OptionStatus).filter(v => typeof v === 'number');
-        expect(members).toHaveLength(5);
+        expect(members).toHaveLength(6);
     });
 });
 
