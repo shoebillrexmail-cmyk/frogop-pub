@@ -201,6 +201,217 @@ that future strategies (iron condor, butterfly) only need SpreadRouter support.*
 
 ---
 
+## Sprint: BTC Pool Integration Tests — Full Lifecycle Coverage
+
+> **Goal:** Replace all `structural_test` stubs in tests 14 and 15 with real
+> on-chain tests. Every BTC pool operation (write, reserve, execute, exercise,
+> cancel, settle) must be tested end-to-end, including extraOutputs for native
+> BTC transfers.
+
+### Context
+
+Tests 14 (BTC quote / type 1) and 15 (BTC underlying / type 2) were written
+as scaffolding — deployment and basic writes work, but 15 of 23 tests are
+`structural_test` stubs that return immediately without executing. The stubs
+exist because BTC operations require `extraOutputs` (native BTC in the same
+TX), which the `DeploymentHelper.callContract()` doesn't support yet.
+
+**Current test coverage:**
+
+| Test | Real | Stub | Notes |
+|------|------|------|-------|
+| 14 (BTC quote) | 5 real (deploy, write, reserve, cancel) | 13 stubs | executeReservation, exercise, settle, full lifecycles |
+| 15 (BTC underlying) | 4 real (deploy, PUT write, PUT buy) | 7 stubs | CALL write, exercise, cancel, settle, full lifecycles |
+
+**Root blocker:** `DeploymentHelper.callContract()` sends transactions without
+`extraOutputs`. BTC pool operations need to include BTC outputs (P2WSH escrow
+payments) in the same transaction.
+
+### User Stories
+
+**US-1: As a developer, I want full integration test coverage for BTC quote
+pools (type 1) so that I can verify the reservation→execute→exercise flow
+works end-to-end before shipping to users.**
+
+**US-2: As a developer, I want full integration test coverage for BTC
+underlying pools (type 2) so that I can verify writeOptionBtc with real BTC
+collateral and exercise with BTC payouts.**
+
+**US-3: As a developer, I want the test harness to support extraOutputs so
+that all future BTC-related tests can send native BTC alongside contract calls.**
+
+### Tasks
+
+- [ ] **Task 1: Add extraOutputs support to DeploymentHelper**
+  - Extend `callContract()` to accept an optional `extraOutputs` parameter:
+    `Array<{ address: string, value: bigint }>`
+  - These get passed through to `sendTransaction({ extraOutputs })` alongside
+    the existing `signer`, `mldsaSigner`, `maximumAllowedSatToSpend`
+  - Add a helper `deriveBtcEscrowAddress(bridgeAddr, provider)` that fetches
+    the bridge's CSV script hash and derives the P2WSH address (same logic
+    BuyOptionModal uses in frontend)
+  - Update `deployment.ts` with new exports
+  - **Key files:** `tests/integration/deployment.ts`
+
+- [ ] **Task 2: Test 14 — Complete BTC quote pool (type 1) lifecycle**
+  - **14.6** `executeReservation` with valid BTC output: reserve option →
+    derive P2WSH from bridge → call executeReservation with extraOutputs
+    containing BTC payment → verify option status changes to PURCHASED
+  - **14.7** `executeReservation` reverts without BTC: call without
+    extraOutputs → verify on-chain revert, option stays RESERVED
+  - **14.8** `executeReservation` with wrong BTC amount: send 1 sat instead
+    of required amount → verify revert
+  - **14.11** CALL exercise with BTC strike: buy a CALL (via reservation flow),
+    then exercise with BTC strike payment via extraOutputs → verify underlying
+    transferred to buyer
+  - **14.12** CALL exercise reverts without BTC: exercise without extraOutputs
+    → verify revert
+  - **14.13** PUT exercise (OP20 only): write PUT, buy PUT, exercise →
+    verify same behavior as type 0 (no BTC involved)
+  - **14.15** Settle after grace: requires expired + purchased option past
+    grace — may need short expiry for testnet feasibility
+  - **14.16-14.18** Full lifecycle tests: complete write→reserve→execute→exercise
+    round trips for CALL and PUT
+  - **Key files:** `tests/integration/14-btc-quote-pool.ts`
+
+- [ ] **Task 3: Test 15 — Complete BTC underlying pool (type 2) lifecycle**
+  - **15.2** CALL writeOptionBtc with BTC output: call writeOptionBtc with
+    extraOutputs containing BTC collateral → verify option created + BTC
+    locked in escrow
+  - **15.3** CALL writeOptionBtc without BTC: verify on-chain revert
+  - **15.6** CALL exercise (pay OP20 strike, get BTC claim): buyer pays OP20
+    strike via exercise → verify BtcClaim event emitted with P2WSH details
+  - **15.7** PUT exercise with BTC output: buyer exercises PUT by sending BTC
+    to writer via extraOutputs → verify OP20 collateral released to buyer
+  - **15.8** CALL cancel: writer cancels → verify CANCELLED status + escrow
+    info emitted for off-chain BTC reclaim via CLTV
+  - **15.9** CALL settle: requires expired+purchased+grace elapsed → verify
+    writer can settle and reclaim
+  - **15.10-15.11** Full lifecycle round trips for both CALL and PUT
+  - **Key files:** `tests/integration/15-btc-underlying-pool.ts`
+
+- [ ] **Task 4: Bridge integration test coverage**
+  - Test bridge `getBtcPrice()` returns valid price from NativeSwap
+  - Test bridge `verifyBtcOutput()` correctly validates extraOutput amounts
+  - Test CSV script hash derivation matches expected P2WSH address
+  - These may be added to test 13 (`13-native-swap-bridge.ts`) or as new
+    sub-tests in 14/15
+  - **Key files:** `tests/integration/13-native-swap-bridge.ts`
+
+- [ ] **Task 5: Fee verification for BTC pools**
+  - Verify cancel fee (1%) on BTC quote pool — fee in OP20 underlying
+  - Verify buy fee (1%) on BTC quote pool — fee deducted from BTC payment?
+    Or from OP20? Verify against contract source
+  - Verify exercise fee (0.1%) — check fee recipient balance before/after
+  - Same verification for BTC underlying pool
+  - Pattern: match existing fee tests from type 0 pool (test 06b/06c)
+  - **Key files:** `tests/integration/14-btc-quote-pool.ts`,
+    `tests/integration/15-btc-underlying-pool.ts`
+
+### Acceptance criteria
+- Zero `structural_test` stubs remaining in tests 14 and 15
+- All tests pass on testnet (may need retry logic for block timing)
+- `extraOutputs` helper is reusable for any future BTC-related test
+
+### Dependencies
+- Bridge contract deployed (test 13 — already done)
+- BTC quote + underlying pools deployed (tests 14.1, 15.1 — already done)
+- Test wallet must have sufficient BTC balance for extraOutputs
+
+---
+
+## Sprint: SpreadRouter Integration Tests — Full Strategy Coverage
+
+> **Goal:** Complete test 16 coverage for SpreadRouter: deploy, verify all
+> strategy types execute atomically, test rollback guarantees, cross-pool
+> spreads, gas profiling, and BTC pool compatibility.
+
+### Context
+
+Test 16 has 8 test cases. Real execution: deploy (16.1), pre-setup (16.1b),
+bull call spread (16.2), atomic rollback on write fail (16.4), atomic rollback
+on buy fail (16.5), collar/dual-write (16.6). Stubs: bear put spread (16.3),
+gas profiling (16.7), cross-pool spread (16.8).
+
+Additionally, SpreadRouter was only tested with type 0 (OP20/OP20) pools.
+BTC pools (type 1 and 2) need coverage to verify the router handles
+extraOutputs pass-through correctly.
+
+### User Stories
+
+**US-1: As a developer, I want to verify all 4 strategy types (bull call,
+bear put, collar, custom) execute atomically via SpreadRouter so that users
+never get partial fills.**
+
+**US-2: As a developer, I want to verify SpreadRouter works with BTC pools
+so that strategies are available on all pool types.**
+
+### Tasks
+
+- [ ] **Task 1: Complete existing test 16 stubs**
+  - **16.3** Bear put spread: write low-strike PUT + buy high-strike PUT →
+    verify both legs executed, option count increased by 1 (write) + 1
+    existing purchased
+  - **16.7** Gas profiling: parse TX receipts from 16.2 and 16.6, assert
+    total gas < 800M (OPNet block gas limit)
+  - **16.8** Cross-pool spread: deploy a second type 0 pool, write option on
+    pool A, buy option on pool B via router → verify works across pools
+  - **Key file:** `tests/integration/16-spread-router.ts`
+
+- [ ] **Task 2: SpreadRouter + BTC quote pool (type 1)**
+  - **16.9** `executeSpread` on BTC quote pool: write CALL + buy existing
+    option (buy leg needs reservation flow — check if router handles this
+    or if spreads are OP20-only)
+  - **16.10** `executeDualWrite` on BTC quote pool: collar with both legs
+    as OP20 writes → should work identically to type 0
+  - **16.11** Verify router reverts cleanly if BTC pool leg requires
+    extraOutputs that aren't present
+  - Document clearly which strategy types are supported on BTC pools vs
+    OP20-only pools
+  - **Key file:** `tests/integration/16-spread-router.ts`
+
+- [ ] **Task 3: SpreadRouter + BTC underlying pool (type 2)**
+  - **16.12** `executeDualWrite` on type 2: CALL leg needs BTC collateral via
+    extraOutputs — verify router passes through correctly
+  - **16.13** PUT-only dual write on type 2: both PUTs use OP20 collateral →
+    should work without extraOutputs
+  - **16.14** Mixed spread: write on type 2 + buy on type 0 (cross-pool,
+    cross-type) → verify or document as unsupported
+  - **Key file:** `tests/integration/16-spread-router.ts`
+
+- [ ] **Task 4: Atomicity regression tests**
+  - **16.15** Verify option count unchanged after reverted spread (write
+    succeeds but buy reverts → both rolled back)
+  - **16.16** Verify token balances unchanged after reverted dual-write
+    (leg 1 succeeds but leg 2 fails → both rolled back, no allowance
+    consumed)
+  - **16.17** Verify expired option in buy leg causes clean revert with
+    descriptive error
+  - **Key file:** `tests/integration/16-spread-router.ts`
+
+- [ ] **Task 5: Save router address + update deployed-contracts.json**
+  - Test 16.1 deploys the router but currently doesn't persist the address
+  - Add `deployed.router = routerAddress` + `saveDeployedContracts(deployed)`
+    after successful deployment (same pattern as pools)
+  - This enables the SpreadRouter frontend sprint (Task 2 of that sprint)
+    to read the address from config
+  - **Key file:** `tests/integration/16-spread-router.ts`
+
+### Acceptance criteria
+- Zero `structural_test` stubs remaining in test 16
+- All strategy types tested on type 0 pool
+- BTC pool compatibility documented (supported vs unsupported combos)
+- Router address persisted to deployed-contracts.json
+- Tests pass on testnet
+
+### Dependencies
+- Depends on "BTC Pool Integration Tests" sprint (Task 1: extraOutputs in
+  DeploymentHelper) for BTC pool router tests
+- Type 0 pool deployed (tests 05/06a — already done)
+- BTC pools deployed (tests 14.1, 15.1 — already done)
+
+---
+
 ## Backlog
 
 ### Contracts
