@@ -8,7 +8,7 @@
  * Phase 3: executeReservation() — verifies BTC UTXO on-chain and completes the purchase
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { payments, networks } from '@btc-vision/bitcoin';
+import { payments, networks, toBytes32 } from '@btc-vision/bitcoin';
 
 export type BtcPaymentPhase =
     | 'IDLE'
@@ -55,7 +55,7 @@ function deriveP2wshAddress(
     network = networks.testnet, // OPNet testnet runs on signet — uses 'tb' bech32 HRP
 ): string {
     const hashHex = csvScriptHash.startsWith('0x') ? csvScriptHash.slice(2) : csvScriptHash;
-    const hash = Buffer.from(hashHex, 'hex');
+    const hash = toBytes32(new Uint8Array(Buffer.from(hashHex, 'hex')));
     const p2wsh = payments.p2wsh({ hash, network });
     return p2wsh.address!;
 }

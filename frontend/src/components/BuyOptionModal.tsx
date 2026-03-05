@@ -10,7 +10,7 @@ import { useMountedRef } from '../hooks/useMountedRef.ts';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import { Address } from '@btc-vision/transaction';
-import { payments, networks } from '@btc-vision/bitcoin';
+import { payments, networks, toBytes32 } from '@btc-vision/bitcoin';
 import type { OptionData, PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI, BTC_QUOTE_POOL_ABI } from '../services/poolAbi.ts';
@@ -249,7 +249,7 @@ export function BuyOptionModal({
                 ? reservationInfo.csvScriptHash.slice(2)
                 : reservationInfo.csvScriptHash;
             const p2wshAddr = payments.p2wsh({
-                hash: Buffer.from(csvHashHex, 'hex'),
+                hash: toBytes32(new Uint8Array(Buffer.from(csvHashHex, 'hex'))),
                 network: networks.testnet, // OPNet testnet uses signet (tb1 prefix)
             }).address!;
             const receipt = await call.sendTransaction({

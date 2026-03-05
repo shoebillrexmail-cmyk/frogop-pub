@@ -10,19 +10,16 @@
  */
 
 import { JSONRpcProvider } from 'opnet';
-import { BinaryWriter, Address, AddressTypes } from '@btc-vision/transaction';
+import { BinaryWriter, Address } from '@btc-vision/transaction';
 import {
     getConfig,
     loadDeployedContracts,
     getLogger,
-    computeSelector,
     computeSelectorU32,
     sleep,
-    POOL_SELECTORS,
 } from './config.js';
 import {
     createTestHarness,
-    isCallError,
     initTestContext,
     readOptionCount,
     pollForOptionCount,
@@ -128,7 +125,7 @@ async function main() {
         return;
     }
 
-    const { poolAddress, poolCallAddr, walletHex } = ctx;
+    const { poolAddress, poolCallAddr } = ctx;
     const underlyingBech32 = deployed.tokens.frogU;
     const premiumBech32 = deployed.tokens.frogP;
 

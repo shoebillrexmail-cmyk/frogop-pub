@@ -27,7 +27,6 @@ import {
     readOptionCount,
     pollForOptionCount,
     pollForOptionStatus,
-    readTokenBalance,
     pollForPublicKeyInfo,
     resolveCallAddress,
 } from './test-harness.js';
@@ -71,23 +70,9 @@ function createExecuteReservationCalldata(reservationId: bigint): Uint8Array {
     return w.getBuffer();
 }
 
-function createCancelReservationCalldata(reservationId: bigint): Uint8Array {
-    const w = new BinaryWriter();
-    w.writeU32(BTC_QUOTE_SELECTORS.cancelReservation);
-    w.writeU256(reservationId);
-    return w.getBuffer();
-}
-
 function createCancelOptionCalldata(optionId: bigint): Uint8Array {
     const w = new BinaryWriter();
     w.writeU32(POOL_SELECTORS.cancelOption);
-    w.writeU256(optionId);
-    return w.getBuffer();
-}
-
-function createExerciseCalldata(optionId: bigint): Uint8Array {
-    const w = new BinaryWriter();
-    w.writeU32(POOL_SELECTORS.exercise);
     w.writeU256(optionId);
     return w.getBuffer();
 }
@@ -97,10 +82,7 @@ function createExerciseCalldata(optionId: bigint): Uint8Array {
 // ---------------------------------------------------------------------------
 
 const CALL = 0;
-const PUT = 1;
 const OPEN = 0;
-const PURCHASED = 1;
-const EXERCISED = 2;
 const CANCELLED = 4;
 const RESERVED = 5;
 const PRECISION = 10n ** 18n;
@@ -120,7 +102,6 @@ async function main() {
 
     const provider = new JSONRpcProvider({ url: config.rpcUrl, network: config.network });
     const deployer = new DeploymentHelper(provider, config.wallet, config.network);
-    const walletHex = config.wallet.address.toString();
 
     // Resolve token addresses (may be hex or bech32)
     const underlyingAddr = deployed.tokens.frogU;

@@ -22,7 +22,6 @@ import {
 import {
     createTestHarness,
     isCallError,
-    readOption,
     readOptionCount,
     pollForOptionCount,
     pollForOptionStatus,
@@ -33,11 +32,8 @@ import {
     DeploymentHelper,
     getWasmPath,
     createBtcPoolCalldata,
-    createWriteOptionCalldata,
     createIncreaseAllowanceCalldata,
     createBuyOptionCalldata,
-    createCancelOptionCalldata,
-    createExerciseCalldata,
 } from './deployment.js';
 
 const log = getLogger('15-btc-underlying');
@@ -58,9 +54,7 @@ const BTC_UNDERLYING_SELECTORS = {
 
 const CALL = 0;
 const PUT = 1;
-const OPEN = 0;
 const PURCHASED = 1;
-const CANCELLED = 4;
 const PRECISION = 10n ** 18n;
 
 const OPTION_AMOUNT = 100_000n;              // 100k sats for BTC underlying CALL

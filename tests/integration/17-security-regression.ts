@@ -11,13 +11,11 @@
  */
 
 import { JSONRpcProvider } from 'opnet';
-import { BinaryWriter, Address, AddressTypes } from '@btc-vision/transaction';
+import { Address, AddressTypes } from '@btc-vision/transaction';
 import {
     getConfig,
     loadDeployedContracts,
     getLogger,
-    computeSelector,
-    computeSelectorU32,
     sleep,
     POOL_SELECTORS,
 } from './config.js';
@@ -30,16 +28,12 @@ import {
     readTokenBalance,
     pollForOptionCount,
     pollForOptionStatus,
-    loadPoolState,
     resolveCallAddress,
 } from './test-harness.js';
 import {
     DeploymentHelper,
-    getWasmPath,
     createWriteOptionCalldata,
     createCancelOptionCalldata,
-    createBuyOptionCalldata,
-    createExerciseCalldata,
     createIncreaseAllowanceCalldata,
     createBatchCancelCalldata,
 } from './deployment.js';
@@ -52,9 +46,7 @@ const { runTest, skipTest, printSummary } = createTestHarness('17-security');
 // ---------------------------------------------------------------------------
 
 const CALL = 0;
-const PUT = 1;
 const OPEN = 0;
-const PURCHASED = 1;
 const CANCELLED = 4;
 const PRECISION = 10n ** 18n;
 
@@ -73,7 +65,6 @@ async function main() {
 
     const provider = new JSONRpcProvider({ url: config.rpcUrl, network: config.network });
     const deployer = new DeploymentHelper(provider, config.wallet, config.network);
-    const walletHex = config.wallet.address.toString();
 
     let ctx;
     try {
@@ -87,13 +78,11 @@ async function main() {
 
     const { poolAddress, poolCallAddr } = ctx;
     const underlyingBech32 = deployed.tokens.frogU;
-    const premiumBech32 = deployed.tokens.frogP;
     const feeRecipientWallet = config.mnemonic.deriveOPWallet(AddressTypes.P2TR, 2);
     const feeRecipientHex = feeRecipientWallet.address.toString();
 
     // Get token hex addresses
     const underlyingHex = await resolveCallAddress(provider, underlyingBech32);
-    const premiumHex = await resolveCallAddress(provider, premiumBech32);
 
     // -----------------------------------------------------------------------
     // 17.1 — Phase 1 tests pass on refactored OptionsPool (zero regressions)
