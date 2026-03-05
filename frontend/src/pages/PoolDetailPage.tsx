@@ -444,29 +444,27 @@ export function PoolDetailPage() {
                             </div>
 
                             {/* Collapsible PriceChart */}
-                            {candles.length > 0 && (
-                                <div>
-                                    <button
-                                        onClick={() => setChartOpen((v) => !v)}
-                                        className="text-xs font-mono text-terminal-text-muted hover:text-terminal-text-primary transition-colors flex items-center gap-1 mb-2"
-                                        data-testid="toggle-chart"
-                                    >
-                                        <span className={`transition-transform ${chartOpen ? 'rotate-90' : ''}`}>&#9654;</span>
-                                        Price Chart
-                                    </button>
-                                    {chartOpen && (
-                                        <PriceChart
-                                            candles={candles}
-                                            token={chartToken}
-                                            interval={chartInterval}
-                                            onIntervalChange={setChartInterval}
-                                            onTokenChange={setChartToken}
-                                            underlyingSymbol={underlyingSymbol}
-                                            premiumSymbol={premiumSymbol}
-                                        />
-                                    )}
-                                </div>
-                            )}
+                            <div>
+                                <button
+                                    onClick={() => setChartOpen((v) => !v)}
+                                    className="text-xs font-mono text-terminal-text-muted hover:text-terminal-text-primary transition-colors flex items-center gap-1 mb-2"
+                                    data-testid="toggle-chart"
+                                >
+                                    <span className={`transition-transform ${chartOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+                                    Price Chart
+                                </button>
+                                {chartOpen && (
+                                    <PriceChart
+                                        candles={candles}
+                                        token={chartToken}
+                                        interval={chartInterval}
+                                        onIntervalChange={setChartInterval}
+                                        onTokenChange={setChartToken}
+                                        underlyingSymbol={underlyingSymbol}
+                                        premiumSymbol={premiumSymbol}
+                                    />
+                                )}
+                            </div>
                         </div>
                     )}
 

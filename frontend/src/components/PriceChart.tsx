@@ -32,9 +32,29 @@ const DEFAULT_TOKEN_META: Record<string, { unit: string; title: string }> = {
     MOTO_PILL: { unit: 'PILL', title: 'MOTO/PILL ratio' },
 };
 
-/** Build token options + metadata from symbol pair. */
+/** Build token options + metadata from symbol pair.
+ *  BTC is not a standalone token on NativeSwap — it only exists as part of
+ *  cross-rate pairs (MOTO_BTC, PILL_BTC). For BTC pools we show the base
+ *  token, the cross-rate, and the inverse cross-rate instead. */
 function buildTokenOptions(uSym: string, pSym: string) {
     const pairKey = `${uSym}_${pSym}`;
+    const inversePairKey = `${pSym}_${uSym}`;
+
+    if (pSym === 'BTC') {
+        // BTC pools: show underlying token + both cross-rate directions
+        const tokens = [
+            { value: uSym, label: uSym },
+            { value: pairKey, label: `${uSym}/BTC` },
+            { value: inversePairKey, label: `BTC/${uSym}` },
+        ];
+        const meta: Record<string, { unit: string; title: string }> = {
+            [uSym]: { unit: 'sats', title: `${uSym} (tokens per 100k sats)` },
+            [pairKey]: { unit: 'sats', title: `${uSym}/BTC (sats per ${uSym})` },
+            [inversePairKey]: { unit: uSym, title: `BTC/${uSym} (${uSym} per sat)` },
+        };
+        return { tokens, meta };
+    }
+
     const tokens = [
         { value: uSym, label: uSym },
         { value: pSym, label: pSym },
@@ -257,6 +277,15 @@ export function PriceChart({
 
             {/* Chart container */}
             <div ref={containerRef} />
+
+            {/* Empty state overlay */}
+            {candles.length === 0 && (
+                <div className="flex items-center justify-center py-16">
+                    <p className="text-terminal-text-muted text-xs font-mono">
+                        No price data available yet
+                    </p>
+                </div>
+            )}
         </div>
     );
 }
