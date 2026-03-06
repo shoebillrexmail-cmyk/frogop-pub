@@ -274,6 +274,7 @@ export const POOL_SELECTORS = {
     batchSettleView: computeSelector('batchSettle(uint256,uint256,uint256,uint256,uint256,uint256)'),
     rollOption: computeSelectorU32('rollOption(uint256,uint256,uint64,uint256)'),
     rollOptionView: computeSelector('rollOption(uint256,uint256,uint64,uint256)'),
+    registerBtcPubkey: computeSelectorU32('registerBtcPubkey(bytes32)'),
 };
 
 /** OptionsFactory method selectors */

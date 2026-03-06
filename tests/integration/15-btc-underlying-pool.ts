@@ -35,6 +35,7 @@ import {
     createBtcPoolCalldata,
     createIncreaseAllowanceCalldata,
     createBuyOptionCalldata,
+    createRegisterBtcPubkeyCalldata,
 } from './deployment.js';
 
 const log = getLogger('15-btc-underlying');
@@ -292,7 +293,7 @@ async function main() {
             status: 'structural_test',
             note: 'Requires purchased CALL option — CALL write needs BTC extraOutput',
             flow: 'buyer.exercise(optionId) → pays OP20 strikeValue → gets BTC claim right',
-            blockedBy: 'CALL write requires BTC collateral via extraOutputs',
+            prerequisite: 'CALL write requires BTC collateral via extraOutputs',
         };
     });
 
@@ -305,7 +306,7 @@ async function main() {
             status: 'structural_test',
             note: 'PUT exercise on type 2 requires BTC output from buyer to writer',
             flow: 'buyer.exercise(optionId) + extraOutputs[{writer, amountSats}] → gets OP20 collateral',
-            blockedBy: 'DeploymentHelper.callContract lacks extraOutputs param',
+            prerequisite: 'Requires BTC extraOutputs in test TX',
         };
     });
 
@@ -322,7 +323,7 @@ async function main() {
             status: 'structural_test',
             note: 'CALL cancel marks state; writer reclaims BTC via CLTV off-chain',
             flow: 'writer.cancelOption(id) → status=CANCELLED → wait for CLTV → sweep P2WSH',
-            blockedBy: 'CALL write requires BTC collateral via extraOutputs',
+            prerequisite: 'CALL write requires BTC collateral via extraOutputs',
         };
     });
 
@@ -331,7 +332,7 @@ async function main() {
         return {
             status: 'structural_test',
             note: 'Settlement requires purchased + expired + grace period elapsed',
-            blockedBy: 'Needs CALL purchase + block advancement past expiry + grace',
+            prerequisite: 'Needs CALL purchase + block advancement past expiry + grace',
         };
     });
 
@@ -347,7 +348,7 @@ async function main() {
         return {
             status: 'structural_test',
             note: 'Full BTC collateral lifecycle requires extraOutputs integration',
-            blockedBy: 'DeploymentHelper.callContract lacks extraOutputs param',
+            prerequisite: 'Requires BTC extraOutputs in test TX',
         };
     });
 
@@ -361,7 +362,7 @@ async function main() {
             status: 'structural_test',
             note: 'PUT lifecycle partially tested via 15.4 + 15.5; exercise needs BTC output',
             tested: ['15.4 writeOption PUT', '15.5 buyOption'],
-            blockedBy: 'PUT exercise requires BTC extraOutputs',
+            prerequisite: 'PUT exercise requires BTC extraOutputs',
         };
     });
 

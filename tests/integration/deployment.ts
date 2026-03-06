@@ -475,6 +475,13 @@ export function createRollOptionCalldata(
     return writer.getBuffer();
 }
 
+export function createRegisterBtcPubkeyCalldata(pubkey: Uint8Array): Uint8Array {
+    const writer = new BinaryWriter();
+    writer.writeU32(POOL_SELECTORS.registerBtcPubkey);
+    writer.writeBytes(pubkey);
+    return writer.getBuffer();
+}
+
 export function getWasmPath(contractName: string): string {
     return path.join(process.cwd(), 'build', `${contractName}.wasm`);
 }
