@@ -12,6 +12,7 @@
 | BTC Pool Frontend Flows — Complete extraOutputs | `32a532b` | 2026-03-05 |
 | Strategy UX Enhancement — Price-Aware Guidance | `954dd71` | 2026-03-05 |
 | SpreadRouter config + frontend wiring (Tasks 1-3) | `f2ca3a2` | 2026-03-06 |
+| SpreadRouter — Atomic Strategy Execution (complete) | `d479592` | 2026-03-06 |
 
 ---
 
@@ -89,7 +90,7 @@ opposite directions. This is confusing, especially for BTC pools.
 
 ---
 
-## Sprint: SpreadRouter — Atomic Strategy Execution (IN PROGRESS)
+## ~~Sprint: SpreadRouter — Atomic Strategy Execution~~ DONE
 
 > **Goal:** Deploy SpreadRouter, make it the single execution path for all
 > multi-leg strategies, and remove the workaround CollarModal two-step flow.
@@ -179,7 +180,7 @@ that future strategies (iron condor, butterfly) only need SpreadRouter support.*
   - On StrategiesPage, show active strategy TX status (reuse existing
     TrackedTransaction display pattern)
 
-- [ ] **Task 6: Tests**
+- [x] **Task 6: Tests**
   - **Integration (on-chain):** Test 16 already covers deploy + execute.
     Extend with edge cases: insufficient allowance, expired option for buy leg,
     mismatched pool address.
@@ -258,7 +259,7 @@ that all future BTC-related tests can send native BTC alongside contract calls.*
 
 ### Tasks
 
-- [ ] **Task 1: Add extraOutputs support to DeploymentHelper**
+- [x] **Task 1: Add extraOutputs support to DeploymentHelper**
   - Extend `callContract()` signature: add optional 4th param
     `extraOutputs?: Array<{ address: string, value: bigint }>`
   - Pass it through to `factory.signInteraction({ ..., extraOutputs })`
@@ -751,6 +752,5 @@ wired into the strategy UI.
 
 ## In Progress
 
-- **SpreadRouter — Atomic Strategy Execution**: Tasks 1-3 done, Tasks 4-6 remaining (CollarModal removal, pill tracking, tests)
-- **BTC Pool Integration Tests**: Task 1 (extraOutputs in DeploymentHelper) is the root blocker
+- **BTC Pool Integration Tests**: Task 1 done (extraOutputs in DeploymentHelper); Tasks 2-5 remaining (blocked: bridge.getBtcPrice() fails on testnet — NativeSwap placeholder)
 - **SpreadRouter Integration Tests**: Tasks 1, 5 done; Tasks 2-4 remaining (BTC pool compat, atomicity regression)
