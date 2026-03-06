@@ -7,7 +7,7 @@
  * Pool is determined by URL param, not a selector.
  */
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import { useFallbackProvider } from '../hooks/useFallbackProvider.ts';
@@ -30,7 +30,6 @@ import { SettleModal } from '../components/SettleModal.tsx';
 import { QuickStrategies } from '../components/QuickStrategies.tsx';
 import { YieldOverview } from '../components/YieldOverview.tsx';
 import { WriterHowItWorks } from '../components/WriterHowItWorks.tsx';
-import { CollarModal } from '../components/CollarModal.tsx';
 import { currentNetwork, findPoolConfigByAddress, getNativeSwapAddress, getPricePairKey, formatTokenAmount, getPoolType } from '../config/index.ts';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
 import { NotificationBanner } from '../components/NotificationBanner.tsx';
@@ -117,26 +116,11 @@ export function PoolDetailPage() {
         confirmedCountRef.current = confirmed;
     }, [transactions, poolAddress, refetchPool]);
 
-    const [searchParams, setSearchParams] = useSearchParams();
     const [writeOpen, setWriteOpen] = useState(false);
     const [writeInitialValues, setWriteInitialValues] = useState<WriteOptionInitialValues | undefined>(undefined);
     const [writeStrategyLabel, setWriteStrategyLabel] = useState<string | undefined>();
     const [writeFlowInstanceId, setWriteFlowInstanceId] = useState<string | undefined>();
     const [buyStrategyLabel, setBuyStrategyLabel] = useState<string | undefined>();
-    const [collarOpen, setCollarOpen] = useState(false);
-    // Auto-open CollarModal when navigated with ?openCollar=true
-    const openCollarParam = searchParams.get('openCollar');
-    const [prevOpenCollarParam, setPrevOpenCollarParam] = useState(openCollarParam);
-    if (openCollarParam !== prevOpenCollarParam) {
-        setPrevOpenCollarParam(openCollarParam);
-        if (openCollarParam === 'true') {
-            setCollarOpen(true);
-            const next = new URLSearchParams(searchParams);
-            next.delete('openCollar');
-            setSearchParams(next, { replace: true });
-        }
-    }
-
     const [buyTarget, setBuyTarget] = useState<OptionData | null>(null);
     const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
     const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
@@ -265,19 +249,6 @@ export function PoolDetailPage() {
         setWriteStrategyLabel('Write Protective Put');
         setWriteInitialValues(values);
         setWriteOpen(true);
-    }
-
-    function handleCollarWriteCall(values: WriteOptionInitialValues) {
-        setCollarOpen(false);
-        setWriteStrategyLabel('Collar: Write CALL');
-        setWriteInitialValues(values);
-        setWriteOpen(true);
-    }
-
-    function handleCollarBuyPut(option: OptionData) {
-        setCollarOpen(false);
-        setBuyStrategyLabel('Collar: Buy PUT');
-        setBuyTarget(option);
     }
 
     // Pool not found
@@ -491,7 +462,7 @@ export function PoolDetailPage() {
                                 premiumSymbol={premiumSymbol}
                                 onCoveredCall={handleCoveredCall}
                                 onWritePut={handleWritePut}
-                                onCollar={() => setCollarOpen(true)}
+                                collarLinkTo={`/strategies?pool=${poolAddress}&strategy=collar`}
                                 onWriteCustom={() => setWriteOpen(true)}
                             />
 
@@ -650,21 +621,6 @@ export function PoolDetailPage() {
                         setWriteFlowInstanceId(undefined);
                         refetchPool();
                     }}
-                />
-            )}
-
-            {/* Collar Strategy modal */}
-            {collarOpen && poolInfo && (
-                <CollarModal
-                    poolInfo={poolInfo}
-                    poolAddress={poolAddress}
-                    options={options}
-                    motoPillRatio={motoPillRatio}
-                    motoBal={null}
-                    walletAddress={walletAddress}
-                    onWriteCall={handleCollarWriteCall}
-                    onBuyPut={handleCollarBuyPut}
-                    onClose={() => setCollarOpen(false)}
                 />
             )}
 

@@ -4,7 +4,7 @@ import {
     BinaryWriter,
     TransactionFactory,
 } from '@btc-vision/transaction';
-import type { Network } from '@btc-vision/bitcoin';
+import type { Network, PsbtOutputExtended } from '@btc-vision/bitcoin';
 import type { JSONRpcProvider } from 'opnet';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -127,7 +127,8 @@ export class DeploymentHelper {
     async callContract(
         contractAddress: string,
         calldata: Uint8Array,
-        gasLimit: bigint = 10_000n
+        gasLimit: bigint = 10_000n,
+        extraOutputs?: PsbtOutputExtended[],
     ): Promise<{ txId: string }> {
         log.info(`Calling contract at ${formatAddress(contractAddress)}...`);
 
@@ -166,6 +167,7 @@ export class DeploymentHelper {
                 network: this.network,
                 challenge: challenge as any,
                 ...(useMLDSA ? { linkMLDSAPublicKeyToAddress: true, revealMLDSAPublicKey: true } : {}),
+                ...(extraOutputs?.length ? { optionalOutputs: extraOutputs } : {}),
             });
 
             log.info(`Interaction TX signed (attempt ${attempt}, mldsaReveal=${useMLDSA})`);

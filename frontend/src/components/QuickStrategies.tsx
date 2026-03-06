@@ -5,6 +5,7 @@
  * Protective Put (buy-side) has been moved to the Buy tab as an inline card.
  */
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import type { PoolInfo } from '../services/types.ts';
 import {
     calcCoveredCallParams,
@@ -22,7 +23,8 @@ interface QuickStrategiesProps {
     premiumSymbol?: string;
     onCoveredCall: (values: WriteOptionInitialValues) => void;
     onWritePut: (values: WriteOptionInitialValues) => void;
-    onCollar: () => void;
+    /** URL to navigate to for the Collar strategy (e.g. /strategies?pool=X&strategy=collar) */
+    collarLinkTo: string;
     onWriteCustom: () => void;
 }
 
@@ -89,7 +91,7 @@ export function QuickStrategies({
     premiumSymbol = 'PILL',
     onCoveredCall,
     onWritePut,
-    onCollar,
+    collarLinkTo,
     onWriteCustom,
 }: QuickStrategiesProps) {
     const noPrice = motoPillRatio === null || motoPillRatio <= 0;
@@ -159,14 +161,23 @@ export function QuickStrategies({
                 disabled={noPrice}
                 testId="strategy-collar"
                 action={
-                    <button
-                        onClick={onCollar}
-                        disabled={noPrice || !collar || !walletConnected}
-                        className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
-                        data-testid="strategy-collar-btn"
-                    >
-                        {walletConnected ? 'Setup Collar' : 'Connect wallet to trade'}
-                    </button>
+                    noPrice || !collar || !walletConnected ? (
+                        <button
+                            disabled
+                            className="w-full btn-secondary py-2 text-xs font-mono rounded disabled:opacity-50"
+                            data-testid="strategy-collar-btn"
+                        >
+                            {walletConnected ? 'Setup Collar' : 'Connect wallet to trade'}
+                        </button>
+                    ) : (
+                        <Link
+                            to={collarLinkTo}
+                            className="block w-full btn-secondary py-2 text-xs font-mono rounded text-center"
+                            data-testid="strategy-collar-btn"
+                        >
+                            Setup Collar
+                        </Link>
+                    )
                 }
             >
                 <p className="text-[10px] text-gray-500 font-mono">CALL 120% / PUT 80%</p>
