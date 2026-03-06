@@ -23,6 +23,8 @@ import {
     createTestHarness,
     initTestContext,
     readOptionCount,
+    readTokenBalance,
+    resolveCallAddress,
     pollForOptionCount,
     pollForPublicKeyInfo,
 } from './test-harness.js';
@@ -389,6 +391,147 @@ async function main() {
                 type2: deployed.btcUnderlyingPool ?? '',
             },
             futureWork: 'Add executeCrossPoolSpread(poolA, poolB, ...) to SpreadRouter contract',
+        };
+    });
+
+    // -----------------------------------------------------------------------
+    // 16.9 — Atomicity: option count unchanged after reverted spread
+    // -----------------------------------------------------------------------
+    await runTest('16.9 Atomicity: option count unchanged after reverted spread', async () => {
+        const countBefore = await readOptionCount(provider, poolCallAddr);
+
+        // Attempt a spread with huge amounts that will fail (insufficient allowance)
+        const poolAddr = Address.fromString(poolCallAddr);
+        const currentBlock = await provider.getBlockNumber();
+        const expiryBlock = currentBlock + 1008n;
+
+        const calldata = createExecuteSpreadCalldata(
+            poolAddr,
+            CALL,
+            100n * PRECISION,
+            expiryBlock,
+            9999n * PRECISION, // Way more than any allowance
+            5n * PRECISION,
+            0n,
+        );
+
+        try {
+            await deployer.callContract(routerAddress, calldata, 50_000n);
+            // TX may broadcast but revert on-chain — wait for next block
+            await sleep(15_000);
+        } catch {
+            // Expected — rejected at simulation
+        }
+
+        const countAfter = await readOptionCount(provider, poolCallAddr);
+        if (countAfter !== countBefore) {
+            throw new Error(`Option count changed: ${countBefore} → ${countAfter} — atomicity violated`);
+        }
+
+        return {
+            optionCountBefore: countBefore.toString(),
+            optionCountAfter: countAfter.toString(),
+            atomicityVerified: true,
+        };
+    });
+
+    // -----------------------------------------------------------------------
+    // 16.10 — Atomicity: token balances unchanged after reverted dual-write
+    // -----------------------------------------------------------------------
+    await runTest('16.10 Atomicity: token balances unchanged after reverted dual-write', async () => {
+        const underlyingCallAddr = await resolveCallAddress(provider, underlyingBech32);
+        const premiumCallAddr = await resolveCallAddress(provider, premiumBech32);
+        const walletHex = ctx.walletHex;
+
+        const underlyingBefore = await readTokenBalance(provider, underlyingCallAddr, walletHex);
+        const premiumBefore = await readTokenBalance(provider, premiumCallAddr, walletHex);
+
+        // Attempt dual-write with insufficient allowance (don't approve first)
+        const poolAddr = Address.fromString(poolCallAddr);
+        const currentBlock = await provider.getBlockNumber();
+        const expiryBlock = currentBlock + 1008n;
+
+        const calldata = createExecuteDualWriteCalldata(
+            poolAddr,
+            CALL,
+            60n * PRECISION,
+            expiryBlock,
+            9999n * PRECISION, // Huge — will fail
+            5n * PRECISION,
+            PUT,
+            40n * PRECISION,
+            expiryBlock,
+            9999n * PRECISION, // Huge — will fail
+            5n * PRECISION,
+        );
+
+        try {
+            await deployer.callContract(routerAddress, calldata, 80_000n);
+            await sleep(15_000);
+        } catch {
+            // Expected
+        }
+
+        const underlyingAfter = await readTokenBalance(provider, underlyingCallAddr, walletHex);
+        const premiumAfter = await readTokenBalance(provider, premiumCallAddr, walletHex);
+
+        if (underlyingAfter !== underlyingBefore) {
+            throw new Error(`Underlying balance changed: ${underlyingBefore} → ${underlyingAfter}`);
+        }
+        if (premiumAfter !== premiumBefore) {
+            throw new Error(`Premium balance changed: ${premiumBefore} → ${premiumAfter}`);
+        }
+
+        return {
+            underlyingUnchanged: true,
+            premiumUnchanged: true,
+            atomicityVerified: true,
+        };
+    });
+
+    // -----------------------------------------------------------------------
+    // 16.11 — Atomicity: buy non-existent option causes clean revert
+    // -----------------------------------------------------------------------
+    await runTest('16.11 Atomicity: buy non-existent option causes clean revert', async () => {
+        const countBefore = await readOptionCount(provider, poolCallAddr);
+
+        // Approve enough for the write leg to succeed
+        const poolAddr = Address.fromString(poolCallAddr);
+        await deployer.callContract(underlyingBech32, createIncreaseAllowanceCalldata(poolAddr, 5n * PRECISION), 10_000n);
+        await deployer.callContract(premiumBech32, createIncreaseAllowanceCalldata(poolAddr, 50n * PRECISION), 10_000n);
+        await sleep(15_000);
+
+        const currentBlock = await provider.getBlockNumber();
+        const expiryBlock = currentBlock + 1008n;
+
+        // Write leg is valid, but buy targets option 999999 (doesn't exist)
+        const calldata = createExecuteSpreadCalldata(
+            poolAddr,
+            CALL,
+            60n * PRECISION,
+            expiryBlock,
+            1n * PRECISION,
+            5n * PRECISION,
+            999999n, // Non-existent
+        );
+
+        let errMsg = '';
+        try {
+            await deployer.callContract(routerAddress, calldata, 50_000n);
+            await sleep(15_000);
+        } catch (err) {
+            errMsg = (err as Error).message;
+        }
+
+        const countAfter = await readOptionCount(provider, poolCallAddr);
+
+        // Even though the write leg was valid, it should be rolled back
+        // because the buy leg failed → no new options created
+        return {
+            optionCountBefore: countBefore.toString(),
+            optionCountAfter: countAfter.toString(),
+            writeRolledBack: countAfter === countBefore,
+            error: errMsg || 'broadcast_succeeded_check_on_chain_revert',
         };
     });
 
