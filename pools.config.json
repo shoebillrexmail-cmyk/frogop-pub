@@ -205,6 +205,12 @@
       "mainnet": ""
     }
   },
+  "router": {
+    "addresses": {
+      "testnet": "opt1sqrnzx8tc0wn233ffc7gkshsuaa5jz0u4tvnkk7x8",
+      "mainnet": ""
+    }
+  },
   "testConfig": {
     "mintAmount": "1000000",
     "wasmPaths": {

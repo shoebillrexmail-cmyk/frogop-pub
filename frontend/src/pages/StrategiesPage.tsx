@@ -24,6 +24,7 @@ import {
     findPoolConfigByAddress,
     getNativeSwapAddress,
     getPricePairKey,
+    getRouterAddress,
 } from '../config/index.ts';
 import { OptionType } from '../services/types.ts';
 
@@ -57,9 +58,6 @@ const STRATEGY_INFO: Record<StrategyType, { label: string; description: string; 
 };
 
 const MAX_SAT = 10_000_000n;
-
-// Placeholder router address — would come from config in production
-const ROUTER_ADDRESS = '';
 
 export function StrategiesPage() {
     const mounted = useMountedRef();
@@ -170,12 +168,13 @@ export function StrategiesPage() {
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
 
+    const routerAddress = getRouterAddress();
     const canExecute = selectedPoolAddress && address && provider && network && !sendingRef.current;
 
     async function handleExecute() {
         if (!canExecute || !address || !provider || !network) return;
-        if (!ROUTER_ADDRESS) {
-            setTxError('SpreadRouter not deployed yet. Configure ROUTER_ADDRESS in the strategy page.');
+        if (!routerAddress) {
+            setTxError('SpreadRouter not deployed yet. Configure router address in pools.config.json.');
             setTxStatus('error');
             return;
         }
@@ -186,7 +185,7 @@ export function StrategiesPage() {
 
         try {
             const routerContract = getContract(
-                ROUTER_ADDRESS,
+                routerAddress,
                 ROUTER_ABI,
                 provider,
                 network,
@@ -277,6 +276,12 @@ export function StrategiesPage() {
             <p className="text-xs text-terminal-text-muted font-mono">
                 Execute atomic multi-leg option strategies via SpreadRouter. Both legs succeed or both revert.
             </p>
+
+            {!routerAddress && (
+                <div className="bg-orange-900/20 border border-orange-700/50 rounded p-3 text-xs font-mono text-orange-400">
+                    SpreadRouter not yet deployed. Strategy execution is disabled until the router contract is configured.
+                </div>
+            )}
 
             {/* Strategy type selector */}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid="strategy-selector">

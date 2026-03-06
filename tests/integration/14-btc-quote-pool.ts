@@ -252,16 +252,50 @@ async function main() {
     });
 
     // -----------------------------------------------------------------------
+    // 14.5b — Verify pool configuration (view calls)
+    // -----------------------------------------------------------------------
+    await runTest('14.5b Verify pool config (underlying, premium, feeRecipient)', async () => {
+        // Read underlying() view
+        const underlyingResult = await provider.call(poolCallAddr, POOL_SELECTORS.underlying);
+        if (isCallError(underlyingResult)) throw new Error(`underlying() call error: ${underlyingResult.error}`);
+        const poolUnderlying = underlyingResult.result.readAddress().toString();
+
+        // Read premiumToken() view
+        const premiumResult = await provider.call(poolCallAddr, POOL_SELECTORS.premiumToken);
+        if (isCallError(premiumResult)) throw new Error(`premiumToken() call error: ${premiumResult.error}`);
+        const poolPremium = premiumResult.result.readAddress().toString();
+
+        // Read feeRecipient() view
+        const feeResult = await provider.call(poolCallAddr, POOL_SELECTORS.feeRecipient);
+        if (isCallError(feeResult)) throw new Error(`feeRecipient() call error: ${feeResult.error}`);
+        const poolFeeRecipient = feeResult.result.readAddress().toString();
+
+        return {
+            underlying: poolUnderlying.slice(0, 20) + '...',
+            premium: poolPremium.slice(0, 20) + '...',
+            feeRecipient: poolFeeRecipient.slice(0, 20) + '...',
+            underlyingMatch: poolUnderlying.toLowerCase() === underlyingHex.toLowerCase(),
+            premiumMatch: poolPremium.toLowerCase() === premiumHex.toLowerCase(),
+        };
+    });
+
+    // -----------------------------------------------------------------------
     // 14.6-14.9 — executeReservation tests (structural)
     // -----------------------------------------------------------------------
     await runTest('14.6 executeReservation succeeds with valid BTC output', async () => {
         // executeReservation requires BTC output in same tx via extraOutputs.
-        // Cannot be fully tested without wallet integration that adds extraOutputs.
-        return { status: 'structural_test', note: 'Requires wallet extraOutputs support for full test' };
+        // The DeploymentHelper.callContract does not support extraOutputs, so this
+        // cannot be fully tested from the CLI. Wallet integration is required.
+        // Verification path: wallet → sign interaction with extraOutputs → broadcast
+        return {
+            status: 'structural_test',
+            note: 'Requires wallet extraOutputs support for full test',
+            blockedBy: 'DeploymentHelper.callContract lacks extraOutputs param',
+        };
     });
 
     await runTest('14.7 executeReservation reverts without BTC output', async () => {
-        // Call executeReservation without BTC output — should revert
+        // Call executeReservation without BTC output — should revert on-chain
         const buyerWallet = config.mnemonic.deriveOPWallet(AddressTypes.P2TR, 1);
         const buyerDeployer = new DeploymentHelper(provider, buyerWallet, config.network);
 
@@ -274,11 +308,19 @@ async function main() {
     });
 
     await runTest('14.8 executeReservation reverts with wrong BTC amount', async () => {
-        return { status: 'structural_test', note: 'Amount verification via bridge verifyBtcOutput' };
+        return {
+            status: 'structural_test',
+            note: 'Amount verification via bridge.verifyBtcOutput — requires extraOutputs with wrong amount',
+            blockedBy: 'DeploymentHelper.callContract lacks extraOutputs param',
+        };
     });
 
     await runTest('14.9 executeReservation reverts if reservation expired', async () => {
-        return { status: 'structural_test', note: 'Reservation expiry = 144 blocks. Would need to wait ~24 hours on testnet.' };
+        return {
+            status: 'structural_test',
+            note: 'Reservation expiry = 144 blocks (~24 hours on Signet). Cannot test in CI.',
+            blockedBy: 'Block time constraint (144 blocks = ~24 hours)',
+        };
     });
 
     // -----------------------------------------------------------------------
@@ -294,18 +336,39 @@ async function main() {
     // 14.11-14.12 — CALL exercise with BTC strike
     // -----------------------------------------------------------------------
     await runTest('14.11 CALL exercise with BTC strike payment succeeds', async () => {
-        return { status: 'structural_test', note: 'Requires purchased CALL + BTC extraOutput for strike payment' };
+        // Type 1 CALL exercise: buyer sends strikeValue in BTC via extraOutputs to writer.
+        // Pool verifies BTC output via bridge.verifyBtcOutput, then transfers underlying to buyer.
+        return {
+            status: 'structural_test',
+            note: 'Requires purchased CALL + BTC extraOutput for strike payment',
+            flow: 'buyer.exercise(optionId) + extraOutputs[{writer, strikeValueSats}]',
+            blockedBy: 'DeploymentHelper.callContract lacks extraOutputs param',
+        };
     });
 
     await runTest('14.12 CALL exercise reverts without BTC payment', async () => {
-        return { status: 'structural_test', note: 'Would revert via bridge verifyBtcOutput' };
+        // Same as 14.11 but without extraOutputs — bridge.verifyBtcOutput should revert
+        return {
+            status: 'structural_test',
+            note: 'Reverts via bridge.verifyBtcOutput — no BTC output found',
+            blockedBy: 'Needs purchased CALL first (which requires BTC buy flow)',
+        };
     });
 
     // -----------------------------------------------------------------------
     // 14.13 — PUT exercise (OP20 only, same as type 0)
     // -----------------------------------------------------------------------
     await runTest('14.13 PUT exercise works normally (OP20 collateral)', async () => {
-        return { status: 'structural_test', note: 'PUT exercise on type 1 identical to type 0 — no BTC involved' };
+        // PUT exercise on type 1 pool is identical to type 0:
+        // - Buyer approved strikeValue in premium token (OP20)
+        // - Pool transfers premium collateral back to writer
+        // - Pool transfers strikeValue from buyer to writer
+        // No BTC involved in PUT exercise on type 1.
+        return {
+            status: 'structural_test',
+            note: 'PUT exercise on type 1 identical to type 0 — no BTC involved',
+            blockedBy: 'Needs purchased PUT (reserve → execute → buy flow)',
+        };
     });
 
     // -----------------------------------------------------------------------
@@ -344,15 +407,39 @@ async function main() {
     // 14.16-14.18 — Full lifecycles (structural)
     // -----------------------------------------------------------------------
     await runTest('14.16 Full lifecycle: write → reserve → execute → exercise (CALL)', async () => {
-        return { status: 'structural_test', note: 'Full CALL lifecycle requires BTC output support' };
+        // Full CALL lifecycle on type 1:
+        //   1. Writer writes CALL (locks OP20 underlying)
+        //   2. Buyer reserves option (pool.reserveOption → bridge.getBtcPrice for BTC amount)
+        //   3. Buyer executes reservation with BTC payment (extraOutputs → bridge.verifyBtcOutput)
+        //   4. Buyer exercises CALL with BTC strike payment (extraOutputs → bridge.verifyBtcOutput)
+        return {
+            status: 'structural_test',
+            note: 'Full CALL lifecycle requires BTC output support at steps 3 and 4',
+            blockedBy: 'DeploymentHelper.callContract lacks extraOutputs param',
+        };
     });
 
     await runTest('14.17 Full lifecycle: write → reserve → execute → exercise (PUT)', async () => {
-        return { status: 'structural_test', note: 'Full PUT lifecycle requires reservation + BTC payment' };
+        // Full PUT lifecycle on type 1:
+        //   1. Writer writes PUT (locks OP20 underlying as collateral via strikeValue math)
+        //   2. Buyer reserves option (same BTC payment flow)
+        //   3. Buyer executes reservation with BTC payment
+        //   4. Buyer exercises PUT — all OP20, no BTC needed at exercise time
+        return {
+            status: 'structural_test',
+            note: 'Full PUT lifecycle requires BTC reservation flow; exercise step is OP20-only',
+            blockedBy: 'DeploymentHelper.callContract lacks extraOutputs param',
+        };
     });
 
     await runTest('14.18 Reservation expiry → re-reservation by different buyer', async () => {
-        return { status: 'structural_test', note: 'Requires 144-block wait for expiry' };
+        // After 144 blocks, reservation expires. Anyone can call cancelReservation,
+        // then a different buyer can reserve the same option.
+        return {
+            status: 'structural_test',
+            note: 'Requires 144-block wait (~24 hours on Signet). Cannot test in CI.',
+            blockedBy: 'Block time constraint (144 blocks = ~24 hours)',
+        };
     });
 
     printSummary();

@@ -44,6 +44,10 @@ export interface PoolsConfig {
     factory: {
         addresses: Record<NetworkId, string>;
     };
+    /** SpreadRouter contract for atomic multi-leg strategies */
+    router?: {
+        addresses: Record<NetworkId, string>;
+    };
     testConfig?: {
         mintAmount: string;
         wasmPaths: {

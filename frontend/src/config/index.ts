@@ -147,6 +147,13 @@ export function isBtcPool(poolType: 0 | 1 | 2): boolean {
     return poolType !== 0;
 }
 
+/** Get the SpreadRouter contract address for the current network. */
+export function getRouterAddress(): string | null {
+    if (!poolsConfig.router) return null;
+    const net = currentNetwork as NetworkId;
+    return poolsConfig.router.addresses[net] || null;
+}
+
 export function formatTokenAmount(amount: bigint, decimals: number = 18): string {
   const divisor = BigInt(10 ** decimals);
   const whole = amount / divisor;
