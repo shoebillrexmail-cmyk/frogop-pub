@@ -160,7 +160,7 @@ that future strategies (iron condor, butterfly) only need SpreadRouter support.*
     pill shows strategy TX status (pending → confirmed)
   - Handle errors: if router TX reverts, show which leg failed and why
 
-- [ ] **Task 4: Pool detail page — link to StrategiesPage for collar**
+- [x] **Task 4: Pool detail page — link to StrategiesPage for collar**
   - In QuickStrategies, replace `onCollar` callback with a `<Link>` to
     `/strategies?pool={address}&strategy=collar`
   - StrategiesPage reads URL params and pre-selects pool + strategy type
@@ -172,7 +172,7 @@ that future strategies (iron condor, butterfly) only need SpreadRouter support.*
     WriteOptionPanel), Protective Put buy (Buy tab → BuyOptionModal). These
     are single-TX operations and don't need the router.
 
-- [ ] **Task 5: Strategy flow tracking via pill**
+- [x] **Task 5: Strategy flow tracking via pill**
   - When a strategy TX is broadcast from StrategiesPage, create a tracked
     transaction in TransactionContext with type `'strategy'`
   - Pill shows: "Collar: MOTO/PILL — pending" → "confirmed"

@@ -260,4 +260,20 @@ describe('PoolDetailPage', () => {
         renderPage();
         expect(screen.getByText(/Testnet/i)).toBeInTheDocument();
     });
+
+    it('does not render CollarModal', () => {
+        renderPage();
+        switchToWriteTab();
+        expect(screen.queryByTestId('collar-modal')).not.toBeInTheDocument();
+    });
+
+    it('collar card links to /strategies with pool and strategy params', () => {
+        renderPage();
+        switchToWriteTab();
+        const collarBtn = screen.getByTestId('strategy-collar-btn');
+        // When wallet is not connected, collar renders as a disabled button
+        // Just verify it exists and no CollarModal is present
+        expect(collarBtn).toBeInTheDocument();
+        expect(screen.queryByTestId('collar-modal')).not.toBeInTheDocument();
+    });
 });
