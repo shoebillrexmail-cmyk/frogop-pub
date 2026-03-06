@@ -2,7 +2,20 @@
 
 > For completed Phase 1 work, see [phase-1-completed.md](phase-1-completed.md).
 
-## Sprint: Pool List UX — Inverse Pair Grouping
+## Completed Sprints
+
+| Sprint | Commit | Date |
+|--------|--------|------|
+| Pool List UX — Inverse Pair Grouping | `cad13a8` | 2026-03-05 |
+| Indexer Cron Resilience | `2c2ed48` | 2026-03-05 |
+| React Error Boundaries | `7c68f95` | 2026-03-05 |
+| BTC Pool Frontend Flows — Complete extraOutputs | `32a532b` | 2026-03-05 |
+| Strategy UX Enhancement — Price-Aware Guidance | `954dd71` | 2026-03-05 |
+| SpreadRouter config + frontend wiring (Tasks 1-3) | `f2ca3a2` | 2026-03-06 |
+
+---
+
+## ~~Sprint: Pool List UX — Inverse Pair Grouping~~ DONE
 
 > **Goal:** Group inverse pool pairs visually on the pool list page so users
 > can see related markets at a glance and pick the right direction for their
@@ -17,7 +30,7 @@ opposite directions. This is confusing, especially for BTC pools.
 
 ### Tasks
 
-- [ ] **Task 1: Group pools into inverse pairs**
+- [x] **Task 1: Group pools into inverse pairs**
   - In `PoolListPage.tsx`, group the flat `pools[]` array into pairs by matching
     underlying↔premium addresses (A/B and B/A are a pair; unpaired pools get
     their own group).
@@ -27,7 +40,7 @@ opposite directions. This is confusing, especially for BTC pools.
   - Write unit tests for grouping logic (edge cases: unpaired pool, 3+ pools
     with same tokens, missing config).
 
-- [ ] **Task 2: Grouped card layout**
+- [x] **Task 2: Grouped card layout**
   - Replace the flat `grid-cols-3` with a vertical list of group rows.
   - Each row has: shared market header + 2 side-by-side `PoolCard`s (or 1 if unpaired).
   - Header shows: market label ("MOTO ↔ BTC"), shared price badge (from
@@ -47,7 +60,7 @@ opposite directions. This is confusing, especially for BTC pools.
     └─────────────────────────────────────────┘
     ```
 
-- [ ] **Task 3: Direction explainer on PoolCard**
+- [x] **Task 3: Direction explainer on PoolCard**
   - Add a one-line subtitle to `PoolCard` explaining what the user locks and
     earns: "Lock MOTO, earn BTC" / "Lock BTC, earn MOTO".
   - Derive from `poolType`: type 0 = "Lock {underlying}, earn {premium}",
@@ -55,12 +68,12 @@ opposite directions. This is confusing, especially for BTC pools.
   - Helps users immediately understand the difference between the two
     directions without clicking in.
 
-- [ ] **Task 4: Search + filter works with groups**
+- [x] **Task 4: Search + filter works with groups**
   - Search should filter at the group level: if either pool in a pair matches
     the query, show the entire group (both cards).
   - Optional: add a pool-type filter dropdown (All / OP20↔OP20 / OP20↔BTC).
 
-- [ ] **Task 5: Tests**
+- [x] **Task 5: Tests**
   - Unit tests for `groupInversePairs()` (grouping, edge cases, sort order).
   - Component test for `PoolListPage` verifying grouped layout renders
     correctly with mock pool data (2 pairs + 1 unpaired).
@@ -76,7 +89,7 @@ opposite directions. This is confusing, especially for BTC pools.
 
 ---
 
-## Sprint: SpreadRouter — Atomic Strategy Execution
+## Sprint: SpreadRouter — Atomic Strategy Execution (IN PROGRESS)
 
 > **Goal:** Deploy SpreadRouter, make it the single execution path for all
 > multi-leg strategies, and remove the workaround CollarModal two-step flow.
@@ -123,7 +136,7 @@ that future strategies (iron condor, butterfly) only need SpreadRouter support.*
 
 ### Tasks
 
-- [ ] **Task 1: Deploy SpreadRouter on testnet**
+- [x] **Task 1: Deploy SpreadRouter on testnet**
   - Run `npm run build:router` to ensure WASM is up to date
   - Run integration test 16 (`npx tsx tests/integration/16-spread-router.ts`)
     which deploys the router and runs bull call spread, bear put spread, and
@@ -132,14 +145,14 @@ that future strategies (iron condor, butterfly) only need SpreadRouter support.*
   - Verify on-chain via RPC: router contract responds to `executeSpread` and
     `executeDualWrite` calls
 
-- [ ] **Task 2: Add SpreadRouter to pools.config.json + frontend config**
+- [x] **Task 2: Add SpreadRouter to pools.config.json + frontend config**
   - Add `"router": { "addresses": { "testnet": "opt1sq..." } }` to `pools.config.json`
   - Add `getRouterAddress()` helper to `frontend/src/config/index.ts` that reads
     from pools.config (same pattern as `getNativeSwapAddress`)
   - Replace hardcoded `ROUTER_ADDRESS = ''` in StrategiesPage with config lookup
   - Add `VITE_ROUTER_ADDRESS` env var fallback for local dev
 
-- [ ] **Task 3: Wire StrategiesPage to live SpreadRouter**
+- [x] **Task 3: Wire StrategiesPage to live SpreadRouter**
   - Remove the "SpreadRouter not deployed yet" error guard (line 137)
   - Test full execution flow: select strategy → configure legs → execute →
     verify TX receipt contains both legs
@@ -201,7 +214,7 @@ that future strategies (iron condor, butterfly) only need SpreadRouter support.*
 
 ---
 
-## Sprint: BTC Pool Integration Tests — Full Lifecycle Coverage
+## Sprint: BTC Pool Integration Tests — Full Lifecycle Coverage (IN PROGRESS)
 
 > **Goal:** Replace all `structural_test` stubs in tests 14 and 15 with real
 > on-chain tests. Every BTC pool operation (write, reserve, execute, exercise,
@@ -324,7 +337,7 @@ that all future BTC-related tests can send native BTC alongside contract calls.*
 
 ---
 
-## Sprint: SpreadRouter Integration Tests — Full Strategy Coverage
+## Sprint: SpreadRouter Integration Tests — Full Strategy Coverage (IN PROGRESS)
 
 > **Goal:** Complete test 16 coverage for SpreadRouter: deploy, verify all
 > strategy types execute atomically, test rollback guarantees, cross-pool
@@ -393,7 +406,7 @@ so that strategies are available on all pool types.**
     descriptive error
   - **Key file:** `tests/integration/16-spread-router.ts`
 
-- [ ] **Task 5: Save router address + update deployed-contracts.json**
+- [x] **Task 5: Save router address + update deployed-contracts.json**
   - Test 16.1 deploys the router but currently doesn't persist the address
   - Add `deployed.router = routerAddress` + `saveDeployedContracts(deployed)`
     after successful deployment (same pattern as pools)
@@ -416,7 +429,7 @@ so that strategies are available on all pool types.**
 
 ---
 
-## Sprint: Indexer Cron Resilience
+## ~~Sprint: Indexer Cron Resilience~~ DONE
 
 > **Goal:** Ensure the indexer cron never silently dies. Wrap all top-level
 > poller work in structured error handling with retry logic and observability,
@@ -432,7 +445,7 @@ retry. A single RPC timeout can cause a full cycle of missed data.
 
 ### Tasks
 
-- [ ] **Task 1: Top-level try/catch in scheduled handler**
+- [x] **Task 1: Top-level try/catch in scheduled handler**
   - Wrap `pollNewBlocks()` call in try/catch inside `scheduled()` in `src/index.ts`
   - On catch: log structured error with `{ error: e.message, stack: e.stack,
     timestamp, cronCycle }` — don't swallow silently
@@ -440,7 +453,7 @@ retry. A single RPC timeout can cause a full cycle of missed data.
     crons, but with exponential backoff that can cause gaps)
   - **Key file:** `indexer/src/index.ts`
 
-- [ ] **Task 2: Per-task isolation in pollNewBlocks**
+- [x] **Task 2: Per-task isolation in pollNewBlocks**
   - Currently `pollNewBlocks()` runs price polling, pool polling, and candle
     aggregation sequentially — if prices fail, pools and candles are skipped
   - Wrap each sub-task in its own try/catch so partial failures don't cascade
@@ -449,7 +462,7 @@ retry. A single RPC timeout can cause a full cycle of missed data.
     pollPools(...), pollCandles(...)])`
   - **Key file:** `indexer/src/poller/index.ts`
 
-- [ ] **Task 3: RPC call retry with exponential backoff**
+- [x] **Task 3: RPC call retry with exponential backoff**
   - Create `retryRpc(fn, maxRetries=3, baseDelayMs=500)` utility in
     `indexer/src/utils/retry.ts`
   - Apply to all `provider.call()` invocations in price polling
@@ -457,14 +470,14 @@ retry. A single RPC timeout can cause a full cycle of missed data.
   - Don't retry on non-transient errors (e.g. invalid calldata — 4xx errors)
   - **Key file:** `indexer/src/utils/retry.ts`, `indexer/src/poller/index.ts`
 
-- [ ] **Task 4: Health check endpoint**
+- [x] **Task 4: Health check endpoint**
   - Add a `GET /health` route to the worker that returns:
     `{ status: 'ok', lastBlock, lastCronAt, priceCount, poolCount }`
   - Query D1 for latest block number and snapshot count
   - Enables external monitoring (Uptime Robot, Cloudflare Health Checks)
   - **Key file:** `indexer/src/api/router.ts`
 
-- [ ] **Task 5: Tests**
+- [x] **Task 5: Tests**
   - Unit test: `retryRpc` retries on transient error, stops on success, gives
     up after maxRetries
   - Unit test: `pollNewBlocks` with one sub-task failing — verify other sub-tasks
@@ -483,7 +496,7 @@ retry. A single RPC timeout can cause a full cycle of missed data.
 
 ---
 
-## Sprint: React Error Boundaries
+## ~~Sprint: React Error Boundaries~~ DONE
 
 > **Goal:** Prevent white-screen crashes when a component throws. Add error
 > boundaries at strategic points so failures are contained and users see
@@ -499,7 +512,7 @@ data formats recently changed.
 
 ### Tasks
 
-- [ ] **Task 1: Create ErrorBoundary component**
+- [x] **Task 1: Create ErrorBoundary component**
   - Create `frontend/src/components/ErrorBoundary.tsx` — class component
     (React error boundaries require class componentDidCatch)
   - Props: `fallback?: ReactNode`, `onError?: (error, info) => void`,
@@ -509,14 +522,14 @@ data formats recently changed.
   - Log error details to console in development
   - **Key file:** `frontend/src/components/ErrorBoundary.tsx`
 
-- [ ] **Task 2: Layout-level boundary**
+- [x] **Task 2: Layout-level boundary**
   - Wrap the `<Outlet>` in the root layout with `<ErrorBoundary>`
   - This catches any page-level crash and shows recovery UI without losing
     the header/navigation
   - User can navigate to a different page without full reload
   - **Key file:** `frontend/src/layouts/MainLayout.tsx` (or wherever Outlet lives)
 
-- [ ] **Task 3: Widget-level boundaries for critical sections**
+- [x] **Task 3: Widget-level boundaries for critical sections**
   - Wrap `<PriceChart>` in its own boundary — chart library errors shouldn't
     crash the pool detail page
   - Wrap `<OptionsTable>` — malformed option data shouldn't crash the page
@@ -525,7 +538,7 @@ data formats recently changed.
   - **Key files:** `frontend/src/pages/PoolDetailPage.tsx`,
     `frontend/src/pages/StrategiesPage.tsx`
 
-- [ ] **Task 4: Graceful degradation when RPC is down**
+- [x] **Task 4: Graceful degradation when RPC is down**
   - When `provider` is null or RPC calls fail, pages should show skeleton UI
     with "Connecting to network..." instead of crashing
   - Add a `useNetworkStatus()` hook that tracks provider connectivity
@@ -534,7 +547,7 @@ data formats recently changed.
   - **Key files:** `frontend/src/hooks/useNetworkStatus.ts`,
     `frontend/src/components/NetworkBanner.tsx`
 
-- [ ] **Task 5: Tests**
+- [x] **Task 5: Tests**
   - Unit test: ErrorBoundary catches render error, shows fallback, calls onError
   - Unit test: ErrorBoundary "Reload" button resets error state
   - Unit test: Child component throwing doesn't crash parent outside boundary
@@ -554,7 +567,7 @@ data formats recently changed.
 
 ---
 
-## Sprint: BTC Pool Frontend Flows — Complete extraOutputs
+## ~~Sprint: BTC Pool Frontend Flows — Complete extraOutputs~~ DONE
 
 > **Goal:** Make all BTC pool user flows (write, exercise, cancel, settle)
 > fully functional by wiring extraOutputs into every modal that needs native
@@ -576,7 +589,7 @@ Audit from 2026-03-05 found that BTC pool modals have detection scaffolding
 
 ### Tasks
 
-- [ ] **Task 1: Create BTC escrow utility**
+- [x] **Task 1: Create BTC escrow utility**
   - Create `frontend/src/utils/btcEscrow.ts` with:
     - `deriveBtcEscrowAddress(bridgeAddr, provider)` — fetch CSV script hash,
       derive P2WSH address (reuse logic from BuyOptionModal)
@@ -586,7 +599,7 @@ Audit from 2026-03-05 found that BTC pool modals have detection scaffolding
   - **Key files:** `frontend/src/utils/btcEscrow.ts`,
     `frontend/src/components/BuyOptionModal.tsx`
 
-- [ ] **Task 2: WriteOptionPanel — type 2 CALL with BTC collateral**
+- [x] **Task 2: WriteOptionPanel — type 2 CALL with BTC collateral**
   - When `poolType === 2` and option type is CALL:
     - Compute BTC collateral amount from underlyingAmount (bridge price lookup)
     - Call `buildBtcExtraOutput()` for the escrow address
@@ -594,7 +607,7 @@ Audit from 2026-03-05 found that BTC pool modals have detection scaffolding
   - Show BTC amount in the confirmation summary
   - **Key file:** `frontend/src/components/WriteOptionPanel.tsx`
 
-- [ ] **Task 3: ExerciseModal — BTC strike/payout flows**
+- [x] **Task 3: ExerciseModal — BTC strike/payout flows**
   - Type 1 CALL exercise: buyer pays BTC strike → add extraOutput with strike
     amount in sats to escrow address
   - Type 2 PUT exercise: buyer sends BTC to writer → add extraOutput with BTC
@@ -602,7 +615,7 @@ Audit from 2026-03-05 found that BTC pool modals have detection scaffolding
   - Show BTC amount required in modal before user confirms
   - **Key file:** `frontend/src/components/ExerciseModal.tsx`
 
-- [ ] **Task 4: CancelModal + SettleModal — pass poolType**
+- [x] **Task 4: CancelModal + SettleModal — pass poolType**
   - Thread `poolType` prop from PoolDetailPage through to CancelModal and
     SettleModal (currently not passed)
   - For type 2 CALL cancel: emit BTC reclaim info (CLTV script details) so
@@ -614,7 +627,7 @@ Audit from 2026-03-05 found that BTC pool modals have detection scaffolding
     `frontend/src/components/SettleModal.tsx`,
     `frontend/src/pages/PoolDetailPage.tsx`
 
-- [ ] **Task 5: Tests**
+- [x] **Task 5: Tests**
   - Unit test: `deriveBtcEscrowAddress` returns valid P2WSH from mock bridge
   - Unit test: `buildBtcExtraOutput` constructs correct output shape
   - Unit test: WriteOptionPanel renders BTC collateral summary for type 2 CALL
@@ -641,7 +654,7 @@ Audit from 2026-03-05 found that BTC pool modals have detection scaffolding
 
 ---
 
-## Sprint: Strategy UX Enhancement — Price-Aware Guidance
+## ~~Sprint: Strategy UX Enhancement — Price-Aware Guidance~~ DONE
 
 > **Goal:** Bring the rich price-aware guidance from WriteOptionPanel (moneyness
 > classification, Black-Scholes premium, yield preview) into the StrategiesPage
@@ -659,7 +672,7 @@ wired into the strategy UI.
 
 ### Tasks
 
-- [ ] **Task 1: Add spot price + moneyness to LegSelector**
+- [x] **Task 1: Add spot price + moneyness to LegSelector**
   - Import `usePoolPrices()` and `classifyMoneyness()` into LegSelector
   - Show current spot price next to strike input
   - Display moneyness badge (ATM/ITM/OTM/Deep ITM/Far OTM) that updates live
@@ -668,7 +681,7 @@ wired into the strategy UI.
   - **Key files:** `frontend/src/components/LegSelector.tsx`,
     `frontend/src/hooks/usePoolPrices.ts`
 
-- [ ] **Task 2: Black-Scholes suggested premium per leg**
+- [x] **Task 2: Black-Scholes suggested premium per leg**
   - Wire `useSuggestedPremium()` hook into each leg configuration
   - Show "Suggested: X PILL" next to premium input with adjustable volatility
     slider (20-200%, default 80%)
@@ -677,7 +690,7 @@ wired into the strategy UI.
   - **Key files:** `frontend/src/components/LegSelector.tsx`,
     `frontend/src/hooks/useSuggestedPremium.ts`
 
-- [ ] **Task 3: Strategy-specific smart defaults via URL params**
+- [x] **Task 3: Strategy-specific smart defaults via URL params**
   - StrategiesPage reads URL params: `?pool=X&strategy=collar&strike=Y`
   - Pre-populate: pool selection, strategy type, and initial strike prices
   - For collar: default to ATM CALL + 10% OTM PUT (common hedge ratio)
@@ -686,13 +699,13 @@ wired into the strategy UI.
   - **Key files:** `frontend/src/pages/StrategiesPage.tsx`,
     `frontend/src/components/QuickStrategies.tsx`
 
-- [ ] **Task 4: Combined P&L chart labels + break-even markers**
+- [x] **Task 4: Combined P&L chart labels + break-even markers**
   - Add numeric labels to key points on CombinedPnLChart: max profit, max loss,
     break-even price(s), current spot price marker
   - Show net premium paid/received for the combined strategy
   - **Key file:** `frontend/src/components/CombinedPnLChart.tsx`
 
-- [ ] **Task 5: Tests**
+- [x] **Task 5: Tests**
   - Unit test: LegSelector shows moneyness badge based on strike vs spot
   - Unit test: Suggested premium auto-fills on button click
   - Unit test: URL params pre-populate strategy configuration
@@ -738,4 +751,6 @@ wired into the strategy UI.
 
 ## In Progress
 
-(none)
+- **SpreadRouter — Atomic Strategy Execution**: Tasks 1-3 done, Tasks 4-6 remaining (CollarModal removal, pill tracking, tests)
+- **BTC Pool Integration Tests**: Task 1 (extraOutputs in DeploymentHelper) is the root blocker
+- **SpreadRouter Integration Tests**: Tasks 1, 5 done; Tasks 2-4 remaining (BTC pool compat, atomicity regression)
