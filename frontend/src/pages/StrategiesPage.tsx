@@ -14,6 +14,7 @@ import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
 import { usePool } from '../hooks/usePool.ts';
 import { usePriceRatio } from '../hooks/usePriceRatio.ts';
 import { useMountedRef } from '../hooks/useMountedRef.ts';
+import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import { getContract } from 'opnet';
 import { Address } from '@btc-vision/transaction';
 import { LegSelector } from '../components/LegSelector.tsx';
@@ -65,6 +66,7 @@ export function StrategiesPage() {
     const [searchParams] = useSearchParams();
     const { walletAddress, address, provider, network } = useWalletConnect();
     const readProvider = useFallbackProvider();
+    const { addTransaction } = useTransactionContext();
     const { pools } = useDiscoverPools(readProvider);
 
     // Strategy type selection
@@ -226,6 +228,17 @@ export function StrategiesPage() {
                 });
                 if (!mounted.current) return;
                 setTxId(receipt.transactionId);
+                addTransaction({
+                    txId: receipt.transactionId,
+                    type: 'strategy',
+                    status: 'broadcast',
+                    poolAddress: selectedPoolAddress,
+                    broadcastBlock: null,
+                    label: `${info.label}: ${underlyingSymbol}/${premiumSymbol}`,
+                    flowId: null,
+                    flowStep: null,
+                    meta: { strategy: strategyType },
+                });
             } else {
                 // Spread: write + buy via executeSpread
                 const poolAddr = Address.fromString(
@@ -256,6 +269,17 @@ export function StrategiesPage() {
                 });
                 if (!mounted.current) return;
                 setTxId(receipt.transactionId);
+                addTransaction({
+                    txId: receipt.transactionId,
+                    type: 'strategy',
+                    status: 'broadcast',
+                    poolAddress: selectedPoolAddress,
+                    broadcastBlock: null,
+                    label: `${info.label}: ${underlyingSymbol}/${premiumSymbol}`,
+                    flowId: null,
+                    flowStep: null,
+                    meta: { strategy: strategyType },
+                });
             }
 
             setTxStatus('done');

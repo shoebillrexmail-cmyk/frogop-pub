@@ -11,7 +11,7 @@ import type { ActiveFlow, StoredFlow, FlowActionType, ResumeRequest } from './fl
 // Types
 // ---------------------------------------------------------------------------
 
-export type TxType = 'approve' | 'writeOption' | 'buyOption' | 'cancelOption' | 'exercise' | 'settle' | 'transferOption' | 'batchCancel' | 'batchSettle' | 'rollOption';
+export type TxType = 'approve' | 'writeOption' | 'buyOption' | 'cancelOption' | 'exercise' | 'settle' | 'transferOption' | 'batchCancel' | 'batchSettle' | 'rollOption' | 'strategy';
 export type TxStatus = 'broadcast' | 'pending' | 'confirmed' | 'failed';
 
 export interface TrackedTransaction {
