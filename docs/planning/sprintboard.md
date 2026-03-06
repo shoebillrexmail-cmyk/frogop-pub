@@ -735,5 +735,10 @@ wired into the strategy UI.
 
 ## In Progress
 
-- **BTC Pool Integration Tests**: Task 1 done (extraOutputs in DeploymentHelper); Task 4 done (bridge getBtcPrice verified). Tasks 2-3, 5 remaining — **UNBLOCKED** (bridge fix `c8e9001`: getQuote uint256→uint64 + real NativeSwap address)
-- **SpreadRouter Integration Tests**: Tasks 1, 4, 5 done; Tasks 2-3 remaining — **UNBLOCKED** (bridge fix)
+- **BTC Pool Integration Tests**: Tasks 1, 4 done. Tests verified on testnet:
+  - Test 13: 10/10 (bridge getBtcPrice, CSV/escrow hash generation)
+  - Test 14: 20/20 (BTC quote pool: deploy, writeOption, registerPubkey, reserveOption→RESERVED, cancel)
+  - Test 15: 13/13 (BTC underlying pool: deploy, PUT write, buyOption→PURCHASED)
+  - Tasks 2-3, 5 remaining (full BTC lifecycle with extraOutputs, fee verification)
+- **SpreadRouter Integration Tests**: Tasks 1, 4, 5 done; Tasks 2-3 remaining (BTC pool compat)
+- **BTC pools in pools.config.json** need redeployment with new bridge (`opt1sqzfp6ujtx2pak38c7n9uc8fhptcwyc2wy5343lzy`). Bridge address updated in config; pool contracts must be redeployed to pick up the bridge internally.

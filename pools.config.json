@@ -91,7 +91,7 @@
       },
       "bridge": {
         "addresses": {
-          "testnet": "opt1sqznv4qdcaanu6hw44e8wksq0v6cgzjdumy4qqvrl",
+          "testnet": "opt1sqzfp6ujtx2pak38c7n9uc8fhptcwyc2wy5343lzy",
           "mainnet": ""
         }
       }
@@ -125,7 +125,7 @@
       },
       "bridge": {
         "addresses": {
-          "testnet": "opt1sqznv4qdcaanu6hw44e8wksq0v6cgzjdumy4qqvrl",
+          "testnet": "opt1sqzfp6ujtx2pak38c7n9uc8fhptcwyc2wy5343lzy",
           "mainnet": ""
         }
       }
@@ -159,7 +159,7 @@
       },
       "bridge": {
         "addresses": {
-          "testnet": "opt1sqznv4qdcaanu6hw44e8wksq0v6cgzjdumy4qqvrl",
+          "testnet": "opt1sqzfp6ujtx2pak38c7n9uc8fhptcwyc2wy5343lzy",
           "mainnet": ""
         }
       }
@@ -193,7 +193,7 @@
       },
       "bridge": {
         "addresses": {
-          "testnet": "opt1sqznv4qdcaanu6hw44e8wksq0v6cgzjdumy4qqvrl",
+          "testnet": "opt1sqzfp6ujtx2pak38c7n9uc8fhptcwyc2wy5343lzy",
           "mainnet": ""
         }
       }
