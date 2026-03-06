@@ -101,11 +101,11 @@ export class NativeSwapBridge extends OP_NET {
             return writer;
         }
 
-        // Query NativeSwap: getQuote(address token, uint256 satoshis)
-        const queryCalldata = new BytesWriter(68);
-        queryCalldata.writeSelector(encodeSelector('getQuote(address,uint256)'));
+        // Query NativeSwap: getQuote(address token, uint64 satoshis)
+        const queryCalldata = new BytesWriter(44);
+        queryCalldata.writeSelector(encodeSelector('getQuote(address,uint64)'));
         queryCalldata.writeAddress(token);
-        queryCalldata.writeU256(u256.fromU64(1_000_000_000_000_000_000));
+        queryCalldata.writeU64(100_000);
 
         const result = Blockchain.call(this._nativeSwap.value, queryCalldata, false);
         if (!result.success) {

@@ -72,18 +72,32 @@ async function main() {
     // 13.1 — Deploy NativeSwapBridge (reuses existing if in deployed-contracts.json)
     // -----------------------------------------------------------------------
     await runTest('13.1 Deploy NativeSwapBridge', async () => {
-        // Check for previously deployed bridge
+        const NATIVE_SWAP_HEX = '0x4397befe4e067390596b3c296e77fe86589487bf3bf3f0a9a93ce794e2d78fb5';
+
+        // Check for previously deployed bridge — verify it points to the correct NativeSwap
         if (deployed.bridge) {
             bridgeAddress = deployed.bridge;
-            log.info(`Reusing existing bridge at: ${bridgeAddress}`);
+            log.info(`Existing bridge at: ${bridgeAddress}`);
             bridgeCallAddr = await pollForPublicKeyInfo(provider, bridgeAddress, 3, 5_000);
-            return { bridgeAddress, bridgeCallAddr, source: 'existing' };
+
+            // Verify bridge has correct NativeSwap address
+            const nsSel = computeSelector('nativeSwap()');
+            const nsResult = await provider.call(bridgeCallAddr, nsSel);
+            if (!isCallError(nsResult) && !nsResult.revert) {
+                const storedAddr = nsResult.result.readAddress().toString();
+                if (storedAddr.toLowerCase() === NATIVE_SWAP_HEX.toLowerCase()) {
+                    log.info('Bridge already has correct NativeSwap address');
+                    return { bridgeAddress, bridgeCallAddr, source: 'existing', nativeSwap: storedAddr };
+                }
+                log.warn(`Bridge has wrong NativeSwap: ${storedAddr}, redeploying...`);
+            } else {
+                log.warn('Could not read bridge nativeSwap, redeploying...');
+            }
         }
 
         // Bridge takes NativeSwap address as deployment calldata
-        // Use a placeholder NativeSwap address (underlying token as stand-in for testnet)
         const w = new BinaryWriter();
-        w.writeAddress(Address.fromString(underlyingHex));
+        w.writeAddress(Address.fromString(NATIVE_SWAP_HEX));
         const calldata = w.getBuffer();
 
         const result = await deployer.deployContract(getWasmPath('NativeSwapBridge'), calldata, 50_000n);
@@ -93,8 +107,16 @@ async function main() {
         // Wait for mining and resolve call address
         bridgeCallAddr = await pollForPublicKeyInfo(provider, bridgeAddress);
 
-        // Save for subsequent runs
+        // Save new bridge and clear stale BTC pools (they reference the old bridge)
         deployed.bridge = bridgeAddress;
+        if (deployed.btcQuotePool) {
+            log.warn('Clearing stale btcQuotePool — needs redeployment with new bridge');
+            delete deployed.btcQuotePool;
+        }
+        if (deployed.btcUnderlyingPool) {
+            log.warn('Clearing stale btcUnderlyingPool — needs redeployment with new bridge');
+            delete deployed.btcUnderlyingPool;
+        }
         const { saveDeployedContracts } = await import('./config.js');
         saveDeployedContracts(deployed);
 
@@ -115,16 +137,17 @@ async function main() {
         const result = await provider.call(bridgeCallAddr, BRIDGE_SELECTORS.getBtcPrice + cd);
 
         if (isCallError(result)) {
-            // Expected on testnet if NativeSwap address is a placeholder
-            log.warn('getBtcPrice returned error (expected if NativeSwap not live): ' + result.error);
-            return { status: 'expected_error_placeholder_nativeswap' };
+            throw new Error('getBtcPrice call error: ' + result.error);
         }
         if (result.revert) {
-            log.warn('getBtcPrice reverted (expected if NativeSwap not live)');
-            return { status: 'expected_revert_placeholder_nativeswap' };
+            const msg = Buffer.from(result.revert, 'base64').toString('utf8');
+            throw new Error('getBtcPrice reverted: ' + msg);
         }
 
         const price = result.result.readU256();
+        if (price === 0n) {
+            throw new Error('getBtcPrice returned zero price');
+        }
         log.info(`BTC price for underlying: ${price}`);
         return { price: price.toString() };
     });
