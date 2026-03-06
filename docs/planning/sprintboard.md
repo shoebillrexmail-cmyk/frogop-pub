@@ -737,8 +737,13 @@ wired into the strategy UI.
 
 - **BTC Pool Integration Tests**: Tasks 1, 4 done. Tests verified on testnet:
   - Test 13: 10/10 (bridge getBtcPrice, CSV/escrow hash generation)
-  - Test 14: 20/20 (BTC quote pool: deploy, writeOption, registerPubkey, reserveOption→RESERVED, cancel)
-  - Test 15: 13/13 (BTC underlying pool: deploy, PUT write, buyOption→PURCHASED)
+  - Test 14: Running fresh against new pool with correct bridge
+  - Test 15: Queued (runs after 14 completes)
   - Tasks 2-3, 5 remaining (full BTC lifecycle with extraOutputs, fee verification)
 - **SpreadRouter Integration Tests**: Tasks 1, 4, 5 done; Tasks 2-3 remaining (BTC pool compat)
-- **BTC pools in pools.config.json** need redeployment with new bridge (`opt1sqzfp6ujtx2pak38c7n9uc8fhptcwyc2wy5343lzy`). Bridge address updated in config; pool contracts must be redeployed to pick up the bridge internally.
+- **Frontend BTC pools redeployed** (2026-03-06) with new bridge:
+  - moto-btc: `opt1sqr7ad5ywjqa6hqrnhfkfa39zaajag0020cm8rpqj`
+  - btc-moto: `opt1sqphrpemnfq329hl9ta4rnsttf8x628tfkqc9a483`
+  - pill-btc: `opt1sqrx5uxhjymy356egzrhaytu85gapy64jjun9r7f9`
+  - btc-pill: `opt1sqpjfne8shr00kxfscymg3v7wux4a3rywzu8k3qz2`
+  - All verified live (bridge() view confirmed), pools.config.json updated

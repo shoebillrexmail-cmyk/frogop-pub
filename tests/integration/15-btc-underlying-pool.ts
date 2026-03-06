@@ -226,7 +226,14 @@ async function main() {
         const poolAddr = Address.fromString(poolCallAddr);
         const countBefore = await readOptionCount(provider, poolCallAddr);
         await deployer.callContract(premiumAddr, createIncreaseAllowanceCalldata(poolAddr, PUT_COLLATERAL * 100n), 10_000n);
-        await sleep(15_000);
+
+        // Wait for next block so approve is confirmed before write
+        const approveBlock = await provider.getBlockNumber();
+        log.info(`Approve broadcast at block ${approveBlock}. Waiting for next block...`);
+        for (let i = 0; i < 40; i++) {
+            await sleep(30_000);
+            if (await provider.getBlockNumber() > approveBlock) break;
+        }
 
         const currentBlock = await provider.getBlockNumber();
         const expiryBlock = currentBlock + 1008n;
@@ -248,10 +255,14 @@ async function main() {
         const buyerWallet = config.mnemonic.deriveOPWallet(AddressTypes.P2TR, 1);
         const buyerDeployer = new DeploymentHelper(provider, buyerWallet, config.network);
 
-        // Approve premium token for buyer
+        // Approve premium token for buyer, then wait for next block
         const poolAddr = Address.fromString(poolCallAddr);
         await buyerDeployer.callContract(premiumAddr, createIncreaseAllowanceCalldata(poolAddr, PREMIUM * 10n), 10_000n);
-        await sleep(15_000);
+        const approveBlock = await provider.getBlockNumber();
+        for (let i = 0; i < 40; i++) {
+            await sleep(30_000);
+            if (await provider.getBlockNumber() > approveBlock) break;
+        }
 
         // Buy the PUT option (option 0)
         const buyCalldata = createBuyOptionCalldata(0n);

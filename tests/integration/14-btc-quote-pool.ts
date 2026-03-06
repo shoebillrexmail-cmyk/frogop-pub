@@ -176,33 +176,34 @@ async function main() {
     // 14.2 — writeOption locks OP20 collateral
     // -----------------------------------------------------------------------
     await runTest('14.2 writeOption locks OP20 collateral (same as type 0)', async () => {
-        // First approve underlying token for the pool
+        // Approve underlying token for the pool, then wait for the approve to
+        // be mined before sending writeOption. On Signet (~10 min blocks), both
+        // TXs landing in the same block can cause write to execute before approve.
         const poolAddr = Address.fromString(poolCallAddr);
         const countBefore = await readOptionCount(provider, poolCallAddr);
-        const approveCalldata = createIncreaseAllowanceCalldata(poolAddr, OPTION_AMOUNT * 10n);
+        const approveCalldata = createIncreaseAllowanceCalldata(poolAddr, OPTION_AMOUNT * 100n);
         await deployer.callContract(underlyingAddr, approveCalldata, 10_000n);
-        await sleep(15_000);
 
-        // Write a CALL option
+        // Wait for next block so approve is confirmed before write
+        const blockAtApprove = await provider.getBlockNumber();
+        log.info(`Approve broadcast at block ${blockAtApprove}. Waiting for next block...`);
+        for (let i = 0; i < 40; i++) {
+            await sleep(30_000);
+            const now = await provider.getBlockNumber();
+            if (now > blockAtApprove) {
+                log.info(`Block advanced to ${now}. Approve should be mined.`);
+                break;
+            }
+        }
+
+        // Write a CALL option (approve is now mined)
         const currentBlock = await provider.getBlockNumber();
         const expiryBlock = currentBlock + 1008n; // ~7 days
         const writeCalldata = createWriteOptionCalldata(CALL, STRIKE_PRICE, expiryBlock, OPTION_AMOUNT, PREMIUM);
         await deployer.callContract(poolAddress, writeCalldata, 30_000n);
 
-        // Poll for option count — if write reverted (approve not mined yet), retry once
-        try {
-            const count = await pollForOptionCount(provider, poolCallAddr, countBefore + 1n, 8, 30_000);
-            return { optionCount: count.toString() };
-        } catch {
-            log.warn('Write may have reverted (approve not mined). Retrying after block...');
-            await sleep(60_000);
-            const retryBlock = await provider.getBlockNumber();
-            const retryExpiry = retryBlock + 1008n;
-            const retryCalldata = createWriteOptionCalldata(CALL, STRIKE_PRICE, retryExpiry, OPTION_AMOUNT, PREMIUM);
-            await deployer.callContract(poolAddress, retryCalldata, 30_000n);
-            const count = await pollForOptionCount(provider, poolCallAddr, countBefore + 1n);
-            return { optionCount: count.toString(), note: 'succeeded_on_retry' };
-        }
+        const count = await pollForOptionCount(provider, poolCallAddr, countBefore + 1n);
+        return { optionCount: count.toString() };
     });
 
     // -----------------------------------------------------------------------
@@ -433,11 +434,17 @@ async function main() {
         const currentBlock = await provider.getBlockNumber();
         const expiryBlock = currentBlock + 1008n;
 
-        // Approve + write
-        await deployer.callContract(underlyingAddr, createIncreaseAllowanceCalldata(poolAddr, OPTION_AMOUNT), 10_000n);
-        await sleep(15_000);
+        // Approve and wait for next block before writing
+        await deployer.callContract(underlyingAddr, createIncreaseAllowanceCalldata(poolAddr, OPTION_AMOUNT * 10n), 10_000n);
+        const approveBlock = await provider.getBlockNumber();
+        for (let i = 0; i < 40; i++) {
+            await sleep(30_000);
+            if (await provider.getBlockNumber() > approveBlock) break;
+        }
 
-        const writeCalldata = createWriteOptionCalldata(CALL, STRIKE_PRICE, expiryBlock, OPTION_AMOUNT, PREMIUM);
+        const writeBlock = await provider.getBlockNumber();
+        const writeExpiry = writeBlock + 1008n;
+        const writeCalldata = createWriteOptionCalldata(CALL, STRIKE_PRICE, writeExpiry, OPTION_AMOUNT, PREMIUM);
         await deployer.callContract(poolAddress, writeCalldata, 30_000n);
 
         const count = await pollForOptionCount(provider, poolCallAddr, countBefore + 1n);
