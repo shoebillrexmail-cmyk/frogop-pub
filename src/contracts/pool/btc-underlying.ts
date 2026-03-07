@@ -33,7 +33,6 @@ import {
     EXERCISED,
     EXPIRED,
     CANCELLED,
-    GRACE_PERIOD_BLOCKS,
     MAX_EXPIRY_BLOCKS,
     CANCEL_FEE_BPS,
     BUY_FEE_BPS,
@@ -165,7 +164,7 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
 
             const placeholderBuyer = new Uint8Array(33);
             placeholderBuyer[0] = 0x02;
-            const cltvBlock = expiryBlock + GRACE_PERIOD_BLOCKS;
+            const cltvBlock = expiryBlock + this.getGracePeriod();
             const escrowHash = this.queryEscrowScriptHash(placeholderBuyer, writerPubkey, cltvBlock);
 
             // Verify BTC output exists in this transaction (before ID allocation)
@@ -342,7 +341,7 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
             throw new Revert('Not yet expired');
         }
 
-        const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
+        const graceEnd = option.expiryBlock + this.getGracePeriod();
         if (currentBlock >= graceEnd) {
             throw new Revert('Grace period ended');
         }
@@ -529,7 +528,7 @@ export class OptionsPoolBtcUnderlying extends OptionsPoolBase {
         }
 
         const currentBlock = Blockchain.block.number;
-        const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
+        const graceEnd = option.expiryBlock + this.getGracePeriod();
         if (currentBlock < graceEnd) {
             throw new Revert('Grace period not ended');
         }

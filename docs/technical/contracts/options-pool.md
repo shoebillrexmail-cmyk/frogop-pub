@@ -20,18 +20,20 @@ Deployed per-token-pair. Registered in [OptionsFactory](./options-factory.md) vi
 
 **Constructor calldata:**
 
-Type 0 — 3 addresses:
+Type 0 — 3 addresses + 1 u64:
 ```typescript
 const underlying = calldata.readAddress();      // underlying token (e.g. MOTO)
 const premiumToken = calldata.readAddress();    // premium token (e.g. PILL)
 const feeRecipient = calldata.readAddress();    // protocol fee destination (must not be zero)
+const gracePeriod = calldata.readU64();         // blocks after expiry for exercise (6–4320)
 ```
 
-Type 1 and Type 2 — 4 addresses:
+Type 1 and Type 2 — 3 addresses + 1 u64 + 1 address:
 ```typescript
 const underlying = calldata.readAddress();      // underlying token
 const premiumToken = calldata.readAddress();    // premium token
 const feeRecipient = calldata.readAddress();    // protocol fee destination
+const gracePeriod = calldata.readU64();         // blocks after expiry for exercise (6–4320)
 const bridge = calldata.readAddress();          // NativeSwapBridge address (must not be zero)
 ```
 
@@ -41,7 +43,9 @@ const bridge = calldata.readAddress();          // NativeSwapBridge address (mus
 |------|-------|-------------|
 | `CALL` | `0` | Option type: right to buy underlying at strike |
 | `PUT` | `1` | Option type: right to sell underlying at strike |
-| `GRACE_PERIOD_BLOCKS` | `144` | ~1 day for buyer to exercise after expiry |
+| `DEFAULT_GRACE_PERIOD_BLOCKS` | `144` | Default grace period (~1 day). Configurable per-pool at deployment. |
+| `MIN_GRACE_PERIOD_BLOCKS` | `6` | Minimum allowed grace period (~1 hour) |
+| `MAX_GRACE_PERIOD_BLOCKS` | `4320` | Maximum allowed grace period (~30 days) |
 | `MAX_EXPIRY_BLOCKS` | `52560` | ~1 year maximum expiry from creation |
 | `CANCEL_FEE_BPS` | `100` | 1% cancellation fee (basis points) |
 | `BUY_FEE_BPS` | `100` | 1% buy fee deducted from premium |
@@ -178,12 +182,12 @@ public cancelFeeBps(_calldata: Calldata): BytesWriter         // 100 = 1%
 
 ### gracePeriodBlocks / maxExpiryBlocks
 
-Return timing constants.
+Return timing parameters. `gracePeriodBlocks` returns the per-pool value set at deployment (configurable, default 144). `maxExpiryBlocks` returns the compile-time constant.
 
 ```typescript
 @view @method()
 @returns({ name: 'blocks', type: ABIDataTypes.UINT64 })
-public gracePeriodBlocks(_calldata: Calldata): BytesWriter    // 144
+public gracePeriodBlocks(_calldata: Calldata): BytesWriter    // per-pool stored value (default 144)
 
 @view @method()
 @returns({ name: 'blocks', type: ABIDataTypes.UINT64 })
@@ -549,7 +553,7 @@ public writeOptionBtc(calldata: Calldata): BytesWriter
 - Writer must have registered BTC pubkey via `registerBtcPubkey`
 - Transaction must include BTC `extraOutput` to escrow P2WSH address
 - `underlyingAmount` is in satoshis (must fit in u64)
-- Escrow derived from: `bridge.generateEscrowScriptHash(placeholderBuyer, writerPubkey, expiryBlock + GRACE_PERIOD_BLOCKS)`
+- Escrow derived from: `bridge.generateEscrowScriptHash(placeholderBuyer, writerPubkey, expiryBlock + gracePeriod)`
 
 **PUT:** Same as type 0 `writeOption` — locks `(strikePrice * underlyingAmount) / PRECISION` of premium token.
 
@@ -747,6 +751,7 @@ Pointer 5:  feeRecipient (StoredAddress) — lazy-loaded
 Pointer 6:  options base pointer — used by OptionStorage (SHA256-keyed)
 Pointer 7:  pubkeyRegistry (AddressMap<Uint8Array>) — BTC pubkey per address
 Pointer 8:  extended slots base pointer — for BTC pool extra data
+Pointer 9:  gracePeriod (StoredU256 storing u64) — per-pool, set at deployment
 ```
 
 ### Option Storage (SHA256-keyed, per option)
@@ -822,8 +827,10 @@ BRIDGE_POINTER: bridge (StoredAddress) — NativeSwapBridge address
 | `'Not buyer'` | exercise, transferOption | Caller is not the buyer |
 | `'Already expired'` | buyOption | Block >= expiry |
 | `'Not yet expired'` | exercise | Block < expiry |
-| `'Grace period ended'` | exercise, transferOption | Block >= expiry + GRACE_PERIOD_BLOCKS |
-| `'Grace period not ended'` | settle | Block < expiry + GRACE_PERIOD_BLOCKS |
+| `'Grace period ended'` | exercise, transferOption | Block >= expiry + gracePeriod |
+| `'Grace period not ended'` | settle | Block < expiry + gracePeriod |
+| `'Grace period too short'` | onDeployment | gracePeriod < MIN_GRACE_PERIOD_BLOCKS (6) |
+| `'Grace period too long'` | onDeployment | gracePeriod > MAX_GRACE_PERIOD_BLOCKS (4320) |
 | `'Writer cannot buy own option'` | buyOption | Buyer == writer |
 | `'Invalid recipient'` | transferOption | Zero address |
 | `'Already owner'` | transferOption | Recipient == current buyer |

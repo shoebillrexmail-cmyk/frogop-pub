@@ -37,8 +37,14 @@ export const RESERVED: u8 = 5;
 // TIME CONSTANTS
 // =============================================================================
 
-/** Grace period after expiry for exercise (in blocks) ~1 day */
-export const GRACE_PERIOD_BLOCKS: u64 = 144;
+/** Default grace period after expiry for exercise (in blocks) ~1 day */
+export const DEFAULT_GRACE_PERIOD_BLOCKS: u64 = 144;
+
+/** Minimum grace period (6 blocks ≈ 1 hour on Bitcoin) */
+export const MIN_GRACE_PERIOD_BLOCKS: u64 = 6;
+
+/** Maximum grace period (4320 blocks ≈ 30 days on Bitcoin) */
+export const MAX_GRACE_PERIOD_BLOCKS: u64 = 4320;
 
 /** Maximum expiry time from creation (in blocks) ~1 year */
 export const MAX_EXPIRY_BLOCKS: u64 = 52560;
@@ -82,3 +88,10 @@ export const EXTENDED_SLOTS_POINTER: u16 = Blockchain.nextPointer;
 
 /** Reservation expiry in blocks (~1 day on signet) */
 export const RESERVATION_EXPIRY_BLOCKS: u64 = 144;
+
+// =============================================================================
+// ADDITIONAL STORAGE POINTERS (after base pointers)
+// =============================================================================
+
+/** Storage pointer for per-pool grace period (u256 storing u64 value) */
+export const GRACE_PERIOD_POINTER: u16 = Blockchain.nextPointer;

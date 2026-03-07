@@ -285,12 +285,14 @@ export function createTokenCalldata(
 export function createPoolCalldata(
     underlying: Address,
     premiumToken: Address,
-    feeRecipient: Address
+    feeRecipient: Address,
+    gracePeriod: bigint = 144n,
 ): Uint8Array {
     const writer = new BinaryWriter();
     writer.writeAddress(underlying);
     writer.writeAddress(premiumToken);
     writer.writeAddress(feeRecipient);
+    writer.writeU64(gracePeriod);
     return writer.getBuffer();
 }
 
@@ -303,11 +305,13 @@ export function createBtcPoolCalldata(
     premiumToken: Address,
     feeRecipient: Address,
     bridge: Address,
+    gracePeriod: bigint = 144n,
 ): Uint8Array {
     const writer = new BinaryWriter();
     writer.writeAddress(underlying);
     writer.writeAddress(premiumToken);
     writer.writeAddress(feeRecipient);
+    writer.writeU64(gracePeriod);
     writer.writeAddress(bridge);
     return writer.getBuffer();
 }

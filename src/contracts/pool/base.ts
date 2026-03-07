@@ -33,7 +33,8 @@ import {
     BUY_FEE_BPS,
     EXERCISE_FEE_BPS,
     CANCEL_FEE_BPS,
-    GRACE_PERIOD_BLOCKS,
+    MIN_GRACE_PERIOD_BLOCKS,
+    MAX_GRACE_PERIOD_BLOCKS,
     MAX_EXPIRY_BLOCKS,
     UNDERLYING_POINTER,
     PREMIUM_TOKEN_POINTER,
@@ -41,6 +42,7 @@ import {
     FEE_RECIPIENT_POINTER,
     OPTIONS_BASE_POINTER,
     PUBKEY_REGISTRY_POINTER,
+    GRACE_PERIOD_POINTER,
 } from './constants';
 
 import { OptionStorage } from './storage';
@@ -59,6 +61,7 @@ export class OptionsPoolBase extends ReentrancyGuard {
 
     private _feeRecipient: StoredAddress | null = null;
     private _options: OptionStorage | null = null;
+    private _gracePeriod: StoredU256 | null = null;
 
     public constructor() {
         super();
@@ -81,6 +84,18 @@ export class OptionsPoolBase extends ReentrancyGuard {
         return this._options!;
     }
 
+    private get gracePeriodStore(): StoredU256 {
+        if (!this._gracePeriod) {
+            this._gracePeriod = new StoredU256(GRACE_PERIOD_POINTER, EMPTY_BUFFER);
+        }
+        return this._gracePeriod!;
+    }
+
+    /** Read the per-pool grace period from storage (u64 blocks). */
+    protected getGracePeriod(): u64 {
+        return this.gracePeriodStore.value.lo1;
+    }
+
     // -------------------------------------------------------------------------
     // DEPLOYMENT
     // -------------------------------------------------------------------------
@@ -91,14 +106,23 @@ export class OptionsPoolBase extends ReentrancyGuard {
         const underlying = calldata.readAddress();
         const premiumToken = calldata.readAddress();
         const feeRecipientAddr = calldata.readAddress();
+        const gracePeriod = calldata.readU64();
 
         if (feeRecipientAddr.equals(Address.zero())) {
             throw new Revert('Fee recipient cannot be zero');
         }
 
+        if (gracePeriod < MIN_GRACE_PERIOD_BLOCKS) {
+            throw new Revert('Grace period too short');
+        }
+        if (gracePeriod > MAX_GRACE_PERIOD_BLOCKS) {
+            throw new Revert('Grace period too long');
+        }
+
         this._underlying.value = underlying;
         this._premiumToken.value = premiumToken;
         this.feeRecipientStore.value = feeRecipientAddr;
+        this.gracePeriodStore.value = u256.fromU64(gracePeriod);
     }
 
     // -------------------------------------------------------------------------
@@ -246,7 +270,7 @@ export class OptionsPoolBase extends ReentrancyGuard {
     @returns({ name: 'blocks', type: ABIDataTypes.UINT64 })
     public gracePeriodBlocks(_calldata: Calldata): BytesWriter {
         const writer = new BytesWriter(8);
-        writer.writeU64(GRACE_PERIOD_BLOCKS);
+        writer.writeU64(this.getGracePeriod());
         return writer;
     }
 

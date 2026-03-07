@@ -271,6 +271,8 @@ async function deployPool(
             ? await resolveToHex(provider, premiumAddr)
             : ZERO_ADDR;
 
+        const gracePeriod = BigInt(poolCfg.gracePeriod ?? 144);
+
         let poolCalldata: Uint8Array;
         if (poolType === 1 || poolType === 2) {
             // BTC pool types need bridge address
@@ -286,12 +288,14 @@ async function deployPool(
                 Address.fromString(premiumHex),
                 feeRecipientWallet.address,
                 Address.fromString(bridgeHex),
+                gracePeriod,
             );
         } else {
             poolCalldata = createPoolCalldata(
                 Address.fromString(underlyingHex),
                 Address.fromString(premiumHex),
                 feeRecipientWallet.address,
+                gracePeriod,
             );
         }
 

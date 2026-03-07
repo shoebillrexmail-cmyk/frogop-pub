@@ -11,7 +11,9 @@ import { BRIDGE_SELECTORS } from './config.js';
 import { isCallError } from './test-harness.js';
 
 // ---------------------------------------------------------------------------
-// Constants (must match src/contracts/pool/constants.ts)
+// Constants — default values matching src/contracts/pool/constants.ts.
+// Grace period is now configurable per-pool at deployment time; tests
+// deploy with the default (144 blocks) unless explicitly overridden.
 // ---------------------------------------------------------------------------
 
 export const GRACE_PERIOD_BLOCKS = 144n;

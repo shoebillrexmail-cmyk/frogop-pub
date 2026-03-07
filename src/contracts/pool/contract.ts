@@ -26,7 +26,6 @@ import {
     EXERCISED,
     EXPIRED,
     CANCELLED,
-    GRACE_PERIOD_BLOCKS,
     MAX_EXPIRY_BLOCKS,
     CANCEL_FEE_BPS,
     BUY_FEE_BPS,
@@ -288,7 +287,7 @@ export class OptionsPool extends OptionsPoolBase {
             throw new Revert('Not yet expired');
         }
 
-        const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
+        const graceEnd = option.expiryBlock + this.getGracePeriod();
         if (currentBlock >= graceEnd) {
             throw new Revert('Grace period ended');
         }
@@ -365,7 +364,7 @@ export class OptionsPool extends OptionsPoolBase {
         }
 
         const currentBlock = Blockchain.block.number;
-        const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
+        const graceEnd = option.expiryBlock + this.getGracePeriod();
         if (currentBlock < graceEnd) {
             throw new Revert('Grace period not ended');
         }
@@ -431,7 +430,7 @@ export class OptionsPool extends OptionsPoolBase {
         }
 
         const currentBlock = Blockchain.block.number;
-        const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
+        const graceEnd = option.expiryBlock + this.getGracePeriod();
         if (currentBlock >= graceEnd) {
             throw new Revert('Grace period ended');
         }
@@ -753,7 +752,7 @@ export class OptionsPool extends OptionsPoolBase {
                 continue;
             }
 
-            const graceEnd = option.expiryBlock + GRACE_PERIOD_BLOCKS;
+            const graceEnd = option.expiryBlock + this.getGracePeriod();
             if (currentBlock < graceEnd) {
                 continue;
             }

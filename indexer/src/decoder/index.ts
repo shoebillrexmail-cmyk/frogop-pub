@@ -36,8 +36,11 @@ const EV_RESERVATION_CANCELLED   = 'ReservationCancelled';
 const EV_OPTION_WRITTEN_BTC      = 'OptionWrittenBtc';
 const EV_BTC_CLAIMABLE           = 'BtcClaimable';
 
-// Mirror of GRACE_PERIOD_BLOCKS in src/contracts/pool/contract.ts
-const GRACE_PERIOD_BLOCKS = 144;
+// TODO: Grace period is now configurable per-pool at deployment time.
+// This hardcoded default (144) works for pools deployed with the default value.
+// When pools with custom grace periods are deployed, the indexer should query
+// each pool's gracePeriodBlocks() view at registration time and cache the value.
+const DEFAULT_DEFAULT_GRACE_PERIOD_BLOCKS = 144;
 
 /**
  * Decode all events for a single block into an array of D1 statements to batch.
@@ -124,7 +127,7 @@ function handleWritten(
 ): D1PreparedStatement[] {
     // OptionWritten: [optionId U256, writer Address, optionType U8,
     //   strikePrice U256, underlyingAmount U256, premium U256, expiryBlock U64]
-    // Note: graceEndBlock is NOT emitted — it is derived (expiryBlock + GRACE_PERIOD_BLOCKS)
+    // Note: graceEndBlock is NOT emitted — it is derived (expiryBlock + DEFAULT_GRACE_PERIOD_BLOCKS)
     const f = parseEventData(event.data, [
         { name: 'optionId',        type: 'u256'    },
         { name: 'writer',          type: 'address' },
@@ -146,8 +149,8 @@ function handleWritten(
         underlying_amt:  f['underlyingAmount'] ?? '0',
         premium:         f['premium'] ?? '0',
         expiry_block:    Number(f['expiryBlock']),
-        // graceEndBlock is not in the event — derive from expiryBlock + GRACE_PERIOD_BLOCKS
-        grace_end_block: Number(f['expiryBlock']) + GRACE_PERIOD_BLOCKS,
+        // graceEndBlock is not in the event — derive from expiryBlock + DEFAULT_GRACE_PERIOD_BLOCKS
+        grace_end_block: Number(f['expiryBlock']) + DEFAULT_GRACE_PERIOD_BLOCKS,
         status:          OptionStatus.OPEN,
         created_block:   blockNumber,
         created_tx:      txId,
@@ -398,7 +401,7 @@ function handleWrittenBtc(
         underlying_amt:  f['underlyingAmount'] ?? '0',
         premium:         f['premium'] ?? '0',
         expiry_block:    Number(f['expiryBlock']),
-        grace_end_block: Number(f['expiryBlock']) + GRACE_PERIOD_BLOCKS,
+        grace_end_block: Number(f['expiryBlock']) + DEFAULT_GRACE_PERIOD_BLOCKS,
         status:          OptionStatus.OPEN,
         created_block:   blockNumber,
         created_tx:      txId,

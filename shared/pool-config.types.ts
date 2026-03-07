@@ -37,6 +37,8 @@ export interface PoolConfig {
     bridge?: {
         addresses: Record<NetworkId, string>;
     };
+    /** Grace period in blocks after expiry for exercise. Defaults to 144 (~24h). Min 6, max 4320. */
+    gracePeriod?: number;
 }
 
 export interface PoolsConfig {

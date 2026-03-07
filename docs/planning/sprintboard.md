@@ -723,9 +723,11 @@ wired into the strategy UI.
 - [x] **BTC pool user flows — complete extraOutputs** — Promoted to sprint: "BTC Pool Frontend Flows — Complete extraOutputs"
 - [ ] **On-chain TX history** — Replace localStorage-only TX tracking with RPC/indexer queries for persistent data
 - [ ] **UX flow redesign** — Parallel TX support, modal persistence, per-TX status in pill ([research](../research/ux-flow-redesign.md))
+- [ ] **Grace period UX & documentation** — Make configurable grace period clearly visible in frontend (countdown timer, block estimates, human-readable durations). Document grace period concept in user-facing docs (user-guide.md, tooltips). Show per-pool grace period in pool cards/headers. Educate users on exercise window mechanics.
 
 ### Indexer
 - [ ] **Historical yield analytics** — Time-series snapshots in D1 for yield trends, TVL, volume metrics
+- [ ] **Per-pool grace period** — Query each pool's `gracePeriodBlocks()` view at registration and cache in D1. Currently hardcoded to 144.
 
 ### CI/CD
 - [x] ~~**Create Cloudflare Pages project for frontend**~~ — Already done.
@@ -735,6 +737,17 @@ wired into the strategy UI.
 ### Pre-Launch
 - [ ] **Security audit** — Complete [audit checklist](../research/audit-checklist.md)
 - [ ] **Mainnet migration** — Follow [migration checklist](../research/mainnet-migration.md)
+
+## Pending Test Results
+
+| Test | Option ID | Grace End Block | Check After (UTC) | Action |
+|------|-----------|-----------------|--------------------|--------|
+| 06d-settle-prep | 29 | 4363 | ~2026-03-08 02:30 UTC (~24h from prep) | Re-run `npx tsx tests/integration/06d-settle-prep.ts` — it reads `settle-state.json`, detects grace has passed, and attempts settle |
+
+> **Timing:** Signet blocks ~10 min. 146 blocks remaining at prep time = ~24 hours.
+> Settle-state saved at 2026-03-07 02:21 UTC. Re-run any time after March 8 ~02:30 UTC.
+
+---
 
 ## Status (2026-03-07)
 
