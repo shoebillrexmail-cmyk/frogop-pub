@@ -170,9 +170,9 @@ export function StrategySection({
         const wp = calcLiveOutcome('write-put', spot, 0.875, 30, 1, pUnit, underlyingSymbol);
         const col = calcLiveOutcome('collar', spot, 1.2, 30, 1, pUnit, underlyingSymbol, 0.8);
         return {
-            'covered-call': cc?.metrics.find(m => m.label === 'Potential return')?.value,
-            'write-put': wp?.metrics.find(m => m.label === 'Potential return')?.value,
-            'collar': col?.metrics.find(m => m.label === 'Net premium')?.value,
+            'covered-call': cc?.metrics.find(m => m.label === 'Return')?.value,
+            'write-put': wp?.metrics.find(m => m.label === 'Return')?.value,
+            'collar': col?.metrics.find(m => m.label === 'Net fee earned')?.value,
         } as Record<string, string | undefined>;
     }, [noPrice, motoPillRatio, pUnit, underlyingSymbol]);
 

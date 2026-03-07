@@ -223,58 +223,127 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                                 </button>
                             </div>
                             {bestPut ? (() => {
-                                const strikeRatio = Number(bestPut.strikePrice) / 1e18 / motoPillRatio;
-                                const inStandardRange = strikeRatio >= 0.80 && strikeRatio <= 0.95;
+                                const pUnit = premiumDisplayUnit(premiumSymbol);
+                                const strikeFloat = Number(bestPut.strikePrice) / 1e18;
+                                const premiumFloat = Number(bestPut.premium) / 1e18;
+                                const amountFloat = Number(bestPut.underlyingAmount) / 1e18;
+                                const strikeRatio = strikeFloat / motoPillRatio;
                                 const dropPct = ((1 - strikeRatio) * 100).toFixed(1);
+                                const inStandardRange = strikeRatio >= 0.80 && strikeRatio <= 0.95;
+                                // Net payout if exercised = (strikePrice × amount) − premium paid
+                                const grossPayout = strikeFloat * amountFloat;
+                                const netPayout = grossPayout - premiumFloat;
+                                // Example scenario: what if price drops 50% from spot?
+                                const crashPrice = motoPillRatio * 0.5;
+                                const withoutProtection = crashPrice * amountFloat;
+                                const withProtection = grossPayout - premiumFloat;
+                                const saved = withProtection - withoutProtection;
                                 return (
                                 <>
+                                    {/* How it works */}
+                                    <p className="text-[11px] text-terminal-text-muted font-mono leading-relaxed bg-terminal-bg-primary border border-terminal-border-subtle rounded px-3 py-2">
+                                        You pay a one-time fee to another user. In return, you get the right to sell
+                                        your {underlyingSymbol} at a guaranteed minimum price — no matter how far the market drops.
+                                        If the price stays above your protected price, you don't need to do anything (you only lose the fee).
+                                    </p>
+
+                                    {/* Key numbers */}
                                     <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 space-y-1.5">
                                         <span className="text-[10px] text-terminal-text-muted font-mono uppercase tracking-wider">
-                                            What You'll Get
+                                            Your Protection
                                         </span>
                                         <div className="flex justify-between text-xs font-mono">
-                                            <span className="text-terminal-text-muted">Type</span>
-                                            <span className="text-rose-400">PUT</span>
-                                        </div>
-                                        <div className="flex justify-between text-xs font-mono">
-                                            <span className="text-terminal-text-muted">Strike</span>
+                                            <span className="text-terminal-text-muted">Current price</span>
                                             <span className="text-terminal-text-primary">
-                                                {formatTokenAmount(bestPut.strikePrice)} {premiumDisplayUnit(premiumSymbol)}
+                                                {motoPillRatio.toFixed(2)} {pUnit}
                                             </span>
                                         </div>
                                         <div className="flex justify-between text-xs font-mono">
-                                            <span className="text-terminal-text-muted">Amount</span>
+                                            <span className="text-terminal-text-muted">Guaranteed sell price</span>
+                                            <span className="text-green-400">
+                                                {formatTokenAmount(bestPut.strikePrice)} {pUnit}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-xs font-mono">
+                                            <span className="text-terminal-text-muted">Protection kicks in</span>
+                                            <span className="text-terminal-text-primary">
+                                                if price drops more than {dropPct}%
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-xs font-mono">
+                                            <span className="text-terminal-text-muted">Amount covered</span>
                                             <span className="text-terminal-text-primary">
                                                 {formatTokenAmount(bestPut.underlyingAmount)} {underlyingSymbol}
                                             </span>
                                         </div>
                                         <div className="flex justify-between text-xs font-mono">
-                                            <span className="text-terminal-text-muted">Cost (premium)</span>
+                                            <span className="text-terminal-text-muted">One-time cost</span>
                                             <span className="text-rose-400">
-                                                {formatTokenAmount(bestPut.premium)} {premiumDisplayUnit(premiumSymbol)}
+                                                {formatTokenAmount(bestPut.premium)} {pUnit}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Scenarios */}
+                                    <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 space-y-2">
+                                        <span className="text-[10px] text-terminal-text-muted font-mono uppercase tracking-wider">
+                                            What Happens
+                                        </span>
+                                        <div className="space-y-1.5">
+                                            <div className="text-[11px] font-mono">
+                                                <span className="text-green-400">If price drops below {strikeFloat.toFixed(2)} {pUnit}:</span>
+                                                <p className="text-terminal-text-muted mt-0.5 ml-2">
+                                                    You exercise and sell at {strikeFloat.toFixed(2)} {pUnit} instead of the lower
+                                                    market price. You receive {netPayout.toFixed(2)} {pUnit} net (after the fee you paid).
+                                                </p>
+                                            </div>
+                                            <div className="text-[11px] font-mono">
+                                                <span className="text-terminal-text-primary">If price stays above {strikeFloat.toFixed(2)} {pUnit}:</span>
+                                                <p className="text-terminal-text-muted mt-0.5 ml-2">
+                                                    You don't need to exercise. Your {underlyingSymbol} are safe.
+                                                    You only lose the {premiumFloat.toFixed(2)} {pUnit} fee.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Example scenario */}
+                                    <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 space-y-1.5">
+                                        <span className="text-[10px] text-terminal-text-muted font-mono uppercase tracking-wider">
+                                            Example: price crashes 50%
+                                        </span>
+                                        <div className="flex justify-between text-xs font-mono">
+                                            <span className="text-terminal-text-muted">Without protection</span>
+                                            <span className="text-rose-400">
+                                                {amountFloat.toFixed(2)} {underlyingSymbol} worth {withoutProtection.toFixed(2)} {pUnit}
                                             </span>
                                         </div>
                                         <div className="flex justify-between text-xs font-mono">
-                                            <span className="text-terminal-text-muted">Protected below</span>
+                                            <span className="text-terminal-text-muted">With this protection</span>
                                             <span className="text-green-400">
-                                                {formatTokenAmount(bestPut.strikePrice)} {premiumDisplayUnit(premiumSymbol)}
+                                                You sell at {strikeFloat.toFixed(2)} → net {withProtection.toFixed(2)} {pUnit}
                                             </span>
                                         </div>
-                                        <div className="flex justify-between text-xs font-mono">
-                                            <span className="text-terminal-text-muted">Drop from spot</span>
-                                            <span className="text-terminal-text-primary">{dropPct}%</span>
-                                        </div>
-                                        {inStandardRange ? (
-                                            <p className="text-[10px] text-cyan-400 font-mono mt-1">
-                                                Strike is in the 80–95% range (industry standard for protective puts)
-                                            </p>
-                                        ) : (
-                                            <p className="text-[10px] text-amber-400 font-mono mt-1">
-                                                Tip: Protective puts typically use strikes at 5–20% below current price for best cost/protection balance.
-                                                Browse the Chain page for more options.
-                                            </p>
+                                        {saved > 0 && (
+                                            <div className="flex justify-between text-xs font-mono">
+                                                <span className="text-terminal-text-muted">You save</span>
+                                                <span className="text-green-400">+{saved.toFixed(2)} {pUnit}</span>
+                                            </div>
                                         )}
                                     </div>
+
+                                    {/* Range hint */}
+                                    {inStandardRange ? (
+                                        <p className="text-[10px] text-cyan-400 font-mono">
+                                            This strike is 5–20% below current price — a common range that balances cost vs. protection.
+                                        </p>
+                                    ) : (
+                                        <p className="text-[10px] text-amber-400 font-mono">
+                                            This strike is {dropPct}% below current price. Strikes 5–20% below current price offer better
+                                            cost/protection balance. Browse the Chain page for more options.
+                                        </p>
+                                    )}
+
                                     <button
                                         type="button"
                                         disabled={!walletConnected}
@@ -285,7 +354,7 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                                         className="w-full btn-primary py-2.5 text-sm font-mono rounded disabled:opacity-50"
                                         data-testid="buy-protective-put-btn"
                                     >
-                                        Buy Protection
+                                        Buy Protection — {formatTokenAmount(bestPut.premium)} {pUnit}
                                     </button>
                                 </>
                                 );

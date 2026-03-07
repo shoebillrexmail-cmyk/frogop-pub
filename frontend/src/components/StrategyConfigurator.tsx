@@ -293,18 +293,33 @@ export function StrategyConfigurator({
                     <span className="text-[10px] text-terminal-text-muted font-mono uppercase tracking-wider">
                         What You'll Get
                     </span>
-                    {outcome.metrics.map((m) => (
-                        <div key={m.label} className="flex justify-between text-xs font-mono">
-                            <span className="text-terminal-text-muted">{m.label}</span>
-                            <span className={
-                                m.color === 'green' ? 'text-green-400'
-                                    : m.color === 'red' ? 'text-rose-400'
-                                        : 'text-terminal-text-primary'
-                            }>
-                                {m.value}
-                            </span>
-                        </div>
-                    ))}
+                    {outcome.metrics.map((m, i) =>
+                        m.label === '—' ? (
+                            <hr key={i} className="border-terminal-border-subtle my-1" />
+                        ) : m.value.length > 40 ? (
+                            <div key={m.label} className="text-xs font-mono">
+                                <span className="text-terminal-text-muted">{m.label}</span>
+                                <p className={`mt-0.5 ml-2 ${
+                                    m.color === 'green' ? 'text-green-400'
+                                        : m.color === 'red' ? 'text-rose-400'
+                                            : 'text-terminal-text-primary'
+                                }`}>
+                                    {m.value}
+                                </p>
+                            </div>
+                        ) : (
+                            <div key={m.label} className="flex justify-between text-xs font-mono">
+                                <span className="text-terminal-text-muted">{m.label}</span>
+                                <span className={
+                                    m.color === 'green' ? 'text-green-400'
+                                        : m.color === 'red' ? 'text-rose-400'
+                                            : 'text-terminal-text-primary'
+                                }>
+                                    {m.value}
+                                </span>
+                            </div>
+                        ),
+                    )}
                 </div>
             )}
 

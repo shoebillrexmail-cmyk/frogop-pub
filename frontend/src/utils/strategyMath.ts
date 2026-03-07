@@ -351,15 +351,19 @@ export function calcLiveOutcome(
             const collateralInPremium = amount * spot;
             const yieldPct = collateralInPremium > 0 ? (totalPremium / collateralInPremium) * 100 : 0;
             const annYield = days > 0 ? yieldPct * (365 / days) : 0;
+            const deltaPct = Math.round((moneyness - 1) * 100);
 
             return {
                 ...meta,
                 metrics: [
-                    { label: 'Fee you set', value: `${totalPremium.toFixed(2)} ${premiumSymbol} (earned when someone buys your listing)`, color: 'green' },
-                    { label: 'Potential return', value: `${yieldPct.toFixed(2)}% for ${days}d (${annYield.toFixed(1)}% ann.)` },
-                    { label: 'Sell price', value: `${strike.toFixed(2)} ${premiumSymbol} — if price goes above this, buyer can take your tokens` },
-                    { label: 'Best case', value: `Price stays below ${strike.toFixed(2)} — you keep tokens + fee`, color: 'green' },
-                    { label: 'Worst case', value: `Price rises above ${strike.toFixed(2)} — you sell tokens at that price (miss further upside)`, color: 'red' },
+                    { label: 'You lock', value: `${amount.toFixed(4)} ${underlyingSymbol} as collateral` },
+                    { label: 'Fee you set', value: `${totalPremium.toFixed(2)} ${premiumSymbol}`, color: 'green' },
+                    { label: 'Return', value: `${yieldPct.toFixed(2)}% for ${days}d (${annYield.toFixed(1)}% annualized)` },
+                    { label: 'Sell price', value: `${strike.toFixed(2)} ${premiumSymbol} (+${deltaPct}% above current)` },
+                    { label: '—', value: '' },
+                    { label: 'If price stays below sell price', value: `You keep your ${underlyingSymbol} + the fee. Best outcome.`, color: 'green' },
+                    { label: 'If price rises above sell price', value: `Buyer takes your ${underlyingSymbol} at ${strike.toFixed(2)}. You keep the fee but miss further gains.`, color: 'red' },
+                    { label: 'If nobody buys your listing', value: `Nothing happens — your ${underlyingSymbol} unlock at expiry. No fee earned.` },
                 ],
                 initialValues: {
                     optionType: OptionType.CALL,
@@ -378,16 +382,19 @@ export function calcLiveOutcome(
             const collateral = strike * amount; // PILL locked
             const yieldPct = collateral > 0 ? (totalPremium / collateral) * 100 : 0;
             const annYield = days > 0 ? yieldPct * (365 / days) : 0;
+            const deltaPct = Math.abs(Math.round((moneyness - 1) * 100));
 
             return {
                 ...meta,
                 metrics: [
-                    { label: 'Fee you set', value: `${totalPremium.toFixed(2)} ${premiumSymbol} (earned when someone takes your offer)`, color: 'green' },
-                    { label: 'Potential return', value: `${yieldPct.toFixed(2)}% for ${days}d (${annYield.toFixed(1)}% ann.)` },
-                    { label: 'Buy price', value: `${strike.toFixed(2)} ${premiumSymbol} — if price drops below this, the other party can sell to you` },
-                    { label: 'Collateral locked', value: `${collateral.toFixed(2)} ${premiumSymbol}` },
-                    { label: 'Best case', value: `Price stays above ${strike.toFixed(2)} — you keep collateral + fee`, color: 'green' },
-                    { label: 'Worst case', value: `Price drops below ${strike.toFixed(2)} — you buy ${underlyingSymbol} at that price (above market)`, color: 'red' },
+                    { label: 'You lock', value: `${collateral.toFixed(2)} ${premiumSymbol} as collateral` },
+                    { label: 'Fee you set', value: `${totalPremium.toFixed(2)} ${premiumSymbol}`, color: 'green' },
+                    { label: 'Return', value: `${yieldPct.toFixed(2)}% for ${days}d (${annYield.toFixed(1)}% annualized)` },
+                    { label: 'Buy price', value: `${strike.toFixed(2)} ${premiumSymbol} (${deltaPct}% below current)` },
+                    { label: '—', value: '' },
+                    { label: 'If price stays above buy price', value: `You keep your collateral + the fee. Best outcome.`, color: 'green' },
+                    { label: 'If price drops below buy price', value: `Other party sells you ${underlyingSymbol} at ${strike.toFixed(2)}. You keep the fee but buy above market.`, color: 'red' },
+                    { label: 'If nobody takes your offer', value: `Nothing happens — your collateral unlocks at expiry. No fee earned.` },
                 ],
                 initialValues: {
                     optionType: OptionType.PUT,
@@ -405,16 +412,19 @@ export function calcLiveOutcome(
             const callPrem = bsPremiumFloat(spot, callStrike, days, OptionType.CALL);
             const putPrem = bsPremiumFloat(spot, putStrike, days, OptionType.PUT);
             const netPremium = (callPrem - putPrem) * amount;
-            const maxProfit = (callStrike - spot + callPrem - putPrem) * amount;
-            const maxLoss = (spot - putStrike - callPrem + putPrem) * amount;
+            const callDelta = Math.round((moneyness - 1) * 100);
+            const putDelta = Math.abs(Math.round(((moneyness2 ?? 0.8) - 1) * 100));
 
             return {
                 ...meta,
                 metrics: [
-                    { label: 'Net premium', value: `${netPremium >= 0 ? '+' : ''}${netPremium.toFixed(2)} ${premiumSymbol}`, color: netPremium >= 0 ? 'green' : 'red' },
-                    { label: 'Price range', value: `${putStrike.toFixed(2)} — ${callStrike.toFixed(2)} ${premiumSymbol}` },
-                    { label: 'Max profit', value: `${maxProfit.toFixed(2)} ${premiumSymbol}`, color: 'green' },
-                    { label: 'Max loss', value: `${Math.abs(maxLoss).toFixed(2)} ${premiumSymbol}`, color: 'red' },
+                    { label: 'Sell-above price', value: `${callStrike.toFixed(2)} ${premiumSymbol} (+${callDelta}% above current)` },
+                    { label: 'Buy-below price', value: `${putStrike.toFixed(2)} ${premiumSymbol} (${putDelta}% below current)` },
+                    { label: 'Net fee earned', value: `${netPremium >= 0 ? '+' : ''}${netPremium.toFixed(2)} ${premiumSymbol}`, color: netPremium >= 0 ? 'green' : 'red' },
+                    { label: '—', value: '' },
+                    { label: 'If price stays between', value: `${putStrike.toFixed(2)} and ${callStrike.toFixed(2)} — you keep ${underlyingSymbol} + net fee. Best outcome.`, color: 'green' },
+                    { label: 'If price rises above sell price', value: `Buyer takes your ${underlyingSymbol} at ${callStrike.toFixed(2)}. You keep the fee.`, color: 'red' },
+                    { label: 'If price drops below buy price', value: `You buy more ${underlyingSymbol} at ${putStrike.toFixed(2)} (above market). You keep the fee.`, color: 'red' },
                 ],
                 initialValues: {
                     optionType: OptionType.CALL,
@@ -434,14 +444,17 @@ export function calcLiveOutcome(
             const netCost = (buyPrem - sellPrem) * amount;
             const maxProfit = (sellStrike - buyStrike) * amount - netCost;
             const maxLoss = netCost;
+            const breakeven = buyStrike + netCost / amount;
 
             return {
                 ...meta,
                 metrics: [
-                    { label: 'Net cost', value: `${netCost.toFixed(2)} ${premiumSymbol}`, color: 'red' },
-                    { label: 'Max profit', value: `${maxProfit.toFixed(2)} ${premiumSymbol}`, color: 'green' },
-                    { label: 'Max loss', value: `${Math.abs(maxLoss).toFixed(2)} ${premiumSymbol}`, color: 'red' },
-                    { label: 'Break-even', value: `${(buyStrike + netCost / amount).toFixed(2)} ${premiumSymbol}` },
+                    { label: 'You pay', value: `${netCost.toFixed(2)} ${premiumSymbol} (net cost of both legs)`, color: 'red' },
+                    { label: 'You can earn up to', value: `${maxProfit.toFixed(2)} ${premiumSymbol}`, color: 'green' },
+                    { label: 'You can lose at most', value: `${Math.abs(maxLoss).toFixed(2)} ${premiumSymbol} (the net cost)`, color: 'red' },
+                    { label: '—', value: '' },
+                    { label: `If price rises above ${breakeven.toFixed(2)}`, value: `You profit — up to ${maxProfit.toFixed(2)} ${premiumSymbol} if price reaches ${sellStrike.toFixed(2)}`, color: 'green' },
+                    { label: `If price stays below ${buyStrike.toFixed(2)}`, value: `You lose the ${netCost.toFixed(2)} ${premiumSymbol} net cost. Nothing else happens.`, color: 'red' },
                 ],
                 initialValues: {
                     optionType: OptionType.CALL,
@@ -461,14 +474,17 @@ export function calcLiveOutcome(
             const netCost = (buyPrem - sellPrem) * amount;
             const maxProfit = (buyStrike - sellStrike) * amount - netCost;
             const maxLoss = netCost;
+            const breakeven = buyStrike - netCost / amount;
 
             return {
                 ...meta,
                 metrics: [
-                    { label: 'Net cost', value: `${netCost.toFixed(2)} ${premiumSymbol}`, color: 'red' },
-                    { label: 'Max profit', value: `${maxProfit.toFixed(2)} ${premiumSymbol}`, color: 'green' },
-                    { label: 'Max loss', value: `${Math.abs(maxLoss).toFixed(2)} ${premiumSymbol}`, color: 'red' },
-                    { label: 'Break-even', value: `${(buyStrike - netCost / amount).toFixed(2)} ${premiumSymbol}` },
+                    { label: 'You pay', value: `${netCost.toFixed(2)} ${premiumSymbol} (net cost of both legs)`, color: 'red' },
+                    { label: 'You can earn up to', value: `${maxProfit.toFixed(2)} ${premiumSymbol}`, color: 'green' },
+                    { label: 'You can lose at most', value: `${Math.abs(maxLoss).toFixed(2)} ${premiumSymbol} (the net cost)`, color: 'red' },
+                    { label: '—', value: '' },
+                    { label: `If price drops below ${breakeven.toFixed(2)}`, value: `You profit — up to ${maxProfit.toFixed(2)} ${premiumSymbol} if price reaches ${sellStrike.toFixed(2)}`, color: 'green' },
+                    { label: `If price stays above ${buyStrike.toFixed(2)}`, value: `You lose the ${netCost.toFixed(2)} ${premiumSymbol} net cost. Nothing else happens.`, color: 'red' },
                 ],
                 initialValues: {
                     optionType: OptionType.PUT,
@@ -485,13 +501,17 @@ export function calcLiveOutcome(
             const premium = bsPremiumFloat(spot, strike, days, OptionType.PUT);
             const cost = premium * amount;
             const protectionLevel = ((spot - strike) / spot * 100).toFixed(1);
+            const netPayout = (strike * amount) - cost;
 
             return {
                 ...meta,
                 metrics: [
                     { label: 'You pay', value: `${cost.toFixed(2)} ${premiumSymbol} (one-time fee to the seller)`, color: 'red' },
-                    { label: 'Guaranteed sell price', value: `${strike.toFixed(2)} ${premiumSymbol} — you can sell at this price no matter how far it drops`, color: 'green' },
-                    { label: 'Protection covers', value: `Drops beyond ${protectionLevel}% from current price` },
+                    { label: 'Guaranteed sell price', value: `${strike.toFixed(2)} ${premiumSymbol}`, color: 'green' },
+                    { label: 'Protection kicks in', value: `If price drops more than ${protectionLevel}% from current` },
+                    { label: '—', value: '' },
+                    { label: `If price drops below ${strike.toFixed(2)}`, value: `You exercise and sell at ${strike.toFixed(2)} — receive ${netPayout.toFixed(2)} ${premiumSymbol} net`, color: 'green' },
+                    { label: `If price stays above ${strike.toFixed(2)}`, value: `You don't exercise. You only lose the ${cost.toFixed(2)} ${premiumSymbol} fee.` },
                 ],
                 initialValues: {
                     optionType: OptionType.PUT,
