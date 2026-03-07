@@ -16,25 +16,35 @@ const DAY_PRESETS = [
     { label: '90d', days: 90 },
 ] as const;
 
+/** How it works — plain-English explainer per strategy */
+const STRATEGY_EXPLAINER: Record<StrategyType, string> = {
+    'covered-call': 'You list your tokens on the marketplace at a sell price you choose. If another user buys your listing, you earn a fee immediately. Your tokens stay locked until expiry or until the buyer exercises.',
+    'write-put': 'You list an offer to buy tokens at a price you choose. If another user takes your offer, you earn a fee immediately. Your collateral stays locked until expiry or until the other party exercises.',
+    'protective-put': 'You buy an existing listing from another user that guarantees you can sell at a minimum price, even if the market crashes.',
+    'collar': 'You list both a sell-above and buy-below price. If other users take either side, you earn fees from both.',
+    'bull-call-spread': 'A two-leg position: you buy the right to profit from a rise, while capping your gain by selling a higher position.',
+    'bear-put-spread': 'A two-leg position: you buy the right to profit from a drop, while capping your gain by selling a lower position.',
+};
+
 /** Config ranges per strategy type */
 const MONEYNESS_RANGES: Record<StrategyType, {
     min: number; max: number; default: number; step: number; label: string;
     leg2?: { min: number; max: number; default: number; step: number; label: string };
 }> = {
-    'covered-call': { min: 1.05, max: 1.50, default: 1.20, step: 0.01, label: 'Strike (% of spot)' },
-    'write-put': { min: 0.70, max: 0.95, default: 0.875, step: 0.01, label: 'Strike (% of spot)' },
-    'protective-put': { min: 0.70, max: 0.95, default: 0.875, step: 0.01, label: 'Protection level (% of spot)' },
+    'covered-call': { min: 1.05, max: 1.50, default: 1.20, step: 0.01, label: 'Sell if price rises above' },
+    'write-put': { min: 0.70, max: 0.95, default: 0.875, step: 0.01, label: 'Buy if price drops below' },
+    'protective-put': { min: 0.70, max: 0.95, default: 0.875, step: 0.01, label: 'Protect below this price' },
     'collar': {
-        min: 1.05, max: 1.50, default: 1.20, step: 0.01, label: 'CALL strike (% of spot)',
-        leg2: { min: 0.70, max: 0.95, default: 0.80, step: 0.01, label: 'PUT strike (% of spot)' },
+        min: 1.05, max: 1.50, default: 1.20, step: 0.01, label: 'Sell above (upside cap)',
+        leg2: { min: 0.70, max: 0.95, default: 0.80, step: 0.01, label: 'Buy below (downside floor)' },
     },
     'bull-call-spread': {
-        min: 1.10, max: 1.50, default: 1.20, step: 0.01, label: 'Sell CALL (% of spot)',
-        leg2: { min: 0.95, max: 1.10, default: 1.00, step: 0.01, label: 'Buy CALL (% of spot)' },
+        min: 1.10, max: 1.50, default: 1.20, step: 0.01, label: 'Upper target price',
+        leg2: { min: 0.95, max: 1.10, default: 1.00, step: 0.01, label: 'Lower entry price' },
     },
     'bear-put-spread': {
-        min: 0.70, max: 0.90, default: 0.80, step: 0.01, label: 'Sell PUT (% of spot)',
-        leg2: { min: 0.90, max: 1.10, default: 1.00, step: 0.01, label: 'Buy PUT (% of spot)' },
+        min: 0.70, max: 0.90, default: 0.80, step: 0.01, label: 'Lower target price',
+        leg2: { min: 0.90, max: 1.10, default: 1.00, step: 0.01, label: 'Upper entry price' },
     },
 };
 
@@ -105,12 +115,18 @@ export function StrategyConfigurator({
                 </button>
             </div>
 
-            {/* Moneyness slider 1 */}
+            {/* How it works */}
+            <p className="text-[11px] text-terminal-text-muted font-mono leading-relaxed bg-terminal-bg-primary border border-terminal-border-subtle rounded px-3 py-2">
+                {STRATEGY_EXPLAINER[strategyType]}
+            </p>
+
+            {/* Price slider 1 */}
             <div className="space-y-1">
                 <div className="flex items-center justify-between">
                     <label className="text-[10px] text-terminal-text-muted font-mono">{ranges.label}</label>
                     <span className="text-xs font-mono text-terminal-text-primary">
-                        {(moneyness * 100).toFixed(0)}% = {(spotPrice * moneyness).toFixed(2)} {pUnit}
+                        {(spotPrice * moneyness).toFixed(2)} {pUnit}
+                        <span className="text-terminal-text-muted ml-1">({(moneyness * 100).toFixed(0)}% of spot)</span>
                     </span>
                 </div>
                 <input
@@ -125,13 +141,14 @@ export function StrategyConfigurator({
                 />
             </div>
 
-            {/* Moneyness slider 2 (collar, spreads) */}
+            {/* Price slider 2 (collar, spreads) */}
             {ranges.leg2 && (
                 <div className="space-y-1">
                     <div className="flex items-center justify-between">
                         <label className="text-[10px] text-terminal-text-muted font-mono">{ranges.leg2.label}</label>
                         <span className="text-xs font-mono text-terminal-text-primary">
-                            {(moneyness2 * 100).toFixed(0)}% = {(spotPrice * moneyness2).toFixed(2)} {pUnit}
+                            {(spotPrice * moneyness2).toFixed(2)} {pUnit}
+                            <span className="text-terminal-text-muted ml-1">({(moneyness2 * 100).toFixed(0)}% of spot)</span>
                         </span>
                     </div>
                     <input

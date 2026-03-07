@@ -37,30 +37,30 @@ import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
 type MultiLegStrategy = 'collar' | 'bull-call-spread' | 'bear-put-spread';
 
 const MULTI_LEG_INFO: Record<MultiLegStrategy, { label: string; leg1Label: string; leg2Label: string }> = {
-    'collar': { label: 'Collar', leg1Label: 'Write CALL', leg2Label: 'Write PUT' },
-    'bull-call-spread': { label: 'Bull Call Spread', leg1Label: 'Write CALL (higher strike)', leg2Label: 'Buy CALL (lower strike)' },
-    'bear-put-spread': { label: 'Bear Put Spread', leg1Label: 'Write PUT (lower strike)', leg2Label: 'Buy PUT (higher strike)' },
+    'collar': { label: 'Earn on Both Sides', leg1Label: 'Leg 1: Sell above (CALL)', leg2Label: 'Leg 2: Buy below (PUT)' },
+    'bull-call-spread': { label: 'Bet on Price Rise', leg1Label: 'Leg 1: List a sell offer (CALL)', leg2Label: 'Leg 2: Buy an existing listing (CALL)' },
+    'bear-put-spread': { label: 'Bet on Price Drop', leg1Label: 'Leg 1: List a buy offer (PUT)', leg2Label: 'Leg 2: Buy an existing listing (PUT)' },
 };
 
 const SINGLE_LEG_CARDS: { type: StrategyType; tagline: string; summaryHint: string }[] = [
-    { type: 'covered-call', tagline: 'Earn premium on tokens you hold', summaryHint: '~2-4% yield / 30d' },
-    { type: 'write-put', tagline: 'Earn premium by insuring others', summaryHint: '~1-3% yield / 30d' },
+    { type: 'covered-call', tagline: 'List your tokens — earn a fee when someone takes the listing', summaryHint: '~2-4% return / 30d' },
+    { type: 'write-put', tagline: 'Post a buy offer — earn a fee when someone takes it', summaryHint: '~1-3% return / 30d' },
 ];
 
 const MULTI_LEG_CARDS: { type: StrategyType; mlType: MultiLegStrategy; tagline: string }[] = [
-    { type: 'collar', mlType: 'collar', tagline: 'Earn premium on both upside and downside' },
-    { type: 'bull-call-spread', mlType: 'bull-call-spread', tagline: 'Profit on moderate price rise' },
-    { type: 'bear-put-spread', mlType: 'bear-put-spread', tagline: 'Profit on moderate price drop' },
+    { type: 'collar', mlType: 'collar', tagline: 'List both sell-above and buy-below offers to earn from both sides' },
+    { type: 'bull-call-spread', mlType: 'bull-call-spread', tagline: 'Profit from a moderate price rise with capped risk' },
+    { type: 'bear-put-spread', mlType: 'bear-put-spread', tagline: 'Profit from a moderate price drop with capped risk' },
 ];
 
 const P2P_BADGES: Record<StrategyType | 'custom', P2PBadge> = {
-    'covered-call':     { type: 'marketplace', tooltip: 'Creates a new CALL listing. Another user must buy it for you to earn premium.' },
-    'write-put':        { type: 'marketplace', tooltip: 'Creates a new PUT listing. Another user must buy it for you to earn premium.' },
-    'protective-put':   { type: 'instant',     tooltip: 'Buys an existing PUT option from another user. Executes immediately.' },
-    'collar':           { type: 'marketplace', tooltip: 'Creates both a CALL and PUT listing. Other users must buy them.' },
-    'bull-call-spread': { type: 'mixed',       tooltip: 'Creates a new CALL listing AND buys an existing CALL in one transaction.' },
-    'bear-put-spread':  { type: 'mixed',       tooltip: 'Creates a new PUT listing AND buys an existing PUT in one transaction.' },
-    'custom':           { type: 'marketplace', tooltip: 'Creates a new option listing.' },
+    'covered-call':     { type: 'marketplace', tooltip: 'Lists on the marketplace. You earn when another user takes your listing.' },
+    'write-put':        { type: 'marketplace', tooltip: 'Lists on the marketplace. You earn when another user takes your offer.' },
+    'protective-put':   { type: 'instant',     tooltip: 'Buys from another user. Executes immediately.' },
+    'collar':           { type: 'marketplace', tooltip: 'Lists two offers on the marketplace. You earn when other users take them.' },
+    'bull-call-spread': { type: 'mixed',       tooltip: 'Lists one offer AND buys from another user in one transaction.' },
+    'bear-put-spread':  { type: 'mixed',       tooltip: 'Lists one offer AND buys from another user in one transaction.' },
+    'custom':           { type: 'marketplace', tooltip: 'Lists on the marketplace.' },
 };
 
 const MAX_SAT = 10_000_000n;
@@ -79,6 +79,8 @@ interface StrategySectionProps {
     premiumSymbol?: string;
     onWriteOption: (values: WriteOptionInitialValues, strategyLabel?: string) => void;
     onRefetch: () => void;
+    /** When set, only show these strategies (Trade wizard passes intent-filtered list). */
+    allowedStrategies?: StrategyType[];
 }
 
 export function StrategySection({
@@ -95,6 +97,7 @@ export function StrategySection({
     premiumSymbol = 'PILL',
     onWriteOption,
     onRefetch,
+    allowedStrategies,
 }: StrategySectionProps) {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
@@ -150,6 +153,15 @@ export function StrategySection({
         currentBlock: wsBlockInfo?.blockNumber,
     });
 
+    // Filter cards when allowedStrategies is set (Trade wizard flow)
+    const filteredSingleLeg = allowedStrategies
+        ? SINGLE_LEG_CARDS.filter(c => allowedStrategies.includes(c.type))
+        : SINGLE_LEG_CARDS;
+    const filteredMultiLeg = allowedStrategies
+        ? MULTI_LEG_CARDS.filter(c => allowedStrategies.includes(c.type))
+        : MULTI_LEG_CARDS;
+    const showCustom = !allowedStrategies;
+
     // Summary metrics for cards (quick BS estimate at default params)
     const summaryMetrics = useMemo(() => {
         if (noPrice) return {};
@@ -158,8 +170,8 @@ export function StrategySection({
         const wp = calcLiveOutcome('write-put', spot, 0.875, 30, 1, pUnit, underlyingSymbol);
         const col = calcLiveOutcome('collar', spot, 1.2, 30, 1, pUnit, underlyingSymbol, 0.8);
         return {
-            'covered-call': cc?.metrics.find(m => m.label === 'Yield')?.value,
-            'write-put': wp?.metrics.find(m => m.label === 'Yield')?.value,
+            'covered-call': cc?.metrics.find(m => m.label === 'Potential return')?.value,
+            'write-put': wp?.metrics.find(m => m.label === 'Potential return')?.value,
             'collar': col?.metrics.find(m => m.label === 'Net premium')?.value,
         } as Record<string, string | undefined>;
     }, [noPrice, motoPillRatio, pUnit, underlyingSymbol]);
@@ -441,7 +453,7 @@ export function StrategySection({
             {/* Outcome cards grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {/* Single-leg strategies */}
-                {SINGLE_LEG_CARDS.map(({ type, tagline }) => {
+                {filteredSingleLeg.map(({ type, tagline }) => {
                     const meta = calcLiveOutcome(type, motoPillRatio ?? 0, type === 'covered-call' ? 1.2 : 0.875, 30, 1, pUnit, underlyingSymbol);
                     return (
                         <OutcomeCard
@@ -460,7 +472,7 @@ export function StrategySection({
                 })}
 
                 {/* Multi-leg strategies */}
-                {MULTI_LEG_CARDS.map(({ type, mlType, tagline }) => {
+                {filteredMultiLeg.map(({ type, mlType, tagline }) => {
                     const meta = calcLiveOutcome(type, motoPillRatio ?? 0, type === 'collar' ? 1.2 : type === 'bull-call-spread' ? 1.2 : 0.8, 30, 1, pUnit, underlyingSymbol, type === 'collar' ? 0.8 : 1.0);
                     return (
                         <OutcomeCard
@@ -478,8 +490,8 @@ export function StrategySection({
                     );
                 })}
 
-                {/* Write Custom */}
-                <OutcomeCard
+                {/* Write Custom (hidden when filtered by intent) */}
+                {showCustom && <OutcomeCard
                     goalTitle="Build Custom Strategy"
                     tagline="Full control over all parameters"
                     riskLevel="medium"
@@ -496,7 +508,7 @@ export function StrategySection({
                             selectedDays: 7,
                         });
                     }}
-                />
+                />}
             </div>
 
             {/* Single-leg configurator (expanded below grid) */}

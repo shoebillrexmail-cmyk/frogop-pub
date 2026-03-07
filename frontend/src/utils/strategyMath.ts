@@ -266,38 +266,38 @@ const STRATEGY_META: Record<StrategyType, {
     actionLabel: string;
 }> = {
     'covered-call': {
-        goalTitle: 'Earn Yield on Holdings',
-        goalDescription: 'Write a CALL above spot. Earn premium upfront, cap upside at strike.',
+        goalTitle: 'Earn Premium on Tokens',
+        goalDescription: 'List your tokens for sale above today\'s price. If another user buys the listing, you earn a fee immediately.',
         riskLevel: 'low',
-        actionLabel: 'Start Earning',
+        actionLabel: 'List on Marketplace',
     },
     'write-put': {
-        goalTitle: 'Earn by Providing Insurance',
-        goalDescription: 'Write a PUT below spot. Earn premium from buyers hedging downside.',
+        goalTitle: 'Earn by Offering to Buy',
+        goalDescription: 'List an offer to buy tokens at a lower price. If another user takes your offer, you earn a fee immediately.',
         riskLevel: 'medium',
-        actionLabel: 'Start Earning',
+        actionLabel: 'List on Marketplace',
     },
     'protective-put': {
         goalTitle: 'Protect Against Drops',
-        goalDescription: 'Buy a PUT to limit downside. Pay a premium for peace of mind.',
+        goalDescription: 'Buy an existing listing that lets you sell at a guaranteed minimum price.',
         riskLevel: 'low',
         actionLabel: 'Get Protection',
     },
     'collar': {
         goalTitle: 'Earn on Both Sides',
-        goalDescription: 'Write a CALL + PUT to earn premium on both upside and downside moves.',
+        goalDescription: 'List both a sell-above and buy-below offer. Earn fees if other users take either side.',
         riskLevel: 'low',
-        actionLabel: 'Start Earning',
+        actionLabel: 'List on Marketplace',
     },
     'bull-call-spread': {
         goalTitle: 'Bet on Moderate Rise',
-        goalDescription: 'Write a higher-strike CALL and buy a lower-strike CALL. Limited risk and reward.',
+        goalDescription: 'Profit if the price rises, with both your cost and gain capped.',
         riskLevel: 'medium',
         actionLabel: 'Open Position',
     },
     'bear-put-spread': {
         goalTitle: 'Bet on Moderate Drop',
-        goalDescription: 'Write a lower-strike PUT and buy a higher-strike PUT. Limited risk and reward.',
+        goalDescription: 'Profit if the price drops, with both your cost and gain capped.',
         riskLevel: 'medium',
         actionLabel: 'Open Position',
     },
@@ -351,17 +351,15 @@ export function calcLiveOutcome(
             const collateralInPremium = amount * spot;
             const yieldPct = collateralInPremium > 0 ? (totalPremium / collateralInPremium) * 100 : 0;
             const annYield = days > 0 ? yieldPct * (365 / days) : 0;
-            const breakeven = strike + premium;
-            const maxLoss = amount; // underlying locked
 
             return {
                 ...meta,
                 metrics: [
-                    { label: 'You earn', value: `${totalPremium.toFixed(2)} ${premiumSymbol}`, color: 'green' },
-                    { label: 'Yield', value: `${yieldPct.toFixed(2)}% (${annYield.toFixed(1)}% ann.)` },
-                    { label: 'Risk', value: `Capped above ${strike.toFixed(2)} ${premiumSymbol}` },
-                    { label: 'Breakeven', value: `${breakeven.toFixed(2)} ${premiumSymbol}` },
-                    { label: 'Max loss', value: `${maxLoss.toFixed(4)} ${underlyingSymbol} (if exercised)`, color: 'red' },
+                    { label: 'Fee you set', value: `${totalPremium.toFixed(2)} ${premiumSymbol} (earned when someone buys your listing)`, color: 'green' },
+                    { label: 'Potential return', value: `${yieldPct.toFixed(2)}% for ${days}d (${annYield.toFixed(1)}% ann.)` },
+                    { label: 'Sell price', value: `${strike.toFixed(2)} ${premiumSymbol} — if price goes above this, buyer can take your tokens` },
+                    { label: 'Best case', value: `Price stays below ${strike.toFixed(2)} — you keep tokens + fee`, color: 'green' },
+                    { label: 'Worst case', value: `Price rises above ${strike.toFixed(2)} — you sell tokens at that price (miss further upside)`, color: 'red' },
                 ],
                 initialValues: {
                     optionType: OptionType.CALL,
@@ -380,16 +378,16 @@ export function calcLiveOutcome(
             const collateral = strike * amount; // PILL locked
             const yieldPct = collateral > 0 ? (totalPremium / collateral) * 100 : 0;
             const annYield = days > 0 ? yieldPct * (365 / days) : 0;
-            const breakeven = strike - premium;
 
             return {
                 ...meta,
                 metrics: [
-                    { label: 'You earn', value: `${totalPremium.toFixed(2)} ${premiumSymbol}`, color: 'green' },
-                    { label: 'Yield', value: `${yieldPct.toFixed(2)}% (${annYield.toFixed(1)}% ann.)` },
-                    { label: 'Risk', value: `Must buy ${underlyingSymbol} at ${strike.toFixed(2)} if price drops` },
-                    { label: 'Breakeven', value: `${breakeven.toFixed(2)} ${premiumSymbol}` },
-                    { label: 'Collateral', value: `${collateral.toFixed(2)} ${premiumSymbol}`, color: 'red' },
+                    { label: 'Fee you set', value: `${totalPremium.toFixed(2)} ${premiumSymbol} (earned when someone takes your offer)`, color: 'green' },
+                    { label: 'Potential return', value: `${yieldPct.toFixed(2)}% for ${days}d (${annYield.toFixed(1)}% ann.)` },
+                    { label: 'Buy price', value: `${strike.toFixed(2)} ${premiumSymbol} — if price drops below this, the other party can sell to you` },
+                    { label: 'Collateral locked', value: `${collateral.toFixed(2)} ${premiumSymbol}` },
+                    { label: 'Best case', value: `Price stays above ${strike.toFixed(2)} — you keep collateral + fee`, color: 'green' },
+                    { label: 'Worst case', value: `Price drops below ${strike.toFixed(2)} — you buy ${underlyingSymbol} at that price (above market)`, color: 'red' },
                 ],
                 initialValues: {
                     optionType: OptionType.PUT,
@@ -491,10 +489,9 @@ export function calcLiveOutcome(
             return {
                 ...meta,
                 metrics: [
-                    { label: 'Cost', value: `${cost.toFixed(2)} ${premiumSymbol}`, color: 'red' },
-                    { label: 'Protected below', value: `${strike.toFixed(2)} ${premiumSymbol}` },
-                    { label: 'Max drop absorbed', value: `${protectionLevel}%` },
-                    { label: 'Breakeven', value: `${(strike - premium).toFixed(2)} ${premiumSymbol}` },
+                    { label: 'You pay', value: `${cost.toFixed(2)} ${premiumSymbol} (one-time fee to the seller)`, color: 'red' },
+                    { label: 'Guaranteed sell price', value: `${strike.toFixed(2)} ${premiumSymbol} — you can sell at this price no matter how far it drops`, color: 'green' },
+                    { label: 'Protection covers', value: `Drops beyond ${protectionLevel}% from current price` },
                 ],
                 initialValues: {
                     optionType: OptionType.PUT,

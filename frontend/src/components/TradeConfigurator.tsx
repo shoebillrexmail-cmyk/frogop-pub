@@ -25,21 +25,21 @@ import { BuyOptionModal } from './BuyOptionModal.tsx';
 import { StrategySection } from './StrategySection.tsx';
 
 const STRATEGY_LABELS: Record<StrategyType, string> = {
-    'covered-call': 'Covered Call',
-    'write-put': 'Cash-Secured Put',
-    'protective-put': 'Protective Put',
-    'collar': 'Collar',
-    'bull-call-spread': 'Bull Call Spread',
-    'bear-put-spread': 'Bear Put Spread',
+    'covered-call': 'Earn on Tokens You Hold',
+    'write-put': 'Earn by Offering to Buy',
+    'protective-put': 'Buy Downside Protection',
+    'collar': 'Earn on Both Directions',
+    'bull-call-spread': 'Bet on Price Rise',
+    'bear-put-spread': 'Bet on Price Drop',
 };
 
 const STRATEGY_TAGLINES: Record<StrategyType, string> = {
-    'covered-call': 'Earn premium on tokens you hold',
-    'write-put': 'Earn premium by insuring others',
-    'protective-put': 'Buy downside protection',
-    'collar': 'Earn premium on both upside and downside',
-    'bull-call-spread': 'Profit on moderate price rise',
-    'bear-put-spread': 'Profit on moderate price drop',
+    'covered-call': 'List your tokens at a sell price — earn a fee when someone takes the listing',
+    'write-put': 'Post an offer to buy at a lower price — earn a fee when someone takes it',
+    'protective-put': 'Buy insurance from another user to protect against price drops',
+    'collar': 'List both sell-above and buy-below offers to earn fees from both sides',
+    'bull-call-spread': 'Profit from a moderate price rise with capped risk and gain',
+    'bear-put-spread': 'Profit from a moderate price drop with capped risk and gain',
 };
 
 const STRATEGY_RISK: Record<StrategyType, 'low' | 'medium' | 'high'> = {
@@ -317,6 +317,7 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                         premiumSymbol={premiumSymbol}
                         onWriteOption={handleWriteOption}
                         onRefetch={refetch}
+                        allowedStrategies={strategies}
                     />
                 </div>
             )}

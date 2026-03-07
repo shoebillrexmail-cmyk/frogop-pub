@@ -27,7 +27,7 @@ const INTENTS: readonly IntentDef[] = [
     {
         id: 'earn-yield',
         label: 'Earn Yield on Holdings',
-        tagline: 'Generate income by writing options on tokens you already hold',
+        tagline: 'List your tokens on the marketplace and earn fees from other users',
         riskLevel: 'low',
         strategies: ['covered-call', 'write-put'],
         role: 'writer',
@@ -35,7 +35,7 @@ const INTENTS: readonly IntentDef[] = [
     {
         id: 'protect',
         label: 'Protect My Position',
-        tagline: 'Buy insurance to limit downside risk on your portfolio',
+        tagline: 'Buy protection from another user to limit losses if the price drops',
         riskLevel: 'low',
         strategies: ['protective-put', 'collar'],
         role: 'buyer',
@@ -43,7 +43,7 @@ const INTENTS: readonly IntentDef[] = [
     {
         id: 'speculate-up',
         label: 'Bet on Price Going Up',
-        tagline: 'Leveraged upside exposure with capped risk',
+        tagline: 'Profit if the price rises, with your maximum loss capped',
         riskLevel: 'high',
         strategies: ['bull-call-spread'],
         role: 'buyer',
@@ -51,7 +51,7 @@ const INTENTS: readonly IntentDef[] = [
     {
         id: 'speculate-down',
         label: 'Bet on Price Going Down',
-        tagline: 'Profit from a price decline with limited risk',
+        tagline: 'Profit if the price drops, with your maximum loss capped',
         riskLevel: 'high',
         strategies: ['bear-put-spread'],
         role: 'buyer',
@@ -59,7 +59,7 @@ const INTENTS: readonly IntentDef[] = [
     {
         id: 'earn-both',
         label: 'Earn on Both Sides',
-        tagline: 'Earn premium from both upside and downside volatility',
+        tagline: 'List offers in both directions and earn fees from other users',
         riskLevel: 'medium',
         strategies: ['collar', 'bull-call-spread', 'bear-put-spread'],
         role: 'writer',
@@ -67,7 +67,7 @@ const INTENTS: readonly IntentDef[] = [
     {
         id: 'power-user',
         label: 'I Know What I Want',
-        tagline: 'Jump straight to the option chain',
+        tagline: 'Jump straight to the full marketplace',
         riskLevel: 'low',
         strategies: [],
         role: 'mixed',
