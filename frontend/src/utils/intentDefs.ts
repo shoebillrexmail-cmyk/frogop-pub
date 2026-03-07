@@ -38,7 +38,7 @@ const INTENTS: readonly IntentDef[] = [
         label: 'Protect My Position',
         tagline: 'Buy protection from another user to limit losses if the price drops',
         riskLevel: 'low',
-        strategies: ['protective-put', 'collar'],
+        strategies: ['protective-put'],
         role: 'buyer',
     },
     {

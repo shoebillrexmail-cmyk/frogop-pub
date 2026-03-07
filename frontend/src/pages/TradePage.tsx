@@ -60,7 +60,11 @@ export function TradePage() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 py-8">
-            <WizardBreadcrumb currentStep={currentStep} onStepClick={handleStepClick} />
+            <WizardBreadcrumb
+                currentStep={currentStep}
+                onStepClick={handleStepClick}
+                goalLabel={intent?.label}
+            />
 
             {currentStep === 1 && (
                 <IntentGrid onSelect={handleIntentSelect} />

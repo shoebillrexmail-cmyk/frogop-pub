@@ -40,4 +40,16 @@ describe('WizardBreadcrumb', () => {
         fireEvent.click(screen.getByTestId('wizard-step-2'));
         expect(onStepClick).toHaveBeenCalledWith(2);
     });
+
+    it('shows goal label instead of "Choose Goal" when past step 1', () => {
+        render(<WizardBreadcrumb currentStep={2} onStepClick={vi.fn()} goalLabel="Earn Yield on Holdings" />);
+        const step1 = screen.getByTestId('wizard-step-1');
+        expect(step1.textContent).toBe('Earn Yield on Holdings');
+    });
+
+    it('does not show goal label on step 1 (current step)', () => {
+        render(<WizardBreadcrumb currentStep={1} onStepClick={vi.fn()} goalLabel="Earn Yield on Holdings" />);
+        const step1 = screen.getByTestId('wizard-step-1');
+        expect(step1.textContent).toBe('Choose Goal');
+    });
 });

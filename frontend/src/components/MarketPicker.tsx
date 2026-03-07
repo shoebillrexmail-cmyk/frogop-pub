@@ -74,6 +74,7 @@ export function MarketPicker({ intentId, onSelect }: MarketPickerProps) {
                 {intentId === 'protect' && 'Choose a market where you want to buy protection.'}
                 {intentId === 'speculate-up' && 'Choose a market where you expect the price to rise.'}
                 {intentId === 'speculate-down' && 'Choose a market where you expect the price to fall.'}
+                {intentId === 'expect-volatility' && 'Choose a market where you expect a big price move in either direction.'}
                 {intentId === 'earn-both' && 'Choose a market where you want to earn premium from both sides.'}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -128,7 +129,7 @@ export function MarketPicker({ intentId, onSelect }: MarketPickerProps) {
                                                             {buyableCount} option{buyableCount > 1 ? 's' : ''} available
                                                         </span>
                                                     ) : (
-                                                        <span className="text-rose-400">No options to buy</span>
+                                                        <span className="text-terminal-text-muted">No listings yet — waiting for writers</span>
                                                     )}
                                                 </p>
                                             )}
@@ -141,6 +142,19 @@ export function MarketPicker({ intentId, onSelect }: MarketPickerProps) {
                     </div>
                 ))}
             </div>
+
+            {/* Explain the P2P model for buy-side intents */}
+            {needsLiquidity && (
+                <div className="mt-4 bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-4 text-[11px] font-mono text-terminal-text-muted leading-relaxed">
+                    <p className="font-bold text-terminal-text-primary mb-1">How does this work?</p>
+                    <p>
+                        This is a peer-to-peer marketplace. To buy an option, another user (a "writer") must first
+                        list one for sale. If a market shows "No listings yet", you can either wait for a writer to
+                        create one, or switch to the <span className="text-accent">Earn Yield</span> goal to list
+                        your own options and earn fees from other users.
+                    </p>
+                </div>
+            )}
         </div>
     );
 }
