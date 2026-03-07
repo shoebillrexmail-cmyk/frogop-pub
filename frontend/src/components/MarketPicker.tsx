@@ -3,10 +3,15 @@
  *
  * Shows available pools filtered/ranked by the selected intent.
  * Groups inverse pairs and displays pool type badges.
+ * For buy-side intents, loads options to show liquidity indicators.
  */
+import { useMemo } from 'react';
 import { useFallbackProvider } from '../hooks/useFallbackProvider.ts';
 import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
+import { useMultiPool } from '../hooks/useMultiPool.ts';
 import { groupInversePairs, directionLabel } from '../utils/poolGrouping.ts';
+import { countBuyableOptionsForIntent } from '../utils/strategyMath.ts';
+import { intentNeedsLiquidity } from '../utils/intentDefs.ts';
 import { findPoolConfigByAddress, getPoolType } from '../config/index.ts';
 import { PoolTypeBadge } from './PoolTypeBadge.tsx';
 import type { IntentId } from '../utils/intentDefs.ts';
@@ -20,6 +25,14 @@ interface MarketPickerProps {
 export function MarketPicker({ intentId, onSelect }: MarketPickerProps) {
     const readProvider = useFallbackProvider();
     const { pools, loading, error } = useDiscoverPools(readProvider);
+    const needsLiquidity = intentNeedsLiquidity(intentId);
+
+    // Only fetch options when the intent requires liquidity checks
+    const poolAddresses = useMemo(
+        () => needsLiquidity ? pools.map((p) => p.address) : [],
+        [pools, needsLiquidity],
+    );
+    const { pools: multiPoolData } = useMultiPool(poolAddresses, readProvider);
 
     const findConfig = (pool: PoolEntry) => findPoolConfigByAddress(pool.address);
     const groups = groupInversePairs(pools, findConfig);
@@ -74,11 +87,25 @@ export function MarketPicker({ intentId, onSelect }: MarketPickerProps) {
                                 if (!pool) return null;
                                 const config = findConfig(pool);
                                 const poolType = getPoolType(config);
+
+                                // Liquidity info for buy-side intents
+                                const poolData = needsLiquidity ? multiPoolData.get(pool.address) : null;
+                                const isLoadingOptions = poolData?.loading ?? false;
+                                const buyableCount = poolData?.options
+                                    ? countBuyableOptionsForIntent(poolData.options, intentId)
+                                    : 0;
+                                const noLiquidity = needsLiquidity && !isLoadingOptions && buyableCount === 0;
+
                                 return (
                                     <button
                                         key={pool.address}
-                                        onClick={() => onSelect(pool.address)}
-                                        className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-terminal-border-subtle hover:border-accent/50 transition-colors"
+                                        onClick={() => !noLiquidity && onSelect(pool.address)}
+                                        disabled={noLiquidity}
+                                        className={`w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-lg border transition-colors ${
+                                            noLiquidity
+                                                ? 'border-terminal-border-subtle opacity-50 cursor-not-allowed'
+                                                : 'border-terminal-border-subtle hover:border-accent/50 cursor-pointer'
+                                        }`}
                                         data-testid={`market-pool-${pool.address}`}
                                     >
                                         <div className="min-w-0">
@@ -88,6 +115,20 @@ export function MarketPicker({ intentId, onSelect }: MarketPickerProps) {
                                             <p className="text-[10px] font-mono text-terminal-text-muted">
                                                 {directionLabel(pool, poolType)}
                                             </p>
+                                            {/* Liquidity indicator for buy-side intents */}
+                                            {needsLiquidity && (
+                                                <p className="text-[10px] font-mono mt-0.5">
+                                                    {isLoadingOptions ? (
+                                                        <span className="text-terminal-text-muted">Loading options...</span>
+                                                    ) : buyableCount > 0 ? (
+                                                        <span className="text-green-400">
+                                                            {buyableCount} option{buyableCount > 1 ? 's' : ''} available
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-rose-400">No options to buy</span>
+                                                    )}
+                                                </p>
+                                            )}
                                         </div>
                                         <PoolTypeBadge poolType={poolType} />
                                     </button>

@@ -81,3 +81,8 @@ export function getAllIntents(): readonly IntentDef[] {
 export function getIntentById(id: string): IntentDef | undefined {
     return INTENTS.find((i) => i.id === id);
 }
+
+/** Returns true if this intent requires existing options on-chain to be useful (buyer role). */
+export function intentNeedsLiquidity(id: IntentId): boolean {
+    return id === 'protect' || id === 'speculate-up' || id === 'speculate-down';
+}

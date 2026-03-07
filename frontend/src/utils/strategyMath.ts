@@ -230,6 +230,25 @@ export function countOpenOptionsForStrategy(
     return 0;
 }
 
+/**
+ * Count open (buyable) options relevant to a buyer intent.
+ * - protect: open PUTs
+ * - speculate-up: open CALLs
+ * - speculate-down: open PUTs
+ */
+export function countBuyableOptionsForIntent(
+    options: OptionData[],
+    intentId: string,
+): number {
+    if (intentId === 'protect' || intentId === 'speculate-down') {
+        return options.filter(o => o.status === OptionStatus.OPEN && o.optionType === OptionType.PUT).length;
+    }
+    if (intentId === 'speculate-up') {
+        return options.filter(o => o.status === OptionStatus.OPEN && o.optionType === OptionType.CALL).length;
+    }
+    return 0;
+}
+
 // ---------------------------------------------------------------------------
 // Live outcome computation (Story 3)
 // ---------------------------------------------------------------------------
