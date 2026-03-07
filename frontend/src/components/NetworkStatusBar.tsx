@@ -6,6 +6,7 @@
  */
 import { useNetworkStatus } from '../hooks/useNetworkStatus.ts';
 import { formatFeeRate, formatNumber, formatCountdown } from '../utils/networkFormat.ts';
+import { currentNetwork, NETWORKS } from '../config/index.ts';
 
 export function NetworkStatusBar() {
     const {
@@ -38,9 +39,19 @@ export function NetworkStatusBar() {
             className="font-mono text-xs text-terminal-text-muted bg-terminal-bg-elevated px-4 py-1.5 flex items-center gap-3"
             data-testid="network-status-bar"
         >
-            {/* Connection + block number */}
+            {/* Network label + connection + block number */}
             <span className="flex items-center gap-1.5" data-testid="ns-block">
                 <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-green-400' : 'bg-rose-400'}`} />
+                <span
+                    className={`text-[10px] font-bold uppercase px-1 rounded ${
+                        currentNetwork === 'mainnet'
+                            ? 'bg-green-800 text-green-300'
+                            : 'bg-amber-800 text-amber-300'
+                    }`}
+                    data-testid="ns-network-label"
+                >
+                    {NETWORKS[currentNetwork].name}
+                </span>
                 {blockNumber !== null && `#${blockNumber.toString()}`}
             </span>
 

@@ -13,6 +13,7 @@ interface YieldOverviewProps {
     options: OptionData[];
     motoPillRatio: number | null;
     walletHex: string | null;
+    premiumSymbol?: string;
 }
 
 function avgYield(values: (number | null)[]): number | null {
@@ -21,7 +22,7 @@ function avgYield(values: (number | null)[]): number | null {
     return valid.reduce((a, b) => a + b, 0) / valid.length;
 }
 
-export function YieldOverview({ options, motoPillRatio, walletHex }: YieldOverviewProps) {
+export function YieldOverview({ options, motoPillRatio, walletHex, premiumSymbol = 'PILL' }: YieldOverviewProps) {
     const stats = useMemo(() => {
         const openOptions = options.filter((o) => o.status === OptionStatus.OPEN);
         const openCalls = openOptions.filter((o) => o.optionType === OptionType.CALL);
@@ -85,8 +86,8 @@ export function YieldOverview({ options, motoPillRatio, walletHex }: YieldOvervi
                                 <p className="text-[10px] text-terminal-text-muted">Premium Earned</p>
                                 <p className="text-terminal-text-primary">
                                     {stats.totalPremiumEarned > 0n
-                                        ? `${(Number(stats.totalPremiumEarned) / 1e18).toFixed(4)} PILL`
-                                        : '0 PILL'}
+                                        ? `${(Number(stats.totalPremiumEarned) / 1e18).toFixed(4)} ${premiumSymbol}`
+                                        : `0 ${premiumSymbol}`}
                                 </p>
                             </div>
                         </>

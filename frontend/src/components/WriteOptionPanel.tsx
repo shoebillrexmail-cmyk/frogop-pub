@@ -14,7 +14,7 @@ import type { PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
 import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI, BTC_UNDERLYING_POOL_ABI } from '../services/poolAbi.ts';
-import { formatTokenAmount, BLOCK_CONSTANTS } from '../config/index.ts';
+import { formatTokenAmount, premiumDisplayUnit, BLOCK_CONSTANTS } from '../config/index.ts';
 import type { PoolType } from '../../../shared/pool-config.types.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import { useActiveFlow } from '../hooks/useActiveFlow.ts';
@@ -248,7 +248,7 @@ export function WriteOptionPanel({
             yieldPct = Number(premiumBi) / Number(col) * 100;
         }
         const annualizedYieldPct = yieldPct !== null && selectedDays > 0 ? yieldPct * 365 / selectedDays : null;
-        const collateralSym = optionType === OptionType.CALL ? underlyingSymbol : premiumSymbol;
+        const collateralSym = optionType === OptionType.CALL ? underlyingSymbol : premiumDisplayUnit(premiumSymbol);
 
         return { maxProfit, breakeven, maxLoss, yieldPct, annualizedYieldPct, collateralSym };
     }, [premiumStr, strikeStr, amountStr, optionType, selectedDays, motoPillRatio, underlyingSymbol, premiumSymbol]);
@@ -413,7 +413,7 @@ export function WriteOptionPanel({
             if (!mounted.current) return;
             setTxId(receipt.transactionId);
             const typeLabel_ = optionType === OptionType.CALL ? 'CALL' : 'PUT';
-            trackAction(receipt.transactionId, 'writeOption', `Write ${typeLabel_} — ${amountStr} ${underlyingSymbol} @ ${strikeStr} ${premiumSymbol}`, {
+            trackAction(receipt.transactionId, 'writeOption', `Write ${typeLabel_} — ${amountStr} ${underlyingSymbol} @ ${strikeStr} ${premiumDisplayUnit(premiumSymbol)}`, {
                 optionType: String(optionType),
                 amount: amountStr,
                 strike: strikeStr,
@@ -546,7 +546,7 @@ export function WriteOptionPanel({
                     {/* Strike */}
                     <div>
                         <label className="block text-xs text-terminal-text-muted font-mono mb-1">
-                            Strike Price ({premiumSymbol})
+                            Strike Price ({premiumDisplayUnit(premiumSymbol)})
                         </label>
                         <div className="flex items-center gap-2 border border-terminal-border-subtle rounded px-3 py-2">
                             <input
@@ -558,14 +558,14 @@ export function WriteOptionPanel({
                                 placeholder="50.0"
                                 data-testid="input-strike"
                             />
-                            <span className="text-terminal-text-muted text-xs font-mono">{premiumSymbol}</span>
+                            <span className="text-terminal-text-muted text-xs font-mono">{premiumDisplayUnit(premiumSymbol)}</span>
                         </div>
                         {/* Moneyness badge */}
                         {motoPillRatio != null && motoPillRatio > 0 && (
                             <div className="mt-1.5 space-y-1" data-testid="moneyness-section">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] text-terminal-text-muted font-mono">
-                                        Spot: <span className="text-terminal-text-secondary">{motoPillRatio.toFixed(2)} {premiumSymbol}</span>
+                                        Spot: <span className="text-terminal-text-secondary">{motoPillRatio.toFixed(2)} {premiumDisplayUnit(premiumSymbol)}</span>
                                     </span>
                                     {moneynessResult && (
                                         <span
@@ -594,7 +594,7 @@ export function WriteOptionPanel({
                     {/* Premium */}
                     <div>
                         <label className="block text-xs text-terminal-text-muted font-mono mb-1">
-                            Premium ({premiumSymbol})
+                            Premium ({premiumDisplayUnit(premiumSymbol)})
                         </label>
                         <div className="flex items-center gap-2 border border-terminal-border-subtle rounded px-3 py-2">
                             <input
@@ -606,13 +606,13 @@ export function WriteOptionPanel({
                                 placeholder="5.0"
                                 data-testid="input-premium"
                             />
-                            <span className="text-terminal-text-muted text-xs font-mono">{premiumSymbol}</span>
+                            <span className="text-terminal-text-muted text-xs font-mono">{premiumDisplayUnit(premiumSymbol)}</span>
                         </div>
                         {suggestedPremium !== null && suggestedPremium > 0n && (
                             <div className="mt-1.5 space-y-1">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] text-terminal-text-muted font-mono">
-                                        Fair value: <span className="text-cyan-400">{formatBigInt(suggestedPremium)} {premiumSymbol}</span>
+                                        Fair value: <span className="text-cyan-400">{formatBigInt(suggestedPremium)} {premiumDisplayUnit(premiumSymbol)}</span>
                                     </span>
                                     <button
                                         type="button"
@@ -743,11 +743,11 @@ export function WriteOptionPanel({
                             <span className="text-[10px] text-terminal-text-muted uppercase tracking-wider">Writer Outlook</span>
                             <div className="flex justify-between">
                                 <span className="text-terminal-text-muted">Max profit</span>
-                                <span className="text-green-400">{formatBigInt(writerOutlook.maxProfit)} {premiumSymbol}</span>
+                                <span className="text-green-400">{formatBigInt(writerOutlook.maxProfit)} {premiumDisplayUnit(premiumSymbol)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-terminal-text-muted">Breakeven</span>
-                                <span className="text-cyan-400">{formatBigInt(writerOutlook.breakeven)} {premiumSymbol}</span>
+                                <span className="text-cyan-400">{formatBigInt(writerOutlook.breakeven)} {premiumDisplayUnit(premiumSymbol)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-terminal-text-muted">Yield</span>

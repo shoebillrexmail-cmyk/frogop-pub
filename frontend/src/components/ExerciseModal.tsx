@@ -15,7 +15,7 @@ import type { OptionData, PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
-import { formatTokenAmount } from '../config/index.ts';
+import { formatTokenAmount, premiumDisplayUnit } from '../config/index.ts';
 import type { PoolType } from '../../../shared/pool-config.types.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import { useActiveFlow } from '../hooks/useActiveFlow.ts';
@@ -355,7 +355,7 @@ export function ExerciseModal({
                         <p className="text-terminal-text-muted font-semibold mb-1">PnL Estimate</p>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Premium paid</span>
-                            <span className="text-terminal-text-secondary">{fmt(option.premium)} {premiumSymbol}</span>
+                            <span className="text-terminal-text-secondary">{fmt(option.premium)} {premiumDisplayUnit(premiumSymbol)}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Exercise cost</span>
@@ -372,7 +372,7 @@ export function ExerciseModal({
                                 {fmt(receiveAmount)} {receiveToken}
                                 {motoPillRatio && isCall && (
                                     <span className="text-terminal-text-muted font-normal ml-1">
-                                        (~{(Number(receiveAmount) / 1e18 * motoPillRatio).toFixed(2)} {premiumSymbol} eq.)
+                                        (~{(Number(receiveAmount) / 1e18 * motoPillRatio).toFixed(2)} {premiumDisplayUnit(premiumSymbol)} eq.)
                                     </span>
                                 )}
                             </span>
@@ -384,7 +384,7 @@ export function ExerciseModal({
                                 <div className="flex justify-between">
                                     <span className="text-terminal-text-muted">Est. PnL</span>
                                     <span className={pnl >= 0 ? 'text-green-400 font-semibold' : 'text-rose-400 font-semibold'}>
-                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(4)} {premiumSymbol}
+                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(4)} {premiumDisplayUnit(premiumSymbol)}
                                     </span>
                                 </div>
                             );

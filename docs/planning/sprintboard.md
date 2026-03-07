@@ -14,6 +14,8 @@
 | SpreadRouter config + frontend wiring (Tasks 1-3) | `f2ca3a2` | 2026-03-06 |
 | SpreadRouter — Atomic Strategy Execution (complete) | `d479592` | 2026-03-06 |
 | SpreadRouter Integration Tests — Full Strategy Coverage | pending | 2026-03-07 |
+| Network Mismatch Guard + Multi-Network Deployment | pending | 2026-03-07 |
+| Strategy UX Redesign — Outcome-First + BTC Fix | pending | 2026-03-07 |
 | BTC Pool Integration Tests — Full Lifecycle Coverage | pending | 2026-03-07 |
 
 ---
@@ -713,6 +715,40 @@ wired into the strategy UI.
 
 ---
 
+## ~~Sprint: Network Mismatch Guard + Multi-Network Deployment~~ DONE
+
+> **Goal:** Detect wallet-network mismatch (e.g. mainnet wallet on testnet app)
+> and show a friendly banner instead of crashing. Set up multi-network CI/CD
+> for parallel testnet + mainnet deployments.
+
+### Tasks
+
+- [x] **Story A: NetworkMismatchBanner** — Compares wallet `chainType` against
+  app `currentNetwork`. Shows amber warning + "Switch Network" button. Dismissible.
+  - `frontend/src/components/NetworkMismatchBanner.tsx` (new)
+  - `frontend/src/components/__tests__/NetworkMismatchBanner.test.tsx` (new, 6 tests)
+  - `frontend/src/components/Layout.tsx` (add banner between header and content)
+
+- [x] **Story B: Dynamic BTC network in useBtcPayment** — Replaced hardcoded
+  `networks.testnet` with `BTC_NETWORK_MAP[currentNetwork]` for P2WSH derivation.
+  - `frontend/src/hooks/useBtcPayment.ts`
+
+- [x] **Story B: Network label in NetworkStatusBar** — Shows "Testnet" or
+  "Mainnet" badge next to connection dot in footer status bar.
+  - `frontend/src/components/NetworkStatusBar.tsx`
+
+- [x] **Story B: Mainnet wrangler configs** — Separate worker names, D1 databases,
+  and env vars for mainnet deployments.
+  - `frontend/wrangler.mainnet.toml` (new)
+  - `indexer/wrangler.mainnet.toml` (new)
+
+- [x] **Story B: CI mainnet deploy jobs** — Gated on `vars.MAINNET_POOL_ADDRESS`
+  (no-op until mainnet pool addresses are configured in GitHub repo variables).
+  - `.github/workflows/frontend.yml` (add `deploy-mainnet` job)
+  - `.github/workflows/indexer.yml` (add `deploy-mainnet` job)
+
+---
+
 ## Backlog
 
 ### Contracts
@@ -749,9 +785,110 @@ wired into the strategy UI.
 
 ---
 
+## ~~Sprint: Strategy UX Redesign — Outcome-First + BTC Fix~~ DONE
+
+> **Goal:** Fix BTC pool display labels, unify strategies into Pool Detail Page,
+> and replace options jargon with outcome-first cards + interactive config.
+
+### Story 1: Fix BTC Pool Display Labels — DONE
+- Added `premiumDisplayUnit(symbol)` helper: returns "sats" for BTC, symbol otherwise
+- Applied across all price-context labels: WriteOptionPanel, LegSelector,
+  CombinedPnLChart, YieldOverview, PoolHeaderBar, BuyOptionModal, ExerciseModal,
+  OptionsChain, OptionsTable
+
+### Story 2: Unify Strategies into Pool Detail Page — DONE
+- Deleted `/strategies` route → redirect to `/pools`
+- Deleted `StrategiesPage.tsx`, `QuickStrategies.tsx` + tests
+- Removed "Strategies" from global nav
+- 2 tabs: "Market" (browse + buy) and "Write" (yield + strategies)
+- Created `StrategySection.tsx` — unified write-side strategy hub
+- Created `MarketStrategyCards.tsx` — buy-side outcome cards + chain filter
+- `OptionsChain.tsx` + `OptionsTable.tsx` accept `strategyFilter` prop, dim non-matching rows
+
+### Story 3: Outcome-First Strategy Cards + Interactive Config — DONE
+- Created `OutcomeCard.tsx` — compact goal-first card (risk badge, title, tagline, metric)
+- Created `StrategyConfigurator.tsx` — moneyness slider(s), expiry presets, amount,
+  live "What You'll Get" preview via `calcLiveOutcome()`
+- Added `calcLiveOutcome()` to `strategyMath.ts` — computes live metrics for all 6 strategies
+- Write tab: 5 strategy cards + Write Custom → StrategyConfigurator → WriteOptionPanel
+- Market tab: Protective Put card → filter chain → StrategyConfigurator → BuyOptionModal
+- Multi-leg (Collar, Spreads): inline LegSelector + CombinedPnLChart + SpreadRouter
+
+### Key files
+| File | Action |
+|------|--------|
+| `frontend/src/config/index.ts` | `premiumDisplayUnit()` helper |
+| `frontend/src/utils/strategyMath.ts` | `calcLiveOutcome()`, types |
+| `frontend/src/components/OutcomeCard.tsx` | NEW |
+| `frontend/src/components/StrategyConfigurator.tsx` | NEW |
+| `frontend/src/components/StrategySection.tsx` | NEW |
+| `frontend/src/components/MarketStrategyCards.tsx` | NEW |
+| `frontend/src/pages/PoolDetailPage.tsx` | 2-tab layout, wired both components |
+| `frontend/src/App.tsx` | `/strategies` → redirect |
+| `frontend/src/components/Layout.tsx` | Removed Strategies nav link |
+| `frontend/src/pages/StrategiesPage.tsx` | DELETED |
+| `frontend/src/components/QuickStrategies.tsx` | DELETED |
+
+---
+
+## Sprint: Strategy UX — Market Tab Enhancements
+
+> **Goal:** Improve the buy-side strategy discovery on the Market tab with
+> richer chain highlighting, a Collar card, and quick-buy shortcuts.
+
+### Stories
+
+- [ ] **Story 1: Collar card on Market tab ("Lock In a Price Range")**
+  - Add a second `OutcomeCard` to `MarketStrategyCards` for Collar strategy
+  - Shows net cost (put premium paid − call premium earned) via `calcLiveOutcome('collar', ...)`
+  - Clicking sets a `StrategyFilter` that highlights both the buy PUT and sell CALL rows
+  - Filter type: `{ type: 'collar', optionType: null, strikeMin, strikeMax }` — highlights
+    PUTs in 70-95% range AND CALLs in 105-150% range
+  - StrategyConfigurator expands with two moneyness sliders (reuse existing dual-slider logic)
+  - "Setup Protection" button triggers `onBuyOption` for the PUT leg + `onWriteOption` for the CALL leg
+  - **Key files:** `MarketStrategyCards.tsx`, `OptionsChain.tsx`, `OptionsTable.tsx`
+
+- [ ] **Story 2: Best-match row highlighting in chain**
+  - When a strategy filter is active, highlight the single "best match" option row
+    with a cyan border/badge instead of just dimming non-matching rows
+  - For Protective Put: best match = closest to selected moneyness with available liquidity
+  - For Collar: highlight both the best PUT and best CALL rows
+  - Add a small "Best match" badge on the highlighted row(s)
+  - Uses `findBestProtectivePut()` (already exists) and new `findBestCollarPair()`
+  - **Key files:** `OptionsChain.tsx`, `OptionsTable.tsx`, `strategyMath.ts`
+
+- [ ] **Story 3: Quick-buy button on strategy-filtered rows**
+  - When the chain is filtered by a strategy, add a prominent "Buy" button directly
+    on matching rows (skip the separate row action → modal flow)
+  - Button opens `BuyOptionModal` pre-filled with the option data + strategy label
+  - Only appears when `strategyFilter` is active and the row matches
+  - For rows that are already purchased or cancelled, show disabled state
+  - **Key files:** `OptionsChain.tsx`, `OptionsTable.tsx`
+
+### Acceptance criteria
+- Market tab shows 2 cards: "Protect Against Drops" + "Lock In a Price Range"
+- Collar card shows net cost metric and dual moneyness config
+- Best-match rows have visible highlight (not just un-dimmed)
+- Quick-buy button opens BuyOptionModal directly from filtered chain rows
+
+---
+
+## Backlog — Future Market Tab Ideas
+
+- [ ] **Guided buy flow** — After clicking "Get Protection" in configurator, instead of
+  opening BuyOptionModal immediately, show a mini-wizard: "You're buying a PUT at X strike
+  for Y premium. This protects you if price drops below Z." → confirm → BuyOptionModal
+- [ ] **Strategy comparison view** — Side-by-side comparison of Protective Put vs Collar
+  cost/benefit when both cards are available
+- [ ] **Historical strategy performance** — Show backtested P&L for the selected strategy
+  parameters using indexer price candle data
+
+---
+
 ## Status (2026-03-07)
 
-All integration test sprints **COMPLETE**. No active sprints.
+All integration test sprints **COMPLETE**. Strategy UX Redesign **COMPLETE** (Stories 1-3).
+Market Tab Enhancements sprint queued.
 
 **Frontend BTC pools deployed** (2026-03-06) with bridge:
 - moto-btc, btc-moto, pill-btc, btc-pill — all verified live

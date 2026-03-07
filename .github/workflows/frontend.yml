@@ -82,3 +82,46 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
           workingDirectory: frontend
+
+  # ── Deploy Mainnet: separate Workers deployment ──────────────────────────
+  deploy-mainnet:
+    name: Deploy to Cloudflare Workers (Mainnet)
+    needs: ci
+    if: >-
+      github.ref == 'refs/heads/master' &&
+      github.event_name == 'push' &&
+      vars.MAINNET_POOL_ADDRESS != ''
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for production (mainnet)
+        run: npx vite build
+        env:
+          VITE_OPNET_NETWORK: mainnet
+          VITE_OPNET_RPC_URL: https://mainnet.opnet.org
+          VITE_POOL_ADDRESS: ${{ vars.MAINNET_POOL_ADDRESS }}
+          VITE_INDEXER_URL: ${{ vars.MAINNET_INDEXER_URL }}
+
+      - name: Deploy to Cloudflare Workers (mainnet)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.mainnet.toml
+          workingDirectory: frontend

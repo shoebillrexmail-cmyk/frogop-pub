@@ -5,8 +5,9 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { type OptionData, OptionStatus, OptionType } from '../services/types.ts';
-import { formatTokenAmount, blocksToCountdown } from '../config/index.ts';
+import { formatTokenAmount, blocksToCountdown, premiumDisplayUnit } from '../config/index.ts';
 import { calcBreakeven, calcYield } from '../utils/optionMath.js';
+import type { StrategyFilter } from '../utils/strategyMath.ts';
 
 type FilterStatus = 'ALL' | 'OPEN' | 'PURCHASED' | 'RESERVED' | 'EXPIRED' | 'CANCELLED';
 
@@ -75,6 +76,8 @@ interface OptionsTableProps {
     onTransfer?: (option: OptionData) => void;
     onBatchCancel?: (options: OptionData[]) => void;
     onBatchSettle?: (options: OptionData[]) => void;
+    /** Strategy filter — highlight matching options, dim others */
+    strategyFilter?: StrategyFilter | null;
 }
 
 const STATUS_LABELS: Record<number, string> = {
@@ -307,6 +310,7 @@ export function OptionsTable({
     onBatchSettle,
     underlyingSymbol = 'MOTO',
     premiumSymbol = 'PILL',
+    strategyFilter,
 }: OptionsTableProps) {
     const [filter, setFilter] = useState<FilterStatus>('ALL');
     const [selected, setSelected] = useState<Set<bigint>>(new Set());
@@ -470,7 +474,7 @@ export function OptionsTable({
                             </div>
                             {/* Strike range */}
                             <div>
-                                <label className="text-terminal-text-muted block mb-1">Strike ({premiumSymbol})</label>
+                                <label className="text-terminal-text-muted block mb-1">Strike ({premiumDisplayUnit(premiumSymbol)})</label>
                                 <div className="flex gap-1">
                                     <input
                                         type="number"
@@ -492,7 +496,7 @@ export function OptionsTable({
                             </div>
                             {/* Premium range */}
                             <div>
-                                <label className="text-terminal-text-muted block mb-1">Premium ({premiumSymbol})</label>
+                                <label className="text-terminal-text-muted block mb-1">Premium ({premiumDisplayUnit(premiumSymbol)})</label>
                                 <div className="flex gap-1">
                                     <input
                                         type="number"
@@ -607,7 +611,13 @@ export function OptionsTable({
                             {filtered.map((option) => (
                                 <tr
                                     key={option.id.toString()}
-                                    className="border-b border-terminal-border-subtle last:border-0 hover:bg-terminal-bg-primary transition-colors"
+                                    className={`border-b border-terminal-border-subtle last:border-0 hover:bg-terminal-bg-primary transition-colors ${
+                                        strategyFilter && !(
+                                            option.optionType === strategyFilter.optionType &&
+                                            Number(option.strikePrice) / 1e18 >= strategyFilter.strikeMin &&
+                                            Number(option.strikePrice) / 1e18 <= strategyFilter.strikeMax
+                                        ) ? 'opacity-30' : ''
+                                    }`}
                                     data-testid={`option-row-${option.id}`}
                                 >
                                     <td className="py-2 pr-2">
@@ -636,7 +646,7 @@ export function OptionsTable({
                                         <TypeBadge optionType={option.optionType} />
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary">
-                                        {formatTokenAmount(option.strikePrice)} {premiumSymbol}
+                                        {formatTokenAmount(option.strikePrice)} {premiumDisplayUnit(premiumSymbol)}
                                         {motoPillRatio != null && motoPillRatio > 0 && (
                                             <span className="block text-[10px] text-terminal-text-muted">
                                                 ~{(Number(option.strikePrice) / 1e18 / motoPillRatio).toFixed(4)} {underlyingSymbol} eq.
@@ -644,7 +654,7 @@ export function OptionsTable({
                                         )}
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary">
-                                        {formatTokenAmount(option.premium)} {premiumSymbol}
+                                        {formatTokenAmount(option.premium)} {premiumDisplayUnit(premiumSymbol)}
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary">
                                         {currentBlock !== undefined
@@ -663,7 +673,7 @@ export function OptionsTable({
                                     <td className="py-2 pr-4 text-terminal-text-secondary text-xs">
                                         {(() => {
                                             const be = calcBreakeven(option);
-                                            return be !== null ? <>{formatTokenAmount(be)} {premiumSymbol}</> : <span className="text-terminal-text-muted">—</span>;
+                                            return be !== null ? <>{formatTokenAmount(be)} {premiumDisplayUnit(premiumSymbol)}</> : <span className="text-terminal-text-muted">—</span>;
                                         })()}
                                     </td>
                                     <td className="py-2 pr-4 text-terminal-text-secondary text-xs">
@@ -679,7 +689,7 @@ export function OptionsTable({
                                                 if (pnl === undefined) return <span className="text-terminal-text-muted">—</span>;
                                                 return (
                                                     <span className={pnl >= 0 ? 'text-green-400' : 'text-rose-400'}>
-                                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} {premiumSymbol}
+                                                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} {premiumDisplayUnit(premiumSymbol)}
                                                     </span>
                                                 );
                                             })()}

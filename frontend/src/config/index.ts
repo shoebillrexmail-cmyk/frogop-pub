@@ -161,3 +161,8 @@ export function formatTokenAmount(amount: bigint, decimals: number = 18): string
   const fractionStr = fraction.toString().padStart(decimals, '0').slice(0, 4);
   return `${whole}.${fractionStr}`;
 }
+
+/** Display unit for price-context values. Returns "sats" for BTC, symbol unchanged for everything else. */
+export function premiumDisplayUnit(symbol: string): string {
+    return symbol === 'BTC' ? 'sats' : symbol;
+}

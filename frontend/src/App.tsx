@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { LandingPage } from './pages/LandingPage';
 import { PoolListPage } from './pages/PoolListPage';
@@ -7,7 +7,6 @@ import { PortfolioPage } from './pages/PortfolioPage';
 import { OptionDetailPage } from './pages/OptionDetailPage';
 import { TransactionHistoryPage } from './pages/TransactionHistoryPage';
 import { AboutPage } from './pages/AboutPage';
-import { StrategiesPage } from './pages/StrategiesPage';
 import { TransactionProvider } from './contexts/TransactionContext';
 
 function App() {
@@ -21,7 +20,8 @@ function App() {
             <Route path="pools/:address" element={<PoolDetailPage />} />
             <Route path="pools/:addr/options/:id" element={<OptionDetailPage />} />
             <Route path="portfolio" element={<PortfolioPage />} />
-            <Route path="strategies" element={<StrategiesPage />} />
+            {/* Redirect old /strategies route to pools */}
+            <Route path="strategies" element={<Navigate to="/pools" replace />} />
             <Route path="transactions" element={<TransactionHistoryPage />} />
             <Route path="about" element={<AboutPage />} />
           </Route>

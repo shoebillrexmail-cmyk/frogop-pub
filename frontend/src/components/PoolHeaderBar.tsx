@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 import type { PoolInfo } from '../services/types.ts';
-import { formatAddress, blocksToTime } from '../config/index.ts';
+import { formatAddress, blocksToTime, premiumDisplayUnit } from '../config/index.ts';
 import { PoolTypeBadge } from './PoolTypeBadge.tsx';
 import type { PoolType } from '../../../shared/pool-config.types.ts';
 
@@ -54,7 +54,7 @@ export function PoolHeaderBar({ poolInfo, poolAddress, motoPillRatio, priceLastU
                     Spot:{' '}
                     <span className="text-terminal-text-primary" data-testid="spot-price">
                         {motoPillRatio != null && motoPillRatio > 0
-                            ? `${motoPillRatio.toFixed(4)} ${premiumSymbol}`
+                            ? `${motoPillRatio.toFixed(4)} ${premiumDisplayUnit(premiumSymbol)}`
                             : 'N/A'}
                     </span>
                     {freshness && (

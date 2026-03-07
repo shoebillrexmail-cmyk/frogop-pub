@@ -1,5 +1,5 @@
 /**
- * PoolDetailPage tests — two-tab layout, filter controls, row action visibility.
+ * PoolDetailPage tests — two-tab layout (Market | Write), filter controls, row action visibility.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -157,22 +157,29 @@ describe('PoolDetailPage', () => {
     });
 
     // Tab structure
-    it('defaults to buy tab with chain visible', () => {
+    it('defaults to market tab with chain visible', () => {
         renderPage();
-        expect(screen.getByTestId('buy-tab-content')).toBeInTheDocument();
+        expect(screen.getByTestId('market-tab-content')).toBeInTheDocument();
         expect(screen.queryByTestId('write-tab-content')).not.toBeInTheDocument();
         expect(screen.getByText('Options Chain')).toBeInTheDocument();
     });
 
-    it('click write tab shows yield overview and strategies', () => {
+    it('tab labels are Market and Write', () => {
+        renderPage();
+        expect(screen.getByTestId('tab-market')).toHaveTextContent('Market');
+        expect(screen.getByTestId('tab-write')).toHaveTextContent('Write');
+    });
+
+    it('click write tab shows yield overview and strategy section', () => {
         renderPage();
         switchToWriteTab();
         expect(screen.getByTestId('write-tab-content')).toBeInTheDocument();
         expect(screen.getByTestId('yield-overview')).toBeInTheDocument();
         expect(screen.getByTestId('writer-how-it-works')).toBeInTheDocument();
+        expect(screen.getByTestId('strategy-section')).toBeInTheDocument();
         expect(screen.getByTestId('strategy-covered-call')).toBeInTheDocument();
         expect(screen.getByTestId('strategy-write-custom')).toBeInTheDocument();
-        expect(screen.queryByTestId('buy-tab-content')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('market-tab-content')).not.toBeInTheDocument();
     });
 
     it('tab persists to sessionStorage', () => {
@@ -181,14 +188,24 @@ describe('PoolDetailPage', () => {
         expect(sessionStorage.getItem('frogop_pool_tab')).toBe('write');
     });
 
-    it('protective put card appears on buy tab', () => {
+    it('market strategy cards appear on market tab', () => {
         renderPage();
-        expect(screen.getByTestId('protective-put-card')).toBeInTheDocument();
+        expect(screen.getByTestId('market-strategy-cards')).toBeInTheDocument();
+        expect(screen.getByTestId('market-protective-put')).toBeInTheDocument();
     });
 
-    it('buy value prop line is visible on buy tab', () => {
+    it('market value prop line is visible on market tab', () => {
         renderPage();
-        expect(screen.getByTestId('buy-value-prop')).toBeInTheDocument();
+        expect(screen.getByTestId('market-value-prop')).toBeInTheDocument();
+    });
+
+    // Multi-leg strategies on write tab
+    it('write tab shows collar, bull spread, and bear spread cards', () => {
+        renderPage();
+        switchToWriteTab();
+        expect(screen.getByTestId('strategy-collar')).toBeInTheDocument();
+        expect(screen.getByTestId('strategy-bull-call-spread')).toBeInTheDocument();
+        expect(screen.getByTestId('strategy-bear-put-spread')).toBeInTheDocument();
     });
 
     // Options table (list view)
@@ -259,21 +276,5 @@ describe('PoolDetailPage', () => {
     it('shows network badge for non-mainnet', () => {
         renderPage();
         expect(screen.getByText(/Testnet/i)).toBeInTheDocument();
-    });
-
-    it('does not render CollarModal', () => {
-        renderPage();
-        switchToWriteTab();
-        expect(screen.queryByTestId('collar-modal')).not.toBeInTheDocument();
-    });
-
-    it('collar card links to /strategies with pool and strategy params', () => {
-        renderPage();
-        switchToWriteTab();
-        const collarBtn = screen.getByTestId('strategy-collar-btn');
-        // When wallet is not connected, collar renders as a disabled button
-        // Just verify it exists and no CollarModal is present
-        expect(collarBtn).toBeInTheDocument();
-        expect(screen.queryByTestId('collar-modal')).not.toBeInTheDocument();
     });
 });

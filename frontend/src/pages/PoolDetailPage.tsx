@@ -1,7 +1,7 @@
 /**
  * PoolDetailPage — per-pool detail view with two-tab layout:
- *   "Buy Options" — options chain/table with protective put card
- *   "Earn by Writing" — yield overview, strategy cards, how-it-works
+ *   "Market" — options chain/table with protective put card + price chart
+ *   "Write" — yield overview, strategy section (single + multi-leg), how-it-works
  *
  * Route: /pools/:address
  * Pool is determined by URL param, not a selector.
@@ -27,21 +27,22 @@ import { BuyOptionModal } from '../components/BuyOptionModal.tsx';
 import { CancelModal } from '../components/CancelModal.tsx';
 import { ExerciseModal } from '../components/ExerciseModal.tsx';
 import { SettleModal } from '../components/SettleModal.tsx';
-import { QuickStrategies } from '../components/QuickStrategies.tsx';
+import { StrategySection } from '../components/StrategySection.tsx';
+import { MarketStrategyCards } from '../components/MarketStrategyCards.tsx';
+import type { StrategyFilter } from '../utils/strategyMath.ts';
 import { YieldOverview } from '../components/YieldOverview.tsx';
 import { WriterHowItWorks } from '../components/WriterHowItWorks.tsx';
-import { currentNetwork, findPoolConfigByAddress, getNativeSwapAddress, getPricePairKey, formatTokenAmount, getPoolType } from '../config/index.ts';
+import { currentNetwork, findPoolConfigByAddress, getNativeSwapAddress, getPricePairKey, getPoolType } from '../config/index.ts';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
 import { NotificationBanner } from '../components/NotificationBanner.tsx';
 import { useNotifications } from '../hooks/useNotifications.ts';
 import { useStatusChangeDetector, describeChange } from '../hooks/useStatusChangeDetector.ts';
 import { OnboardingOverlay } from '../components/OnboardingOverlay.tsx';
 import { useOnboardingState } from '../hooks/useOnboardingState.ts';
-import { findBestProtectivePut } from '../utils/strategyMath.js';
 import type { OptionData } from '../services/types.ts';
 import type { ResumeRequest } from '../contexts/flowDefs.ts';
 
-type PoolTab = 'buy' | 'write';
+type PoolTab = 'market' | 'write';
 
 export function PoolDetailPage() {
     const { address: poolAddress } = useParams<{ address: string }>();
@@ -66,6 +67,7 @@ export function PoolDetailPage() {
     const poolType = getPoolType(poolConfig);
     const pairKey = poolConfig ? getPricePairKey(poolConfig) : `${underlyingSymbol}_${premiumSymbol}`;
 
+
     // NativeSwap address from pool config (not env var)
     const nativeSwapAddress = useMemo(() => getNativeSwapAddress(poolConfig), [poolConfig]);
 
@@ -80,7 +82,13 @@ export function PoolDetailPage() {
 
     // Tab state — persisted to sessionStorage
     const [activeTab, setActiveTab] = useState<PoolTab>(() => {
-        try { return (sessionStorage.getItem('frogop_pool_tab') as PoolTab) || 'buy'; } catch { return 'buy'; }
+        try {
+            const stored = sessionStorage.getItem('frogop_pool_tab');
+            // Migrate old values
+            if (stored === 'buy') return 'market';
+            if (stored === 'market' || stored === 'write') return stored;
+            return 'market';
+        } catch { return 'market'; }
     });
     const handleTabChange = (tab: PoolTab) => {
         setActiveTab(tab);
@@ -115,6 +123,9 @@ export function PoolDetailPage() {
         }
         confirmedCountRef.current = confirmed;
     }, [transactions, poolAddress, refetchPool]);
+
+    // Strategy filter for Market tab chain highlighting
+    const [strategyFilter, setStrategyFilter] = useState<StrategyFilter | null>(null);
 
     const [writeOpen, setWriteOpen] = useState(false);
     const [writeInitialValues, setWriteInitialValues] = useState<WriteOptionInitialValues | undefined>(undefined);
@@ -206,11 +217,6 @@ export function PoolDetailPage() {
         if (walletConnected) requestPermission();
     }, [walletConnected, requestPermission]);
 
-    // Protective Put
-    const bestProtectivePut = useMemo(() => {
-        if (!motoPillRatio || motoPillRatio <= 0) return null;
-        return findBestProtectivePut(options, motoPillRatio);
-    }, [options, motoPillRatio]);
 
     function handleBuy(option: OptionData) {
         if (!walletConnected) return;
@@ -229,26 +235,14 @@ export function PoolDetailPage() {
         if (walletConnected) setSettleTarget(option);
     }
 
-    // Strategy template handlers
-    function handleCoveredCall(values: WriteOptionInitialValues) {
+    // Strategy template handler (from StrategySection)
+    function handleWriteOption(values: WriteOptionInitialValues, strategyLabel?: string) {
         if (!walletConnected) return;
-        setWriteStrategyLabel('Covered Call');
+        setWriteStrategyLabel(strategyLabel);
         setWriteInitialValues(values);
         setWriteOpen(true);
     }
 
-    function handleProtectivePut(option: OptionData) {
-        if (!walletConnected) return;
-        setBuyStrategyLabel('Protective Put');
-        setBuyTarget(option);
-    }
-
-    function handleWritePut(values: WriteOptionInitialValues) {
-        if (!walletConnected) return;
-        setWriteStrategyLabel('Write Protective Put');
-        setWriteInitialValues(values);
-        setWriteOpen(true);
-    }
 
     // Pool not found
     if (!poolAddress) {
@@ -303,7 +297,7 @@ export function PoolDetailPage() {
 
                     {/* Tab bar */}
                     <div className="flex gap-0 border-b border-terminal-border-subtle" data-testid="pool-tabs">
-                        {(['buy', 'write'] as const).map((tab) => (
+                        {(['market', 'write'] as const).map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => handleTabChange(tab)}
@@ -314,17 +308,32 @@ export function PoolDetailPage() {
                                 }`}
                                 data-testid={`tab-${tab}`}
                             >
-                                {tab === 'buy' ? 'Buy Options' : 'Earn by Writing'}
+                                {tab === 'market' ? 'Market' : 'Write'}
                             </button>
                         ))}
                     </div>
 
-                    {/* BUY TAB */}
-                    {activeTab === 'buy' && (
-                        <div className="space-y-4" data-testid="buy-tab-content">
-                            <p className="text-xs text-terminal-text-muted font-mono" data-testid="buy-value-prop">
+                    {/* MARKET TAB */}
+                    {activeTab === 'market' && (
+                        <div className="space-y-4" data-testid="market-tab-content">
+                            <p className="text-xs text-terminal-text-muted font-mono" data-testid="market-value-prop">
                                 Capped risk &middot; Leveraged exposure &middot; No liquidation
                             </p>
+
+                            {/* Buy-side strategy cards */}
+                            <MarketStrategyCards
+                                options={options}
+                                spotPrice={motoPillRatio}
+                                underlyingSymbol={underlyingSymbol}
+                                premiumSymbol={premiumSymbol}
+                                onBuyOption={(opt, label) => {
+                                    if (!walletConnected) return;
+                                    setBuyStrategyLabel(label);
+                                    setBuyTarget(opt);
+                                }}
+                                onStrategyFilter={setStrategyFilter}
+                                activeFilter={strategyFilter}
+                            />
 
                             {/* View toggle */}
                             <div className="flex items-center gap-2">
@@ -358,6 +367,7 @@ export function PoolDetailPage() {
                                     underlyingSymbol={underlyingSymbol}
                                     premiumSymbol={premiumSymbol}
                                     onBuy={handleBuy}
+                                    strategyFilter={strategyFilter}
                                 />
                             ) : (
                                 <ErrorBoundary inline label="Options Table">
@@ -375,46 +385,10 @@ export function PoolDetailPage() {
                                         onCancel={handleCancel}
                                         onExercise={handleExercise}
                                         onSettle={handleSettle}
+                                        strategyFilter={strategyFilter}
                                     />
                                 </ErrorBoundary>
                             )}
-
-                            {/* Protective Put card */}
-                            <div
-                                className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-4"
-                                data-testid="protective-put-card"
-                            >
-                                <h4 className="text-sm font-bold text-terminal-text-primary font-mono mb-1">
-                                    Protective Put
-                                </h4>
-                                <p className="text-xs text-terminal-text-muted font-mono mb-3">
-                                    Hedge your {underlyingSymbol} — buy downside protection
-                                </p>
-                                {bestProtectivePut ? (
-                                    <div className="text-xs font-mono space-y-1 mb-3">
-                                        <div className="flex justify-between">
-                                            <span className="text-terminal-text-muted">Strike</span>
-                                            <span className="text-terminal-text-secondary">{formatTokenAmount(bestProtectivePut.strikePrice)} {premiumSymbol}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-terminal-text-muted">Premium</span>
-                                            <span className="text-rose-400">{formatTokenAmount(bestProtectivePut.premium)} {premiumSymbol}</span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <p className="text-xs text-terminal-text-muted font-mono mb-3">
-                                        No puts available in the 80-95% range yet.
-                                    </p>
-                                )}
-                                <button
-                                    onClick={() => bestProtectivePut && handleProtectivePut(bestProtectivePut)}
-                                    disabled={!bestProtectivePut || !walletConnected}
-                                    className="btn-secondary px-4 py-2 text-xs font-mono rounded disabled:opacity-50"
-                                    data-testid="buy-protective-put-btn"
-                                >
-                                    {walletConnected ? (bestProtectivePut ? 'Buy Put' : 'No puts available') : 'Connect wallet'}
-                                </button>
-                            </div>
 
                             {/* Collapsible PriceChart */}
                             <div>
@@ -450,19 +424,23 @@ export function PoolDetailPage() {
                                 options={options}
                                 motoPillRatio={motoPillRatio}
                                 walletHex={walletHex}
+                                premiumSymbol={premiumSymbol}
                             />
                             <WriterHowItWorks />
-                            <QuickStrategies
+                            <StrategySection
                                 poolInfo={poolInfo}
+                                poolAddress={poolAddress}
+                                options={options}
                                 motoPillRatio={motoPillRatio}
-                                motoBal={null}
                                 walletConnected={walletConnected}
+                                walletAddress={walletAddress}
+                                address={address}
+                                provider={provider}
+                                network={network}
                                 underlyingSymbol={underlyingSymbol}
                                 premiumSymbol={premiumSymbol}
-                                onCoveredCall={handleCoveredCall}
-                                onWritePut={handleWritePut}
-                                collarLinkTo={`/strategies?pool=${poolAddress}&strategy=collar`}
-                                onWriteCustom={() => setWriteOpen(true)}
+                                onWriteOption={handleWriteOption}
+                                onRefetch={refetchPool}
                             />
 
                             {candles.length > 0 && (

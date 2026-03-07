@@ -14,8 +14,9 @@ import {
     BUCKET_LABELS,
 } from '../utils/optionsChain.ts';
 import type { ExpiryBucket, ChainCell } from '../utils/optionsChain.ts';
-import { formatTokenAmount, blocksToCountdown } from '../config/index.ts';
+import { formatTokenAmount, blocksToCountdown, premiumDisplayUnit } from '../config/index.ts';
 import { calcBreakeven } from '../utils/optionMath.js';
+import type { StrategyFilter } from '../utils/strategyMath.ts';
 
 // ── Props ──────────────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ interface OptionsChainProps {
     underlyingSymbol?: string;
     premiumSymbol?: string;
     onBuy?: (option: OptionData) => void;
+    /** Strategy filter — highlight matching strikes, dim others */
+    strategyFilter?: StrategyFilter | null;
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────
@@ -277,7 +280,7 @@ function ExpandedListings({
                                     {formatTokenAmount(opt.underlyingAmount)} {uSym}
                                 </td>
                                 <td className={`py-1.5 pr-2 ${side === 'call' ? 'text-green-400' : 'text-rose-400'}`}>
-                                    {formatTokenAmount(opt.premium)} {pSym}
+                                    {formatTokenAmount(opt.premium)} {premiumDisplayUnit(pSym)}
                                 </td>
                                 <td className="py-1.5 pr-2 text-terminal-text-secondary">
                                     {blocksLeft !== undefined
@@ -288,7 +291,7 @@ function ExpandedListings({
                                     }
                                 </td>
                                 <td className="py-1.5 pr-2 text-terminal-text-secondary">
-                                    {be !== null ? `${formatTokenAmount(be)} ${pSym}` : '—'}
+                                    {be !== null ? `${formatTokenAmount(be)} ${premiumDisplayUnit(pSym)}` : '—'}
                                 </td>
                                 <td className="py-1.5">
                                     {isWriter ? (
@@ -347,6 +350,7 @@ export function OptionsChain({
     underlyingSymbol = 'MOTO',
     premiumSymbol = 'PILL',
     onBuy,
+    strategyFilter,
 }: OptionsChainProps) {
     const [activeBucket, setActiveBucket] = useState<ExpiryBucket | 'all'>('all');
     const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -435,7 +439,12 @@ export function OptionsChain({
                                 {showAtm && spot !== null && <AtmDivider spot={spot} />}
 
                                 <div
-                                    className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-terminal-border-subtle text-sm font-mono"
+                                    className={`grid grid-cols-[1fr_auto_1fr] items-center border-b border-terminal-border-subtle text-sm font-mono ${
+                                        strategyFilter && !(
+                                            Number(row.strikePrice) / 1e18 >= strategyFilter.strikeMin &&
+                                            Number(row.strikePrice) / 1e18 <= strategyFilter.strikeMax
+                                        ) ? 'opacity-30' : ''
+                                    }`}
                                     data-testid={`chain-row-${row.strikePrice}`}
                                 >
                                     {/* CALL side */}

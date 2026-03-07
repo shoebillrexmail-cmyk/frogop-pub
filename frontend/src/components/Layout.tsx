@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useWalletConnect } from '@btc-vision/walletconnect';
 import { formatAddress } from '../config';
 import { ErrorBoundary } from './ErrorBoundary';
+import { NetworkMismatchBanner } from './NetworkMismatchBanner';
 import { TransactionToast } from './TransactionToast';
 import { TransactionDetailModal } from './TransactionDetailModal';
 import { NetworkStatusBar } from './NetworkStatusBar';
@@ -31,8 +32,7 @@ export function Layout() {
   const navLinks = [
     { path: '/', label: 'Home', testId: 'nav-home' },
     { path: '/pools', label: 'Pools', testId: 'nav-pools' },
-    { path: '/strategies', label: 'Strategies', testId: 'nav-strategies' },
-    { path: '/portfolio', label: 'Portfolio', testId: 'nav-portfolio' },
+{ path: '/portfolio', label: 'Portfolio', testId: 'nav-portfolio' },
     { path: '/transactions', label: 'History', testId: 'nav-history' },
     { path: '/about', label: 'About', testId: 'nav-about' },
   ];
@@ -125,6 +125,8 @@ export function Layout() {
           </nav>
         )}
       </header>
+
+      <NetworkMismatchBanner />
 
       <NetworkStatusProvider provider={readProvider} wsConnected={wsConnected}>
         <main className="flex-1">

@@ -68,3 +68,43 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: indexer
+
+  # ── Deploy Mainnet: separate Workers deployment ──────────────────────────
+  deploy-mainnet:
+    name: Deploy Indexer (Mainnet)
+    needs: ci
+    if: >-
+      github.ref == 'refs/heads/master' &&
+      github.event_name == 'push' &&
+      vars.MAINNET_POOL_ADDRESS != ''
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: indexer
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: indexer/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Migrate D1 schema (mainnet)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: indexer
+          command: d1 execute frogop-indexer-mainnet --remote --file=./src/db/schema.sql --config wrangler.mainnet.toml
+
+      - name: Deploy via Wrangler (mainnet)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: indexer
+          command: deploy --config wrangler.mainnet.toml

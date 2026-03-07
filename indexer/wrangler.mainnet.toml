@@ -1,0 +1,52 @@
+name = "frogop-indexer-mainnet"
+main = "src/worker.ts"
+compatibility_date = "2026-03-01"
+
+# nodejs_compat: polyfills Buffer, process, etc. required by opnet + @btc-vision packages
+compatibility_flags = ["nodejs_compat"]
+
+# Custom domain — update after DNS is configured
+# routes = [
+#   { pattern = "api-mainnet.frogop.net", custom_domain = true }
+# ]
+
+[triggers]
+# Mainnet blocks ~10 min — poll every 5 min
+crons = ["*/5 * * * *"]
+
+# ---------------------------------------------------------------------------
+# D1 — managed SQLite (create with: npx wrangler d1 create frogop-indexer-mainnet)
+# ---------------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "frogop-indexer-mainnet"
+database_id = "REPLACE_WITH_MAINNET_D1_ID"
+
+# ---------------------------------------------------------------------------
+# Non-secret config (committed). Secrets go via `wrangler secret put`.
+# ---------------------------------------------------------------------------
+[vars]
+OPNET_NETWORK    = "bitcoin"
+OPNET_RPC_URL    = "https://mainnet.opnet.org"
+# Space-separated bech32 pool addresses to track (populate after mainnet deployment)
+POOL_ADDRESSES   = ""
+FACTORY_ADDRESS  = ""
+# Max blocks to process per cron invocation
+MAX_BLOCKS_PER_RUN = "20"
+# NativeSwap price tracking (populate after mainnet deployment)
+NATIVESWAP_CONTRACT = ""
+NATIVESWAP_TOKEN_ADDRESSES = ""
+NATIVESWAP_LABELS = ""
+
+# ---------------------------------------------------------------------------
+# Observability — logs, traces
+# ---------------------------------------------------------------------------
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true

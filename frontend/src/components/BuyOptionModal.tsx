@@ -15,7 +15,7 @@ import type { OptionData, PoolInfo } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
 import { POOL_WRITE_ABI, TOKEN_APPROVE_ABI, BTC_QUOTE_POOL_ABI } from '../services/poolAbi.ts';
 import { useTokenInfo } from '../hooks/useTokenInfo.ts';
-import { formatTokenAmount } from '../config/index.ts';
+import { formatTokenAmount, premiumDisplayUnit } from '../config/index.ts';
 import type { PoolType } from '../../../shared/pool-config.types.ts';
 import { useTransactionFlow } from '../hooks/useTransactionFlow.ts';
 import { useActiveFlow } from '../hooks/useActiveFlow.ts';
@@ -510,7 +510,7 @@ export function BuyOptionModal({
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Strike</span>
                             <span className="text-terminal-text-secondary">
-                                {fmt(option.strikePrice)} {premiumSymbol}
+                                {fmt(option.strikePrice)} {premiumDisplayUnit(premiumSymbol)}
                             </span>
                         </div>
                         <div className="flex justify-between">
@@ -528,7 +528,7 @@ export function BuyOptionModal({
                         <div className="flex justify-between">
                             <span className="text-terminal-text-muted">Breakeven</span>
                             <span className="text-cyan-300 text-xs">
-                                {fmt(calcBreakeven(option) ?? 0n)} {premiumSymbol}
+                                {fmt(calcBreakeven(option) ?? 0n)} {premiumDisplayUnit(premiumSymbol)}
                             </span>
                         </div>
                     </div>
@@ -546,16 +546,16 @@ export function BuyOptionModal({
                         <div className="flex justify-between font-semibold">
                             <span className="text-terminal-text-muted">You pay</span>
                             <span className="text-terminal-text-primary">
-                                {isBtcQuote ? `${fmt(buyerPays)} sats (BTC)` : `${fmt(buyerPays)} ${premiumSymbol}`}
+                                {fmt(buyerPays)} {premiumDisplayUnit(premiumSymbol)}
                             </span>
                         </div>
                         <div className="flex justify-between text-terminal-text-muted">
                             <span>Writer receives</span>
-                            <span className="text-terminal-text-secondary">{fmt(writerReceives)} {premiumSymbol}</span>
+                            <span className="text-terminal-text-secondary">{fmt(writerReceives)} {premiumDisplayUnit(premiumSymbol)}</span>
                         </div>
                         <div className="flex justify-between text-terminal-text-muted">
                             <span>Protocol fee ({Number(poolInfo.buyFeeBps) / 100}%)</span>
-                            <span className="text-terminal-text-secondary">{fmt(fee)} {premiumSymbol}</span>
+                            <span className="text-terminal-text-secondary">{fmt(fee)} {premiumDisplayUnit(premiumSymbol)}</span>
                         </div>
                         <hr className="border-terminal-border-subtle" />
                         <div className="flex justify-between mt-1">

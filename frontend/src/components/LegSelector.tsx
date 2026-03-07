@@ -7,7 +7,7 @@
 import { useState, useMemo } from 'react';
 import type { OptionData } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
-import { formatTokenAmount } from '../config/index.ts';
+import { formatTokenAmount, premiumDisplayUnit } from '../config/index.ts';
 import { classifyMoneyness } from '../utils/optionsChain.ts';
 import { useSuggestedPremium } from '../hooks/useSuggestedPremium.ts';
 import { BLOCK_CONSTANTS } from '../config/index.ts';
@@ -135,10 +135,10 @@ export function LegSelector({
                                                 {opt.optionType === OptionType.CALL ? 'CALL' : 'PUT'} #{opt.id.toString()}
                                             </span>
                                             <span className="text-terminal-text-muted">
-                                                {formatTokenAmount(opt.strikePrice)} {premiumSymbol}
+                                                {formatTokenAmount(opt.strikePrice)} {premiumDisplayUnit(premiumSymbol)}
                                             </span>
                                             <span className="text-terminal-text-muted">
-                                                {formatTokenAmount(opt.premium)} {premiumSymbol}
+                                                {formatTokenAmount(opt.premium)} {premiumDisplayUnit(premiumSymbol)}
                                             </span>
                                         </button>
                                     ))}
@@ -181,14 +181,14 @@ export function LegSelector({
                                         onChange={(e) => onChange({ ...value, strikeStr: e.target.value })}
                                         disabled={disabled}
                                         className="flex-1 bg-transparent border border-terminal-border-subtle rounded px-2 py-1 text-xs font-mono text-terminal-text-primary outline-none disabled:opacity-50"
-                                        placeholder={`e.g. 50 ${premiumSymbol}`}
+                                        placeholder={`e.g. 50 ${premiumDisplayUnit(premiumSymbol)}`}
                                     />
                                 </div>
                                 {/* Spot price + moneyness badge */}
                                 {spotPrice != null && spotPrice > 0 && (
                                     <div className="flex items-center gap-2 ml-14" data-testid={`leg-${legNumber}-moneyness`}>
                                         <span className="text-[10px] text-terminal-text-muted font-mono">
-                                            Spot: <span className="text-terminal-text-secondary">{spotPrice.toFixed(2)} {premiumSymbol}</span>
+                                            Spot: <span className="text-terminal-text-secondary">{spotPrice.toFixed(2)} {premiumDisplayUnit(premiumSymbol)}</span>
                                         </span>
                                         {moneynessResult && (
                                             <span
@@ -231,14 +231,14 @@ export function LegSelector({
                                         onChange={(e) => onChange({ ...value, premiumStr: e.target.value })}
                                         disabled={disabled}
                                         className="flex-1 bg-transparent border border-terminal-border-subtle rounded px-2 py-1 text-xs font-mono text-terminal-text-primary outline-none disabled:opacity-50"
-                                        placeholder={`e.g. 5 ${premiumSymbol}`}
+                                        placeholder={`e.g. 5 ${premiumDisplayUnit(premiumSymbol)}`}
                                     />
                                 </div>
                                 {/* BS suggested premium */}
                                 {suggestedPremium !== null && suggestedPremium > 0n && (
                                     <div className="flex items-center gap-2 ml-14" data-testid={`leg-${legNumber}-bs-suggestion`}>
                                         <span className="text-[10px] text-terminal-text-muted font-mono">
-                                            Fair value: <span className="text-cyan-400">{formatTokenAmount(suggestedPremium)} {premiumSymbol}</span>
+                                            Fair value: <span className="text-cyan-400">{formatTokenAmount(suggestedPremium)} {premiumDisplayUnit(premiumSymbol)}</span>
                                         </span>
                                         <button
                                             type="button"

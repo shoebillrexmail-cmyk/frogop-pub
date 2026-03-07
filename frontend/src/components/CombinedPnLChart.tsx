@@ -6,6 +6,7 @@
  */
 import { useMemo } from 'react';
 import { OptionType } from '../services/types.ts';
+import { premiumDisplayUnit } from '../config/index.ts';
 import type { LegConfig } from './LegSelector.tsx';
 import type { OptionData } from '../services/types.ts';
 
@@ -175,7 +176,7 @@ export function CombinedPnLChart({
 
     return (
         <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3" data-testid="combined-pnl-chart">
-            <p className="text-[10px] font-mono text-terminal-text-muted mb-2">Combined P&L at Expiry ({premiumSymbol})</p>
+            <p className="text-[10px] font-mono text-terminal-text-muted mb-2">Combined P&L at Expiry ({premiumDisplayUnit(premiumSymbol)})</p>
             <svg
                 viewBox={`0 0 ${chartWidth} ${height}`}
                 className="w-full"
@@ -253,22 +254,22 @@ export function CombinedPnLChart({
             {/* Summary line below chart */}
             <div className="flex items-center justify-between mt-1.5 text-[10px] font-mono text-terminal-text-muted">
                 <span>
-                    Max profit: <span className="text-green-400">+{maxPnl.toFixed(2)} {premiumSymbol}</span>
+                    Max profit: <span className="text-green-400">+{maxPnl.toFixed(2)} {premiumDisplayUnit(premiumSymbol)}</span>
                 </span>
                 <span>
-                    Max loss: <span className="text-rose-400">{minPnl.toFixed(2)} {premiumSymbol}</span>
+                    Max loss: <span className="text-rose-400">{minPnl.toFixed(2)} {premiumDisplayUnit(premiumSymbol)}</span>
                 </span>
                 {breakEvens.length > 0 && (
                     <span>
                         BE: <span className="text-yellow-400">
-                            {breakEvens.map((be) => be.toFixed(1)).join(', ')} {premiumSymbol}
+                            {breakEvens.map((be) => be.toFixed(1)).join(', ')} {premiumDisplayUnit(premiumSymbol)}
                         </span>
                     </span>
                 )}
                 {netPremium !== 0 && (
                     <span>
                         Net premium: <span className={netPremium > 0 ? 'text-green-400' : 'text-rose-400'}>
-                            {netPremium > 0 ? '+' : ''}{netPremium.toFixed(2)} {premiumSymbol}
+                            {netPremium > 0 ? '+' : ''}{netPremium.toFixed(2)} {premiumDisplayUnit(premiumSymbol)}
                         </span>
                     </span>
                 )}

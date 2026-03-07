@@ -9,6 +9,7 @@
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { payments, networks, toBytes32 } from '@btc-vision/bitcoin';
+import { currentNetwork } from '../config/index.ts';
 
 export type BtcPaymentPhase =
     | 'IDLE'
@@ -50,9 +51,15 @@ export interface UseBtcPaymentResult {
  * @param csvScriptHash - 0x-prefixed 64-char hex string (32 bytes)
  * @param network - bitcoin network (defaults to testnet for OPNet signet)
  */
+const BTC_NETWORK_MAP: Record<string, typeof networks.testnet> = {
+    testnet: networks.testnet,
+    mainnet: networks.bitcoin,
+    regtest: networks.regtest,
+};
+
 function deriveP2wshAddress(
     csvScriptHash: string,
-    network = networks.testnet, // OPNet testnet runs on signet — uses 'tb' bech32 HRP
+    network = BTC_NETWORK_MAP[currentNetwork] ?? networks.testnet,
 ): string {
     const hashHex = csvScriptHash.startsWith('0x') ? csvScriptHash.slice(2) : csvScriptHash;
     const hash = toBytes32(new Uint8Array(Buffer.from(hashHex, 'hex')));
