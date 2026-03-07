@@ -31,9 +31,9 @@ const MONEYNESS_RANGES: Record<StrategyType, {
     min: number; max: number; default: number; step: number; label: string;
     leg2?: { min: number; max: number; default: number; step: number; label: string };
 }> = {
-    'covered-call': { min: 1.05, max: 1.50, default: 1.20, step: 0.01, label: 'Sell if price rises above' },
-    'write-put': { min: 0.70, max: 0.95, default: 0.875, step: 0.01, label: 'Buy if price drops below' },
-    'protective-put': { min: 0.70, max: 0.95, default: 0.875, step: 0.01, label: 'Protect below this price' },
+    'covered-call': { min: 0.90, max: 1.50, default: 1.20, step: 0.01, label: 'Sell if price rises above' },
+    'write-put': { min: 0.50, max: 1.00, default: 0.875, step: 0.01, label: 'Buy if price drops below' },
+    'protective-put': { min: 0.50, max: 1.00, default: 0.875, step: 0.01, label: 'Protect below this price' },
     'collar': {
         min: 1.05, max: 1.50, default: 1.20, step: 0.01, label: 'Sell above (upside cap)',
         leg2: { min: 0.70, max: 0.95, default: 0.80, step: 0.01, label: 'Buy below (downside floor)' },
@@ -139,6 +139,42 @@ export function StrategyConfigurator({
                     className="w-full h-1 accent-accent cursor-pointer"
                     data-testid="moneyness-slider"
                 />
+                {/* Contextual hints based on moneyness */}
+                {strategyType === 'covered-call' && moneyness < 1.0 && (
+                    <p className="text-[10px] text-amber-400 font-mono mt-0.5">
+                        Below spot — higher premium but your tokens will likely be exercised. Essentially selling at a discount.
+                    </p>
+                )}
+                {strategyType === 'covered-call' && moneyness >= 1.0 && moneyness < 1.05 && (
+                    <p className="text-[10px] text-cyan-400 font-mono mt-0.5">
+                        Near spot — good premium, but tokens may be taken if price rises even slightly.
+                    </p>
+                )}
+                {strategyType === 'covered-call' && moneyness >= 1.05 && moneyness <= 1.30 && (
+                    <p className="text-[10px] text-green-400 font-mono mt-0.5">
+                        Typical range — balanced premium vs. chance of keeping your tokens.
+                    </p>
+                )}
+                {strategyType === 'covered-call' && moneyness > 1.30 && (
+                    <p className="text-[10px] text-terminal-text-muted font-mono mt-0.5">
+                        Far above spot — low premium but very unlikely your tokens get taken.
+                    </p>
+                )}
+                {strategyType === 'write-put' && moneyness > 0.95 && (
+                    <p className="text-[10px] text-amber-400 font-mono mt-0.5">
+                        Near spot — higher premium but you'll likely have to buy if price drops at all.
+                    </p>
+                )}
+                {strategyType === 'write-put' && moneyness >= 0.80 && moneyness <= 0.95 && (
+                    <p className="text-[10px] text-green-400 font-mono mt-0.5">
+                        Typical range — decent premium with a buffer before you'd have to buy.
+                    </p>
+                )}
+                {strategyType === 'write-put' && moneyness < 0.80 && (
+                    <p className="text-[10px] text-terminal-text-muted font-mono mt-0.5">
+                        Far below spot — low premium but very unlikely you'll have to buy.
+                    </p>
+                )}
             </div>
 
             {/* Price slider 2 (collar, spreads) */}
