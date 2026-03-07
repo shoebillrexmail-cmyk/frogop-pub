@@ -22,6 +22,7 @@ const TX_TYPE_LABELS: Record<TxType, string> = {
     batchCancel: 'Batch Cancel',
     batchSettle: 'Batch Settle',
     rollOption: 'Roll',
+    strategy: 'Strategy',
 };
 
 const STATUS_COLORS: Record<TxStatus, string> = {

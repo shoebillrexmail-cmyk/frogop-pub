@@ -510,7 +510,6 @@ async function main() {
         const countBefore = await readOptionCount(provider, poolCallAddr);
 
         const currentBlock = await provider.getBlockNumber();
-        const expiryBlock = currentBlock + 1008n;
 
         // Approve and wait for next block before writing
         await deployer.callContract(underlyingAddr, createIncreaseAllowanceCalldata(poolAddr, OPTION_AMOUNT * 10n), 10_000n);

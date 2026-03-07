@@ -40,7 +40,7 @@ const EV_BTC_CLAIMABLE           = 'BtcClaimable';
 // This hardcoded default (144) works for pools deployed with the default value.
 // When pools with custom grace periods are deployed, the indexer should query
 // each pool's gracePeriodBlocks() view at registration time and cache the value.
-const DEFAULT_DEFAULT_GRACE_PERIOD_BLOCKS = 144;
+const DEFAULT_GRACE_PERIOD_BLOCKS = 144;
 
 /**
  * Decode all events for a single block into an array of D1 statements to batch.

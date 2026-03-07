@@ -571,16 +571,6 @@ async function main() {
 
         // executeSpread: write leg calls writeOption (exists on type 1) ✓
         // but buy leg calls buyOption (does NOT exist on type 1) ✗
-        const calldata = createExecuteSpreadCalldata(
-            btcPoolAddr,
-            CALL,
-            60n * PRECISION,
-            expiryBlock,
-            1n * PRECISION,
-            5n * PRECISION,
-            0n, // dummy — will fail before this matters, but router validates buyOptionId > 0
-        );
-
         // Use buyOptionId=1 to pass router validation (MED-6)
         const calldataWithId = createExecuteSpreadCalldata(
             btcPoolAddr,

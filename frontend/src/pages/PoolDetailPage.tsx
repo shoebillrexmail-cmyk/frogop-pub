@@ -137,7 +137,6 @@ export function PoolDetailPage() {
         setCancelTarget(null);
         setExerciseTarget(null);
         setSettleTarget(null);
-        setCollarOpen(false);
     }, []);
 
     // Apply a resume request
