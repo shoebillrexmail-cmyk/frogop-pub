@@ -28,6 +28,7 @@ import { ExerciseModal } from '../components/ExerciseModal.tsx';
 import { SettleModal } from '../components/SettleModal.tsx';
 import { NotificationBanner } from '../components/NotificationBanner.tsx';
 import { PoolsSkeleton } from '../components/LoadingSkeletons.tsx';
+import type { ResumeRequest } from '../contexts/flowDefs.ts';
 import type { OptionData } from '../services/types.ts';
 import { OptionStatus } from '../services/types.ts';
 import {
@@ -108,13 +109,15 @@ export function ChainPage() {
     const [writeOpen, setWriteOpen] = useState(false);
     const [writeInitialValues, setWriteInitialValues] = useState<WriteOptionInitialValues | undefined>();
     const [writeStrategyLabel, setWriteStrategyLabel] = useState<string | undefined>();
+    const [writeFlowInstanceId, setWriteFlowInstanceId] = useState<string | undefined>();
     const [buyTarget, setBuyTarget] = useState<OptionData | null>(null);
+    const [buyStrategyLabel, setBuyStrategyLabel] = useState<string | undefined>();
     const [cancelTarget, setCancelTarget] = useState<OptionData | null>(null);
     const [exerciseTarget, setExerciseTarget] = useState<OptionData | null>(null);
     const [settleTarget, setSettleTarget] = useState<OptionData | null>(null);
 
-    // Auto-refetch on confirmed TX
-    const { transactions } = useTransactionContext();
+    // Auto-refetch on confirmed TX + resume flow routing
+    const { transactions, resumeRequest, clearResumeRequest, abandonFlow: abandonFlowById } = useTransactionContext();
     const confirmedCountRef = useRef(0);
     useEffect(() => {
         if (!selectedAddr) return;
@@ -124,6 +127,69 @@ export function ChainPage() {
         if (confirmed > confirmedCountRef.current) refetchPool();
         confirmedCountRef.current = confirmed;
     }, [transactions, selectedAddr, refetchPool]);
+
+    // Close all action modals
+    const closeAllModals = useCallback(() => {
+        setWriteOpen(false);
+        setWriteInitialValues(undefined);
+        setWriteStrategyLabel(undefined);
+        setWriteFlowInstanceId(undefined);
+        setBuyTarget(null);
+        setBuyStrategyLabel(undefined);
+        setCancelTarget(null);
+        setExerciseTarget(null);
+        setSettleTarget(null);
+    }, []);
+
+    // Apply a resume request — open the correct modal with saved form state
+    const applyResume = useCallback((req: ResumeRequest) => {
+        closeAllModals();
+
+        if (req.actionType === 'writeOption') {
+            const formState = req.formState;
+            if (formState) {
+                setWriteInitialValues({
+                    optionType: formState['optionType'] !== undefined ? Number(formState['optionType']) : undefined,
+                    amountStr: formState['amount'],
+                    strikeStr: formState['strike'],
+                    premiumStr: formState['premium'],
+                    selectedDays: formState['days'] !== undefined ? Number(formState['days']) : undefined,
+                });
+                setWriteFlowInstanceId(formState['flowInstanceId'] ?? undefined);
+            }
+            setWriteStrategyLabel(req.strategyLabel ?? undefined);
+            setWriteOpen(true);
+            return;
+        }
+
+        if (req.actionType === 'buyOption' && req.optionId) {
+            const opt = options.find((o) => o.id.toString() === req.optionId);
+            if (opt) {
+                setBuyStrategyLabel(req.strategyLabel ?? undefined);
+                setBuyTarget(opt);
+            } else {
+                abandonFlowById(req.flowId);
+            }
+            return;
+        }
+
+        if (req.actionType === 'exercise' && req.optionId) {
+            const opt = options.find((o) => o.id.toString() === req.optionId);
+            if (opt) {
+                setExerciseTarget(opt);
+            } else {
+                abandonFlowById(req.flowId);
+            }
+        }
+    }, [options, abandonFlowById, closeAllModals]);
+
+    // Handle resume requests from the Pill flow card
+    useEffect(() => {
+        if (!resumeRequest || !selectedAddr) return;
+        if (resumeRequest.poolAddress !== selectedAddr) return;
+        clearResumeRequest();
+        applyResume(resumeRequest);
+    }, [resumeRequest, selectedAddr, clearResumeRequest, applyResume]);
 
     // Notifications
     const { notifications, addNotification, dismissNotification, requestPermission } = useNotifications();
@@ -342,15 +408,18 @@ export function ChainPage() {
                     poolType={poolType}
                     initialValues={writeInitialValues}
                     strategyLabel={writeStrategyLabel}
+                    flowInstanceId={writeFlowInstanceId}
                     onClose={() => {
                         setWriteOpen(false);
                         setWriteInitialValues(undefined);
                         setWriteStrategyLabel(undefined);
+                        setWriteFlowInstanceId(undefined);
                     }}
                     onSuccess={() => {
                         setWriteOpen(false);
                         setWriteInitialValues(undefined);
                         setWriteStrategyLabel(undefined);
+                        setWriteFlowInstanceId(undefined);
                         refetchPool();
                     }}
                 />
@@ -370,9 +439,11 @@ export function ChainPage() {
                     underlyingSymbol={underlyingSymbol}
                     premiumSymbol={premiumSymbol}
                     poolType={poolType}
-                    onClose={() => setBuyTarget(null)}
+                    strategyLabel={buyStrategyLabel}
+                    onClose={() => { setBuyTarget(null); setBuyStrategyLabel(undefined); }}
                     onSuccess={() => {
                         setBuyTarget(null);
+                        setBuyStrategyLabel(undefined);
                         refetchPool();
                     }}
                 />
