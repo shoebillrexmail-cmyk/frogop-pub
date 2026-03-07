@@ -26,27 +26,54 @@ const STRATEGY_EXPLAINER: Record<StrategyType, string> = {
     'bear-put-spread': 'A two-leg position: you buy the right to profit from a drop, while capping your gain by selling a lower position.',
 };
 
-/** Config ranges per strategy type */
-const MONEYNESS_RANGES: Record<StrategyType, {
+/** Dynamic strike ranges that scale with expiry — crypto markets are volatile. */
+function getMoneyRanges(strategyType: StrategyType, days: number): {
     min: number; max: number; default: number; step: number; label: string;
     leg2?: { min: number; max: number; default: number; step: number; label: string };
-}> = {
-    'covered-call': { min: 0.90, max: 1.50, default: 1.20, step: 0.01, label: 'Sell if price rises above' },
-    'write-put': { min: 0.50, max: 1.00, default: 0.875, step: 0.01, label: 'Buy if price drops below' },
-    'protective-put': { min: 0.50, max: 1.00, default: 0.875, step: 0.01, label: 'Protect below this price' },
-    'collar': {
-        min: 1.05, max: 1.50, default: 1.20, step: 0.01, label: 'Sell above (upside cap)',
-        leg2: { min: 0.70, max: 0.95, default: 0.80, step: 0.01, label: 'Buy below (downside floor)' },
-    },
-    'bull-call-spread': {
-        min: 1.10, max: 1.50, default: 1.20, step: 0.01, label: 'Upper target price',
-        leg2: { min: 0.95, max: 1.10, default: 1.00, step: 0.01, label: 'Lower entry price' },
-    },
-    'bear-put-spread': {
-        min: 0.70, max: 0.90, default: 0.80, step: 0.01, label: 'Lower target price',
-        leg2: { min: 0.90, max: 1.10, default: 1.00, step: 0.01, label: 'Upper entry price' },
-    },
-};
+} {
+    // Wider ranges for longer expiries
+    const callMax = days <= 7 ? 1.50 : days <= 14 ? 2.00 : days <= 30 ? 3.00 : 4.00;
+    const putMin = days <= 7 ? 0.70 : days <= 14 ? 0.50 : days <= 30 ? 0.30 : 0.20;
+
+    switch (strategyType) {
+        case 'covered-call':
+            return {
+                min: 1.00, max: callMax, default: 1.20, step: 0.01,
+                label: 'Sell if price rises above',
+            };
+        case 'write-put':
+            return {
+                min: putMin, max: 1.00, default: 0.875, step: 0.01,
+                label: 'Buy if price drops below',
+            };
+        case 'protective-put':
+            return {
+                min: putMin, max: 1.00, default: 0.875, step: 0.01,
+                label: 'Protect below this price',
+            };
+        case 'collar':
+            return {
+                min: 1.05, max: callMax, default: 1.20, step: 0.01,
+                label: 'Sell above (upside cap)',
+                leg2: {
+                    min: putMin, max: 0.95, default: 0.80, step: 0.01,
+                    label: 'Buy below (downside floor)',
+                },
+            };
+        case 'bull-call-spread':
+            return {
+                min: 1.10, max: callMax, default: 1.20, step: 0.01,
+                label: 'Upper target price',
+                leg2: { min: 0.90, max: 1.10, default: 1.00, step: 0.01, label: 'Lower entry price' },
+            };
+        case 'bear-put-spread':
+            return {
+                min: putMin, max: 0.90, default: 0.80, step: 0.01,
+                label: 'Lower target price',
+                leg2: { min: 0.90, max: 1.10, default: 1.00, step: 0.01, label: 'Upper entry price' },
+            };
+    }
+}
 
 interface StrategyConfiguratorProps {
     strategyType: StrategyType;
@@ -57,6 +84,14 @@ interface StrategyConfiguratorProps {
     onClose: () => void;
 }
 
+/** Format moneyness as a relative label: "+5% above current", "-20% below current", "at current price". */
+function formatMoneynessDelta(moneyness: number): string {
+    const delta = Math.round((moneyness - 1) * 100);
+    if (delta === 0) return 'at current price';
+    if (delta > 0) return `+${delta}% above current`;
+    return `${delta}% below current`;
+}
+
 export function StrategyConfigurator({
     strategyType,
     spotPrice,
@@ -65,13 +100,20 @@ export function StrategyConfigurator({
     onExecute,
     onClose,
 }: StrategyConfiguratorProps) {
-    const ranges = MONEYNESS_RANGES[strategyType];
     const pUnit = premiumDisplayUnit(premiumSymbol);
 
-    const [moneyness, setMoneyness] = useState(ranges.default);
-    const [moneyness2, setMoneyness2] = useState(ranges.leg2?.default ?? 1.0);
     const [days, setDays] = useState(30);
+    const ranges = useMemo(() => getMoneyRanges(strategyType, days), [strategyType, days]);
+
+    const [rawMoneyness, setMoneyness] = useState(ranges.default);
+    const [rawMoneyness2, setMoneyness2] = useState(ranges.leg2?.default ?? 1.0);
     const [amountStr, setAmountStr] = useState('1');
+
+    // Clamp to current range (e.g. user picked +250% then switched to 7d expiry)
+    const moneyness = Math.min(Math.max(rawMoneyness, ranges.min), ranges.max);
+    const moneyness2 = ranges.leg2
+        ? Math.min(Math.max(rawMoneyness2, ranges.leg2.min), ranges.leg2.max)
+        : rawMoneyness2;
 
     const amount = useMemo(() => {
         const n = Number(amountStr);
@@ -120,13 +162,19 @@ export function StrategyConfigurator({
                 {STRATEGY_EXPLAINER[strategyType]}
             </p>
 
+            {/* Current price reference */}
+            <div className="flex items-center justify-between">
+                <span className="text-[10px] text-terminal-text-muted font-mono">Current price</span>
+                <span className="text-xs font-mono text-terminal-text-primary">{spotPrice.toFixed(2)} {pUnit}</span>
+            </div>
+
             {/* Price slider 1 */}
             <div className="space-y-1">
                 <div className="flex items-center justify-between">
                     <label className="text-[10px] text-terminal-text-muted font-mono">{ranges.label}</label>
                     <span className="text-xs font-mono text-terminal-text-primary">
                         {(spotPrice * moneyness).toFixed(2)} {pUnit}
-                        <span className="text-terminal-text-muted ml-1">({(moneyness * 100).toFixed(0)}% of spot)</span>
+                        <span className="text-terminal-text-muted ml-1">({formatMoneynessDelta(moneyness)})</span>
                     </span>
                 </div>
                 <input
@@ -140,14 +188,14 @@ export function StrategyConfigurator({
                     data-testid="moneyness-slider"
                 />
                 {/* Contextual hints based on moneyness */}
-                {strategyType === 'covered-call' && moneyness < 1.0 && (
+                {strategyType === 'covered-call' && moneyness <= 1.00 && (
                     <p className="text-[10px] text-amber-400 font-mono mt-0.5">
-                        Below spot — higher premium but your tokens will likely be exercised. Essentially selling at a discount.
+                        At current price — maximum premium but your tokens will almost certainly be taken.
                     </p>
                 )}
-                {strategyType === 'covered-call' && moneyness >= 1.0 && moneyness < 1.05 && (
+                {strategyType === 'covered-call' && moneyness > 1.00 && moneyness < 1.05 && (
                     <p className="text-[10px] text-cyan-400 font-mono mt-0.5">
-                        Near spot — good premium, but tokens may be taken if price rises even slightly.
+                        Near current price — good premium, but tokens may be taken if price rises even slightly.
                     </p>
                 )}
                 {strategyType === 'covered-call' && moneyness >= 1.05 && moneyness <= 1.30 && (
@@ -184,7 +232,7 @@ export function StrategyConfigurator({
                         <label className="text-[10px] text-terminal-text-muted font-mono">{ranges.leg2.label}</label>
                         <span className="text-xs font-mono text-terminal-text-primary">
                             {(spotPrice * moneyness2).toFixed(2)} {pUnit}
-                            <span className="text-terminal-text-muted ml-1">({(moneyness2 * 100).toFixed(0)}% of spot)</span>
+                            <span className="text-terminal-text-muted ml-1">({formatMoneynessDelta(moneyness2)})</span>
                         </span>
                     </div>
                     <input

@@ -270,7 +270,7 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                                             </p>
                                         ) : (
                                             <p className="text-[10px] text-amber-400 font-mono mt-1">
-                                                Tip: Protective puts typically use strikes at 80–95% of spot for best cost/protection balance.
+                                                Tip: Protective puts typically use strikes at 5–20% below current price for best cost/protection balance.
                                                 Browse the Chain page for more options.
                                             </p>
                                         )}
