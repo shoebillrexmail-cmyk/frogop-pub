@@ -14,6 +14,7 @@ import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import { getIntentById } from '../utils/intentDefs.ts';
 import type { IntentId } from '../utils/intentDefs.ts';
 import type { StrategyType, StrategyOutcome } from '../utils/strategyMath.ts';
+import { findBestProtectivePut, countOpenOptionsForStrategy } from '../utils/strategyMath.ts';
 import { findPoolConfigByAddress, getPoolType, getPricePairKey, getNativeSwapAddress, premiumDisplayUnit } from '../config/index.ts';
 import type { OptionData } from '../services/types.ts';
 import { OutcomeCard } from './OutcomeCard.tsx';
@@ -51,6 +52,7 @@ const STRATEGY_RISK: Record<StrategyType, 'low' | 'medium' | 'high'> = {
 };
 
 const MULTI_LEG: Set<StrategyType> = new Set(['collar', 'bull-call-spread', 'bear-put-spread']);
+const BUY_SIDE: Set<StrategyType> = new Set(['protective-put']);
 
 interface TradeConfiguratorProps {
     intentId: IntentId;
@@ -94,8 +96,29 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
 
     const strategies = intent?.strategies ?? [];
 
+    // For buy-side strategies: find matching options to buy
+    const bestPut = useMemo(
+        () => motoPillRatio && motoPillRatio > 0 ? findBestProtectivePut(options, motoPillRatio) : null,
+        [options, motoPillRatio],
+    );
+    const putLiquidity = useMemo(
+        () => motoPillRatio && motoPillRatio > 0 ? countOpenOptionsForStrategy(options, 'protective-put', motoPillRatio) : 0,
+        [options, motoPillRatio],
+    );
+
     function handleStrategyExecute(outcome: StrategyOutcome) {
         if (!walletConnected) return;
+
+        // Buy-side strategies: find & buy an existing option
+        if (selectedStrategy && BUY_SIDE.has(selectedStrategy)) {
+            if (selectedStrategy === 'protective-put' && bestPut) {
+                setBuyStrategyLabel('Protective Put');
+                setBuyTarget(bestPut);
+            }
+            return;
+        }
+
+        // Write-side strategies: open WriteOptionPanel
         setWriteStrategyLabel(outcome.goalTitle);
         setWriteInitialValues(outcome.initialValues);
         setWriteOpen(true);
@@ -149,17 +172,24 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                 <div className="space-y-3 mb-4">
                     <h3 className="text-sm font-bold text-terminal-text-primary font-mono">Choose a Strategy</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {singleLegStrategies.map((type) => (
-                            <OutcomeCard
-                                key={type}
-                                goalTitle={STRATEGY_LABELS[type]}
-                                tagline={STRATEGY_TAGLINES[type]}
-                                riskLevel={STRATEGY_RISK[type]}
-                                active={selectedStrategy === type}
-                                testId={`strategy-${type}`}
-                                onClick={() => setSelectedStrategy(selectedStrategy === type ? null : type)}
-                            />
-                        ))}
+                        {singleLegStrategies.map((type) => {
+                            const isBuySide = BUY_SIDE.has(type);
+                            const noLiquidity = isBuySide && type === 'protective-put' && putLiquidity === 0;
+                            return (
+                                <OutcomeCard
+                                    key={type}
+                                    goalTitle={STRATEGY_LABELS[type]}
+                                    tagline={STRATEGY_TAGLINES[type]}
+                                    riskLevel={STRATEGY_RISK[type]}
+                                    active={selectedStrategy === type}
+                                    disabled={noLiquidity}
+                                    disabledMessage={noLiquidity ? 'No matching options available to buy yet' : undefined}
+                                    summaryMetric={isBuySide && putLiquidity > 0 ? `${putLiquidity} option${putLiquidity > 1 ? 's' : ''} available` : undefined}
+                                    testId={`strategy-${type}`}
+                                    onClick={() => setSelectedStrategy(selectedStrategy === type ? null : type)}
+                                />
+                            );
+                        })}
                     </div>
                     {selectedStrategy && !MULTI_LEG.has(selectedStrategy) && motoPillRatio !== null && (
                         <StrategyConfigurator
