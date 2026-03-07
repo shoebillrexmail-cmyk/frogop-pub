@@ -38,6 +38,10 @@ interface LegSelectorProps {
     underlyingSymbol?: string;
     premiumSymbol?: string;
     disabled?: boolean;
+    /** When set, lock the action (buy/write) — hide the toggle. */
+    lockedAction?: 'buy' | 'write';
+    /** When set, lock the option type (CALL/PUT) — hide the toggle. */
+    lockedOptionType?: number;
 }
 
 export function LegSelector({
@@ -50,6 +54,8 @@ export function LegSelector({
     underlyingSymbol = 'MOTO',
     premiumSymbol = 'PILL',
     disabled = false,
+    lockedAction,
+    lockedOptionType,
 }: LegSelectorProps) {
     const [expanded, setExpanded] = useState(true);
 
@@ -93,24 +99,30 @@ export function LegSelector({
 
             {expanded && (
                 <div className="space-y-3">
-                    {/* Action toggle */}
-                    <div className="flex gap-2">
-                        {(['buy', 'write'] as const).map((action) => (
-                            <button
-                                key={action}
-                                type="button"
-                                disabled={disabled}
-                                onClick={() => onChange({ ...value, action })}
-                                className={`flex-1 py-1.5 text-xs font-mono rounded border transition-colors ${
-                                    value.action === action
-                                        ? 'bg-accent/20 border-accent text-accent'
-                                        : 'border-terminal-border-subtle text-terminal-text-muted hover:text-terminal-text-primary'
-                                } disabled:opacity-50`}
-                            >
-                                {action === 'buy' ? 'Buy Existing' : 'Write New'}
-                            </button>
-                        ))}
-                    </div>
+                    {/* Action toggle — hidden when locked by strategy */}
+                    {lockedAction ? (
+                        <div className="text-[10px] font-mono text-terminal-text-muted">
+                            {lockedAction === 'buy' ? 'Buy an existing listing' : 'Write a new listing'}
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                            {(['buy', 'write'] as const).map((action) => (
+                                <button
+                                    key={action}
+                                    type="button"
+                                    disabled={disabled}
+                                    onClick={() => onChange({ ...value, action })}
+                                    className={`flex-1 py-1.5 text-xs font-mono rounded border transition-colors ${
+                                        value.action === action
+                                            ? 'bg-accent/20 border-accent text-accent'
+                                            : 'border-terminal-border-subtle text-terminal-text-muted hover:text-terminal-text-primary'
+                                    } disabled:opacity-50`}
+                                >
+                                    {action === 'buy' ? 'Buy Existing' : 'Write New'}
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Buy: select from available options */}
                     {value.action === 'buy' && (
@@ -150,26 +162,32 @@ export function LegSelector({
                     {/* Write: configure new option params */}
                     {value.action === 'write' && (
                         <div className="space-y-2">
-                            {/* Type */}
-                            <div className="flex gap-2">
-                                {[OptionType.CALL, OptionType.PUT].map((t) => (
-                                    <button
-                                        key={t}
-                                        type="button"
-                                        disabled={disabled}
-                                        onClick={() => onChange({ ...value, optionType: t })}
-                                        className={`flex-1 py-1.5 text-xs font-mono rounded border transition-colors ${
-                                            value.optionType === t
-                                                ? t === OptionType.CALL
-                                                    ? 'bg-green-900/30 border-green-500 text-green-300'
-                                                    : 'bg-rose-900/30 border-rose-500 text-rose-300'
-                                                : 'border-terminal-border-subtle text-terminal-text-muted'
-                                        } disabled:opacity-50`}
-                                    >
-                                        {t === OptionType.CALL ? 'CALL' : 'PUT'}
-                                    </button>
-                                ))}
-                            </div>
+                            {/* Type — hidden when locked by strategy */}
+                            {lockedOptionType !== undefined ? (
+                                <div className="text-[10px] font-mono text-terminal-text-muted">
+                                    {lockedOptionType === OptionType.CALL ? 'CALL' : 'PUT'}
+                                </div>
+                            ) : (
+                                <div className="flex gap-2">
+                                    {[OptionType.CALL, OptionType.PUT].map((t) => (
+                                        <button
+                                            key={t}
+                                            type="button"
+                                            disabled={disabled}
+                                            onClick={() => onChange({ ...value, optionType: t })}
+                                            className={`flex-1 py-1.5 text-xs font-mono rounded border transition-colors ${
+                                                value.optionType === t
+                                                    ? t === OptionType.CALL
+                                                        ? 'bg-green-900/30 border-green-500 text-green-300'
+                                                        : 'bg-rose-900/30 border-rose-500 text-rose-300'
+                                                    : 'border-terminal-border-subtle text-terminal-text-muted'
+                                            } disabled:opacity-50`}
+                                        >
+                                            {t === OptionType.CALL ? 'CALL' : 'PUT'}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                             {/* Strike + spot + moneyness */}
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">

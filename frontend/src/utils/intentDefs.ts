@@ -70,7 +70,7 @@ const INTENTS: readonly IntentDef[] = [
         label: 'Earn on Both Sides',
         tagline: 'List offers in both directions and earn fees from other users',
         riskLevel: 'medium',
-        strategies: ['collar', 'bull-call-spread', 'bear-put-spread'],
+        strategies: ['collar'],
         role: 'writer',
     },
     {

@@ -67,6 +67,25 @@ const P2P_BADGES: Record<StrategyType | 'custom', P2PBadge> = {
     'custom':           { type: 'marketplace', tooltip: 'Lists on the marketplace.' },
 };
 
+/** Per-strategy leg constraints — prevents users from changing action/type on fixed legs. */
+const LEG_LOCKS: Record<MultiLegStrategy, {
+    leg1: { action: 'buy' | 'write'; optionType: number };
+    leg2: { action: 'buy' | 'write'; optionType: number };
+}> = {
+    'collar': {
+        leg1: { action: 'write', optionType: OptionType.CALL },
+        leg2: { action: 'write', optionType: OptionType.PUT },
+    },
+    'bull-call-spread': {
+        leg1: { action: 'write', optionType: OptionType.CALL },
+        leg2: { action: 'buy', optionType: OptionType.CALL },
+    },
+    'bear-put-spread': {
+        leg1: { action: 'write', optionType: OptionType.PUT },
+        leg2: { action: 'buy', optionType: OptionType.PUT },
+    },
+};
+
 const MAX_SAT = 10_000_000n;
 
 interface StrategySectionProps {
@@ -85,6 +104,10 @@ interface StrategySectionProps {
     onRefetch: () => void;
     /** When set, only show these strategies (Trade wizard passes intent-filtered list). */
     allowedStrategies?: StrategyType[];
+    /** When true, hide the card grid and only show the configurator for initialMultiLeg. */
+    hideCards?: boolean;
+    /** Pre-select and show this multi-leg strategy's configurator. */
+    initialMultiLeg?: MultiLegStrategy;
 }
 
 export function StrategySection({
@@ -102,6 +125,8 @@ export function StrategySection({
     onWriteOption,
     onRefetch,
     allowedStrategies,
+    hideCards = false,
+    initialMultiLeg,
 }: StrategySectionProps) {
     const mounted = useMountedRef();
     const sendingRef = useRef(false);
@@ -110,8 +135,8 @@ export function StrategySection({
     const noPrice = motoPillRatio === null || motoPillRatio <= 0;
 
     // Active card (for single-leg configurator or multi-leg panel)
-    const [activeStrategy, setActiveStrategy] = useState<StrategyType | null>(null);
-    const [activeMultiLeg, setActiveMultiLeg] = useState<MultiLegStrategy | null>(null);
+    const [activeStrategy, setActiveStrategy] = useState<StrategyType | null>(initialMultiLeg ?? null);
+    const [activeMultiLeg, setActiveMultiLeg] = useState<MultiLegStrategy | null>(initialMultiLeg ?? null);
 
     // Multi-leg state
     const [leg1, setLeg1] = useState<LegConfig>({ action: 'write', optionType: OptionType.CALL });
@@ -120,6 +145,30 @@ export function StrategySection({
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
     const [approvalLabel, setApprovalLabel] = useState<string>('');
+
+    // Initialize legs when controlled from parent (hideCards mode)
+    const initializedRef = useRef(false);
+    if (initialMultiLeg && !initializedRef.current) {
+        initializedRef.current = true;
+        const spot = motoPillRatio ?? 50;
+        const locks = LEG_LOCKS[initialMultiLeg];
+        setLeg1({
+            action: locks.leg1.action,
+            optionType: locks.leg1.optionType,
+            ...(locks.leg1.action === 'write' ? {
+                strikeStr: (spot * (locks.leg1.optionType === OptionType.CALL ? 1.2 : 0.8)).toFixed(2),
+                amountStr: '1', selectedDays: 7,
+            } : {}),
+        });
+        setLeg2({
+            action: locks.leg2.action,
+            optionType: locks.leg2.optionType,
+            ...(locks.leg2.action === 'write' ? {
+                strikeStr: (spot * (locks.leg2.optionType === OptionType.CALL ? 1.2 : 0.8)).toFixed(2),
+                amountStr: '1', selectedDays: 7,
+            } : {}),
+        });
+    }
 
     const routerAddress = getRouterAddress();
     const wsBlockInfo = useWsBlock();
@@ -452,6 +501,8 @@ export function StrategySection({
 
     return (
         <div className="space-y-4" data-testid="strategy-section">
+            {!hideCards && (
+            <>
             <h3 className="text-sm font-bold text-terminal-text-primary font-mono">Strategies</h3>
 
             {/* Outcome cards grid */}
@@ -514,6 +565,8 @@ export function StrategySection({
                     }}
                 />}
             </div>
+            </>
+            )}
 
             {/* Single-leg configurator (expanded below grid) */}
             {activeStrategy && !activeMultiLeg && (activeStrategy === 'covered-call' || activeStrategy === 'write-put') && motoPillRatio != null && motoPillRatio > 0 && (
@@ -564,6 +617,8 @@ export function StrategySection({
                                     legNumber={1} label={info.leg1Label}
                                     availableOptions={options} value={leg1} onChange={setLeg1}
                                     spotPrice={motoPillRatio} underlyingSymbol={underlyingSymbol} premiumSymbol={premiumSymbol}
+                                    lockedAction={activeMultiLeg ? LEG_LOCKS[activeMultiLeg].leg1.action : undefined}
+                                    lockedOptionType={activeMultiLeg ? LEG_LOCKS[activeMultiLeg].leg1.optionType : undefined}
                                 />
                             </div>
                             <div>
@@ -589,6 +644,8 @@ export function StrategySection({
                                     legNumber={2} label={info.leg2Label}
                                     availableOptions={options} value={leg2} onChange={setLeg2}
                                     spotPrice={motoPillRatio} underlyingSymbol={underlyingSymbol} premiumSymbol={premiumSymbol}
+                                    lockedAction={activeMultiLeg ? LEG_LOCKS[activeMultiLeg].leg2.action : undefined}
+                                    lockedOptionType={activeMultiLeg ? LEG_LOCKS[activeMultiLeg].leg2.optionType : undefined}
                                 />
                             </div>
                         </div>

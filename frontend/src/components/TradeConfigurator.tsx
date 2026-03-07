@@ -205,9 +205,7 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
 
     if (!poolInfo) return null;
 
-    // For multi-leg strategies, delegate to StrategySection which already handles SpreadRouter
-    const hasMultiLeg = strategies.some((s) => MULTI_LEG.has(s));
-    const singleLegStrategies = strategies.filter((s) => !MULTI_LEG.has(s));
+    const selectedIsMultiLeg = selectedStrategy ? MULTI_LEG.has(selectedStrategy) : false;
 
     return (
         <div data-testid="trade-configurator">
@@ -220,12 +218,12 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                     : 'Fetching spot price...'}
             </p>
 
-            {/* Single-leg strategy cards */}
-            {singleLegStrategies.length > 0 && (
+            {/* Strategy cards — all strategies in one grid */}
+            {strategies.length > 0 && (
                 <div className="space-y-3 mb-4">
                     <h3 className="text-sm font-bold text-terminal-text-primary font-mono">Choose a Strategy</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {singleLegStrategies.map((type) => {
+                        {strategies.map((type) => {
                             const isBuySide = BUY_SIDE.has(type);
                             const liquidity = isBuySide ? getBuySideLiquidity(type) : 0;
                             const noLiquidity = isBuySide && liquidity === 0;
@@ -807,8 +805,8 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                 </div>
             )}
 
-            {/* Multi-leg strategies via StrategySection */}
-            {hasMultiLeg && (
+            {/* Multi-leg configurator (shown when a multi-leg card is selected) */}
+            {selectedIsMultiLeg && selectedStrategy && (
                 <div className="mb-4">
                     <StrategySection
                         poolInfo={poolInfo}
@@ -825,6 +823,8 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                         onWriteOption={handleWriteOption}
                         onRefetch={refetch}
                         allowedStrategies={strategies}
+                        hideCards
+                        initialMultiLeg={selectedStrategy as 'collar' | 'bull-call-spread' | 'bear-put-spread'}
                     />
                 </div>
             )}
