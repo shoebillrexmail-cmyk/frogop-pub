@@ -277,6 +277,16 @@ export const POOL_SELECTORS = {
     registerBtcPubkey: computeSelectorU32('registerBtcPubkey(bytes32)'),
 };
 
+/** NativeSwapBridge method selectors */
+export const BRIDGE_SELECTORS = {
+    getBtcPrice: computeSelector('getBtcPrice(address)'),
+    generateCsvScriptHash: computeSelector('generateCsvScriptHash(bytes32,uint64)'),
+    generateEscrowScriptHash: computeSelector('generateEscrowScriptHash(bytes32,bytes32,uint64)'),
+    verifyBtcOutput: computeSelector('verifyBtcOutput(bytes32,uint64)'),
+    nativeSwap: computeSelector('nativeSwap()'),
+    bridge: computeSelector('bridge()'),
+};
+
 /** OptionsFactory method selectors */
 export const FACTORY_SELECTORS = {
     getOwner: computeSelector('getOwner()'),

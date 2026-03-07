@@ -4,7 +4,7 @@ import {
     BinaryWriter,
     TransactionFactory,
 } from '@btc-vision/transaction';
-import type { Network, PsbtOutputExtended } from '@btc-vision/bitcoin';
+import { payments, toBytes32, type Network, type PsbtOutputExtended } from '@btc-vision/bitcoin';
 import type { JSONRpcProvider } from 'opnet';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -484,4 +484,43 @@ export function createRegisterBtcPubkeyCalldata(pubkey: Uint8Array): Uint8Array 
 
 export function getWasmPath(contractName: string): string {
     return path.join(process.cwd(), 'build', `${contractName}.wasm`);
+}
+
+// ---------------------------------------------------------------------------
+// BTC pool test helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive a bech32 P2WSH address from a 32-byte script hash (SHA256 of witness script).
+ * Used to construct extraOutputs for BTC pool transactions.
+ */
+export function deriveP2wshAddress(scriptHashHex: string, network: Network): string {
+    const hex = scriptHashHex.startsWith('0x') ? scriptHashHex.slice(2) : scriptHashHex;
+    const hash = toBytes32(new Uint8Array(Buffer.from(hex, 'hex')));
+    const p2wsh = payments.p2wsh({ hash, network });
+    if (!p2wsh.address) throw new Error('P2WSH derivation failed');
+    return p2wsh.address;
+}
+
+/**
+ * Build a PsbtOutputExtended for BTC payment to a P2WSH address.
+ * Used with DeploymentHelper.callContract's extraOutputs parameter.
+ */
+export function buildBtcExtraOutput(address: string, amountSats: bigint): PsbtOutputExtended {
+    return { address, value: Number(amountSats) } as unknown as PsbtOutputExtended;
+}
+
+/**
+ * Construct the writer's 33-byte compressed pubkey from a Wallet.
+ * Matches the pubkey registered via registerBtcPubkey.
+ */
+export function getWriterCompressedPubkey(wallet: Wallet): Uint8Array {
+    const pubkey = new Uint8Array(33);
+    pubkey[0] = 0x02;
+    const walletPubHex = Buffer.from(wallet.keypair.publicKey).toString('hex');
+    const xOnly = walletPubHex.length === 66 ? walletPubHex.slice(2) : walletPubHex;
+    for (let i = 0; i < 32 && i * 2 < xOnly.length; i++) {
+        pubkey[1 + i] = parseInt(xOnly.slice(i * 2, i * 2 + 2), 16);
+    }
+    return pubkey;
 }
