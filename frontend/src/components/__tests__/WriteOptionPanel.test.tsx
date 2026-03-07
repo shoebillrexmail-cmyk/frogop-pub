@@ -332,7 +332,7 @@ describe('WriteOptionPanel', () => {
         expect(outlook.textContent).toContain('Max profit');
         expect(outlook.textContent).toContain('Breakeven');
         expect(outlook.textContent).toContain('Yield');
-        expect(outlook.textContent).toContain('Collateral at risk');
+        expect(outlook.textContent).toContain('What Happens');
     });
 
     it('shows correct CALL yield using spot price (not cross-denom)', () => {

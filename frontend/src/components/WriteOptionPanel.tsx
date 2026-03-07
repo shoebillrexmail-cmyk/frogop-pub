@@ -232,26 +232,35 @@ export function WriteOptionPanel({
         const breakeven = optionType === OptionType.CALL
             ? strikeBi + premiumBi
             : strikeBi - premiumBi;
-        const maxLoss = col > premiumBi ? col - premiumBi : 0n;
-
         // Yield = premium / collateral * 100
         // CALL: collateral is MOTO, premium is PILL — normalize via spot price
         let yieldPct: number | null;
+        let collateralInPill: number | null;
         if (optionType === OptionType.CALL) {
             if (motoPillRatio && motoPillRatio > 0) {
-                const collateralInPill = Number(amountBi) / 1e18 * motoPillRatio;
+                collateralInPill = Number(amountBi) / 1e18 * motoPillRatio;
                 yieldPct = Number(premiumBi) / 1e18 / collateralInPill * 100;
             } else {
+                collateralInPill = null;
                 yieldPct = null;
             }
         } else {
+            collateralInPill = Number(col) / 1e18;
             yieldPct = Number(premiumBi) / Number(col) * 100;
         }
         const annualizedYieldPct = yieldPct !== null && selectedDays > 0 ? yieldPct * 365 / selectedDays : null;
-        const collateralSym = optionType === OptionType.CALL ? underlyingSymbol : premiumDisplayUnit(premiumSymbol);
 
-        return { maxProfit, breakeven, maxLoss, yieldPct, annualizedYieldPct, collateralSym };
-    }, [premiumStr, strikeStr, amountStr, optionType, selectedDays, motoPillRatio, underlyingSymbol, premiumSymbol]);
+        // Max loss in PILL terms (same unit for both CALL and PUT)
+        const premiumFloat = Number(premiumBi) / 1e18;
+        const maxLossFloat = collateralInPill !== null ? Math.max(collateralInPill - premiumFloat, 0) : null;
+        const strikeFloat = Number(strikeBi) / 1e18;
+        const amountFloat = Number(amountBi) / 1e18;
+
+        return {
+            maxProfit, breakeven, maxLossFloat, yieldPct, annualizedYieldPct,
+            premiumFloat, strikeFloat, amountFloat, collateralInPill,
+        };
+    }, [premiumStr, strikeStr, amountStr, optionType, selectedDays, motoPillRatio]);
 
     // Black-Scholes suggested premium
     const { suggestedPremium, annualizedVol } = useSuggestedPremium(
@@ -763,12 +772,59 @@ export function WriteOptionPanel({
                                     }
                                 </span>
                             </div>
-                            <div className="flex justify-between">
-                                <span className="text-terminal-text-muted">Collateral at risk</span>
-                                <span className="text-rose-400">
-                                    {formatBigInt(writerOutlook.maxLoss)} {writerOutlook.collateralSym}
-                                </span>
-                            </div>
+                            <hr className="border-terminal-border-subtle my-1" />
+                            <span className="text-[10px] text-terminal-text-muted uppercase tracking-wider">What Happens</span>
+                            {optionType === OptionType.CALL ? (
+                                <>
+                                    <div className="text-[11px]">
+                                        <span className="text-green-400">If nobody buys your listing:</span>
+                                        <p className="text-terminal-text-muted mt-0.5 ml-2">
+                                            You cancel or it expires — your {writerOutlook.amountFloat.toFixed(4)} {underlyingSymbol} is returned in full. No cost.
+                                        </p>
+                                    </div>
+                                    <div className="text-[11px]">
+                                        <span className="text-green-400">If bought & price stays below {writerOutlook.strikeFloat.toFixed(2)} {premiumDisplayUnit(premiumSymbol)}:</span>
+                                        <p className="text-terminal-text-muted mt-0.5 ml-2">
+                                            Option expires unexercised — you keep your {underlyingSymbol} + the {writerOutlook.premiumFloat.toFixed(2)} {premiumDisplayUnit(premiumSymbol)} fee.
+                                        </p>
+                                    </div>
+                                    <div className="text-[11px]">
+                                        <span className="text-amber-400">If bought & price rises above {writerOutlook.strikeFloat.toFixed(2)} {premiumDisplayUnit(premiumSymbol)}:</span>
+                                        <p className="text-terminal-text-muted mt-0.5 ml-2">
+                                            Buyer exercises — your {underlyingSymbol} is sold at {writerOutlook.strikeFloat.toFixed(2)} {premiumDisplayUnit(premiumSymbol)}. You keep the fee but miss gains above the strike.
+                                        </p>
+                                    </div>
+                                    <div className="text-[11px]">
+                                        <span className="text-terminal-text-muted">Capital loss:</span>
+                                        <span className="text-green-400 ml-1">None — you always receive at least the strike price if exercised</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="text-[11px]">
+                                        <span className="text-green-400">If nobody buys your listing:</span>
+                                        <p className="text-terminal-text-muted mt-0.5 ml-2">
+                                            You cancel or it expires — your {writerOutlook.collateralInPill?.toFixed(2)} {premiumDisplayUnit(premiumSymbol)} collateral is returned in full. No cost.
+                                        </p>
+                                    </div>
+                                    <div className="text-[11px]">
+                                        <span className="text-green-400">If bought & price stays above {writerOutlook.strikeFloat.toFixed(2)} {premiumDisplayUnit(premiumSymbol)}:</span>
+                                        <p className="text-terminal-text-muted mt-0.5 ml-2">
+                                            Option expires unexercised — you keep your collateral + the {writerOutlook.premiumFloat.toFixed(2)} {premiumDisplayUnit(premiumSymbol)} fee.
+                                        </p>
+                                    </div>
+                                    <div className="text-[11px]">
+                                        <span className="text-amber-400">If bought & price drops below {writerOutlook.strikeFloat.toFixed(2)} {premiumDisplayUnit(premiumSymbol)}:</span>
+                                        <p className="text-terminal-text-muted mt-0.5 ml-2">
+                                            Buyer exercises — you buy {writerOutlook.amountFloat.toFixed(4)} {underlyingSymbol} at {writerOutlook.strikeFloat.toFixed(2)} {premiumDisplayUnit(premiumSymbol)} (above market). Net loss up to {writerOutlook.maxLossFloat?.toFixed(2) ?? '?'} {premiumDisplayUnit(premiumSymbol)} after fee.
+                                        </p>
+                                    </div>
+                                    <div className="text-[11px]">
+                                        <span className="text-terminal-text-muted">Max loss:</span>
+                                        <span className="text-rose-400 ml-1">{writerOutlook.maxLossFloat?.toFixed(2) ?? '?'} {premiumDisplayUnit(premiumSymbol)} (collateral − fee earned)</span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
 
