@@ -716,7 +716,8 @@ wired into the strategy UI.
 ## Backlog
 
 ### Contracts
-- [ ] **Update ABI documentation** — options-factory.md and options-pool.md have 23 discrepancies vs source code (see AUDIT notes)
+- [x] ~~**Update ABI documentation**~~ — options-factory.md and options-pool.md fully rewritten
+  to match source code. Now covers all 3 pool types + SpreadRouter + base class.
 
 ### Frontend
 - [x] **BTC pool user flows — complete extraOutputs** — Promoted to sprint: "BTC Pool Frontend Flows — Complete extraOutputs"
@@ -727,25 +728,17 @@ wired into the strategy UI.
 - [ ] **Historical yield analytics** — Time-series snapshots in D1 for yield trends, TVL, volume metrics
 
 ### CI/CD
-- [ ] **Create Cloudflare Pages project for frontend**
-  - Run `wrangler pages project create frogop-frontend` once from CLI
-  - Set environment variables in Pages dashboard
+- [x] ~~**Create Cloudflare Pages project for frontend**~~ — Already done.
+  CI/CD in `.github/workflows/frontend.yml` (lint/typecheck/test/build + deploy to CF Workers on master push).
+  Also: `contracts.yml`, `indexer.yml`.
 
 ### Pre-Launch
 - [ ] **Security audit** — Complete [audit checklist](../research/audit-checklist.md)
 - [ ] **Mainnet migration** — Follow [migration checklist](../research/mainnet-migration.md)
 
-## In Progress
+## Status (2026-03-07)
 
-- **BTC Pool Integration Tests**: Tasks 1, 4 done. Tests verified on testnet:
-  - Test 13: 10/10 (bridge getBtcPrice, CSV/escrow hash generation)
-  - Test 14: Running fresh against new pool with correct bridge
-  - Test 15: Queued (runs after 14 completes)
-  - Tasks 2-3, 5 remaining (full BTC lifecycle with extraOutputs, fee verification)
-- **SpreadRouter Integration Tests**: Tasks 1, 4, 5 done; Tasks 2-3 remaining (BTC pool compat)
-- **Frontend BTC pools redeployed** (2026-03-06) with new bridge:
-  - moto-btc: `opt1sqr7ad5ywjqa6hqrnhfkfa39zaajag0020cm8rpqj`
-  - btc-moto: `opt1sqphrpemnfq329hl9ta4rnsttf8x628tfkqc9a483`
-  - pill-btc: `opt1sqrx5uxhjymy356egzrhaytu85gapy64jjun9r7f9`
-  - btc-pill: `opt1sqpjfne8shr00kxfscymg3v7wux4a3rywzu8k3qz2`
-  - All verified live (bridge() view confirmed), pools.config.json updated
+All integration test sprints **COMPLETE**. No active sprints.
+
+**Frontend BTC pools deployed** (2026-03-06) with bridge:
+- moto-btc, btc-moto, pill-btc, btc-pill — all verified live

@@ -1,22 +1,38 @@
-# OptionsPool Contract
+# OptionsPool Contracts
 
 ## Overview
 
-OptionsPool is the core contract for an individual option market. Each pool handles a specific token pair (underlying + premium token) and manages the full option lifecycle: write, buy, exercise, settle, cancel, transfer, and roll. Includes batch operations and a protocol fee system.
+The options pool system consists of a base class and three pool implementations, each handling a specific collateral model:
 
-**Source:** `src/contracts/pool/contract.ts` (1,398 lines)
+| Contract | Type | Underlying | Quote/Premium | Source |
+|----------|------|-----------|---------------|--------|
+| `OptionsPool` | 0 | OP20 | OP20 | `src/contracts/pool/contract.ts` |
+| `OptionsPoolBtcQuote` | 1 | OP20 | BTC (satoshis) | `src/contracts/pool/btc-quote.ts` |
+| `OptionsPoolBtcUnderlying` | 2 | BTC (satoshis) | OP20 | `src/contracts/pool/btc-underlying.ts` |
+
+All inherit from `OptionsPoolBase` (`src/contracts/pool/base.ts`) which provides view methods, fee constants, pubkey registry, and storage.
+
+Additionally, `SpreadRouter` (`src/contracts/router/contract.ts`) is a stateless orchestrator that executes multi-leg strategies atomically on type 0 and type 1 pools.
 
 ## Deployment
 
 Deployed per-token-pair. Registered in [OptionsFactory](./options-factory.md) via `registerPool()`.
 
-**Constructor calldata (3 addresses):**
+**Constructor calldata:**
 
+Type 0 — 3 addresses:
 ```typescript
-// onDeployment reads:
 const underlying = calldata.readAddress();      // underlying token (e.g. MOTO)
 const premiumToken = calldata.readAddress();    // premium token (e.g. PILL)
 const feeRecipient = calldata.readAddress();    // protocol fee destination (must not be zero)
+```
+
+Type 1 and Type 2 — 4 addresses:
+```typescript
+const underlying = calldata.readAddress();      // underlying token
+const premiumToken = calldata.readAddress();    // premium token
+const feeRecipient = calldata.readAddress();    // protocol fee destination
+const bridge = calldata.readAddress();          // NativeSwapBridge address (must not be zero)
 ```
 
 ## Constants
@@ -30,8 +46,9 @@ const feeRecipient = calldata.readAddress();    // protocol fee destination (mus
 | `CANCEL_FEE_BPS` | `100` | 1% cancellation fee (basis points) |
 | `BUY_FEE_BPS` | `100` | 1% buy fee deducted from premium |
 | `EXERCISE_FEE_BPS` | `10` | 0.1% exercise fee on proceeds |
-| `MAX_BATCH_SIZE` | `5` | Max options per batch operation |
+| `MAX_BATCH_SIZE` | `5` | Max options per batch operation (type 0 only) |
 | `PRECISION` | `1e18` | Fixed-point precision for strike x amount math |
+| `RESERVATION_EXPIRY_BLOCKS` | `144` | Reservation timeout (type 1 only) |
 
 ## Option States
 
@@ -42,6 +59,7 @@ enum OptionStatus: u8 {
     EXERCISED = 2,  // Buyer exercised the option
     EXPIRED = 3,    // Settled after grace period (collateral returned to writer)
     CANCELLED = 4,  // Cancelled by writer (fee deducted)
+    RESERVED = 5,   // Reserved for BTC commit (type 1 only)
 }
 ```
 
@@ -53,141 +71,24 @@ class Option {
     writer: Address;
     buyer: Address;
     strikePrice: u256;         // 18-decimal fixed-point
-    underlyingAmount: u256;    // 18-decimal fixed-point
+    underlyingAmount: u256;    // 18-decimal fixed-point (or satoshis for type 2 CALL)
     premium: u256;             // 18-decimal fixed-point
     expiryBlock: u64;
     createdBlock: u64;
     optionType: u8;            // 0=CALL, 1=PUT
-    status: u8;                // 0-4 per OptionStatus
+    status: u8;                // 0-5 per OptionStatus
 }
 ```
 
-## ABI
+---
 
-```typescript
-const OPTIONS_POOL_ABI = [
-    // === View Methods ===
-    { name: 'underlying', inputs: [], outputs: [{ name: 'underlying', type: 'address' }] },
-    { name: 'premiumToken', inputs: [], outputs: [{ name: 'premiumToken', type: 'address' }] },
-    {
-        name: 'getOption',
-        inputs: [{ name: 'optionId', type: 'uint256' }],
-        outputs: [/* 202-byte packed record */],
-    },
-    { name: 'optionCount', inputs: [], outputs: [{ name: 'count', type: 'uint256' }] },
-    {
-        name: 'getOptionsBatch',
-        inputs: [
-            { name: 'startId', type: 'uint256' },
-            { name: 'count', type: 'uint256' },
-        ],
-        outputs: [/* u256 actualCount + actualCount x 202-byte records */],
-    },
-    { name: 'feeRecipient', inputs: [], outputs: [{ name: 'recipient', type: 'address' }] },
-    { name: 'buyFeeBps', inputs: [], outputs: [{ name: 'bps', type: 'uint64' }] },
-    { name: 'exerciseFeeBps', inputs: [], outputs: [{ name: 'bps', type: 'uint64' }] },
-    { name: 'cancelFeeBps', inputs: [], outputs: [{ name: 'bps', type: 'uint64' }] },
-    { name: 'gracePeriodBlocks', inputs: [], outputs: [{ name: 'blocks', type: 'uint64' }] },
-    { name: 'maxExpiryBlocks', inputs: [], outputs: [{ name: 'blocks', type: 'uint64' }] },
-    {
-        name: 'calculateCollateral',
-        inputs: [
-            { name: 'optionType', type: 'uint8' },
-            { name: 'strikePrice', type: 'uint256' },
-            { name: 'underlyingAmount', type: 'uint256' },
-        ],
-        outputs: [{ name: 'collateral', type: 'uint256' }],
-    },
+## Base View Methods (all pool types)
 
-    // === State-Changing Methods ===
-    {
-        name: 'writeOption',
-        inputs: [
-            { name: 'optionType', type: 'uint8' },
-            { name: 'strikePrice', type: 'uint256' },
-            { name: 'expiryBlock', type: 'uint64' },
-            { name: 'underlyingAmount', type: 'uint256' },
-            { name: 'premium', type: 'uint256' },
-        ],
-        outputs: [{ name: 'optionId', type: 'uint256' }],
-    },
-    {
-        name: 'buyOption',
-        inputs: [{ name: 'optionId', type: 'uint256' }],
-        outputs: [{ name: 'success', type: 'bool' }],
-    },
-    {
-        name: 'exercise',
-        inputs: [{ name: 'optionId', type: 'uint256' }],
-        outputs: [{ name: 'success', type: 'bool' }],
-    },
-    {
-        name: 'cancelOption',
-        inputs: [{ name: 'optionId', type: 'uint256' }],
-        outputs: [{ name: 'success', type: 'bool' }],
-    },
-    {
-        name: 'settle',
-        inputs: [{ name: 'optionId', type: 'uint256' }],
-        outputs: [{ name: 'success', type: 'bool' }],
-    },
-    {
-        name: 'transferOption',
-        inputs: [
-            { name: 'optionId', type: 'uint256' },
-            { name: 'to', type: 'address' },
-        ],
-        outputs: [{ name: 'success', type: 'bool' }],
-    },
-    {
-        name: 'rollOption',
-        inputs: [
-            { name: 'optionId', type: 'uint256' },
-            { name: 'newStrikePrice', type: 'uint256' },
-            { name: 'newExpiryBlock', type: 'uint64' },
-            { name: 'newPremium', type: 'uint256' },
-        ],
-        outputs: [{ name: 'newOptionId', type: 'uint256' }],
-    },
-    {
-        name: 'updateFeeRecipient',
-        inputs: [{ name: 'newRecipient', type: 'address' }],
-        outputs: [{ name: 'success', type: 'bool' }],
-    },
-    {
-        name: 'batchCancel',
-        inputs: [
-            { name: 'count', type: 'uint256' },
-            { name: 'id0', type: 'uint256' },
-            { name: 'id1', type: 'uint256' },
-            { name: 'id2', type: 'uint256' },
-            { name: 'id3', type: 'uint256' },
-            { name: 'id4', type: 'uint256' },
-        ],
-        outputs: [{ name: 'success', type: 'bool' }],
-    },
-    {
-        name: 'batchSettle',
-        inputs: [
-            { name: 'count', type: 'uint256' },
-            { name: 'id0', type: 'uint256' },
-            { name: 'id1', type: 'uint256' },
-            { name: 'id2', type: 'uint256' },
-            { name: 'id3', type: 'uint256' },
-            { name: 'id4', type: 'uint256' },
-        ],
-        outputs: [{ name: 'settledCount', type: 'uint256' }],
-    },
-];
-```
+All pool types inherit these from `OptionsPoolBase`.
 
-## Methods
+### underlying
 
-### View Methods
-
-#### underlying
-
-Returns the underlying token address (set at deployment).
+Returns the underlying token address.
 
 ```typescript
 @view @method('underlying')
@@ -195,9 +96,9 @@ Returns the underlying token address (set at deployment).
 public getUnderlying(_calldata: Calldata): BytesWriter
 ```
 
-#### premiumToken
+### premiumToken
 
-Returns the premium token address (set at deployment).
+Returns the premium token address.
 
 ```typescript
 @view @method('premiumToken')
@@ -205,7 +106,7 @@ Returns the premium token address (set at deployment).
 public getPremiumToken(_calldata: Calldata): BytesWriter
 ```
 
-#### getOption
+### getOption
 
 Returns a single option record by ID. Response is a packed 202-byte record:
 
@@ -222,7 +123,7 @@ public getOption(calldata: Calldata): BytesWriter
 
 **Reverts:** `'Option not found'` if ID doesn't exist.
 
-#### optionCount
+### optionCount
 
 Returns total number of options ever created (next available ID).
 
@@ -232,7 +133,7 @@ Returns total number of options ever created (next available ID).
 public optionCount(_calldata: Calldata): BytesWriter
 ```
 
-#### getOptionsBatch
+### getOptionsBatch
 
 Returns a batch of options starting at `startId`. Capped at 9 options per call (OPNet 2048-byte response limit, 202 bytes per option).
 
@@ -247,9 +148,7 @@ public getOptionsBatch(calldata: Calldata): BytesWriter
 
 **Response:** `actualCount(32) + actualCount x option records (202 bytes each)`
 
-Returns `actualCount = 0` if `startId >= optionCount`.
-
-#### feeRecipient
+### feeRecipient
 
 Returns the protocol fee destination address.
 
@@ -259,59 +158,41 @@ Returns the protocol fee destination address.
 public feeRecipientMethod(_calldata: Calldata): BytesWriter
 ```
 
-#### buyFeeBps
+### buyFeeBps / exerciseFeeBps / cancelFeeBps
 
-Returns the buy fee in basis points (100 = 1%).
+Return fee rates in basis points.
 
 ```typescript
 @view @method('buyFeeBps')
 @returns({ name: 'bps', type: ABIDataTypes.UINT64 })
-public buyFeeBpsMethod(_calldata: Calldata): BytesWriter
-```
+public buyFeeBpsMethod(_calldata: Calldata): BytesWriter     // 100 = 1%
 
-#### exerciseFeeBps
-
-Returns the exercise fee in basis points (10 = 0.1%).
-
-```typescript
 @view @method('exerciseFeeBps')
 @returns({ name: 'bps', type: ABIDataTypes.UINT64 })
-public exerciseFeeBpsMethod(_calldata: Calldata): BytesWriter
-```
+public exerciseFeeBpsMethod(_calldata: Calldata): BytesWriter // 10 = 0.1%
 
-#### cancelFeeBps
-
-Returns the cancel fee in basis points (100 = 1%).
-
-```typescript
 @view @method()
 @returns({ name: 'bps', type: ABIDataTypes.UINT64 })
-public cancelFeeBps(_calldata: Calldata): BytesWriter
+public cancelFeeBps(_calldata: Calldata): BytesWriter         // 100 = 1%
 ```
 
-#### gracePeriodBlocks
+### gracePeriodBlocks / maxExpiryBlocks
 
-Returns the grace period in blocks (144 = ~1 day).
+Return timing constants.
 
 ```typescript
 @view @method()
 @returns({ name: 'blocks', type: ABIDataTypes.UINT64 })
-public gracePeriodBlocks(_calldata: Calldata): BytesWriter
-```
+public gracePeriodBlocks(_calldata: Calldata): BytesWriter    // 144
 
-#### maxExpiryBlocks
-
-Returns the maximum expiry duration in blocks (52560 = ~1 year).
-
-```typescript
 @view @method()
 @returns({ name: 'blocks', type: ABIDataTypes.UINT64 })
-public maxExpiryBlocks(_calldata: Calldata): BytesWriter
+public maxExpiryBlocks(_calldata: Calldata): BytesWriter      // 52560
 ```
 
-#### calculateCollateral
+### calculateCollateral
 
-Calculates the collateral required for an option. CALL: `underlyingAmount`. PUT: `(strikePrice * underlyingAmount) / PRECISION`.
+Calculates collateral required for an option. CALL: `underlyingAmount`. PUT: `(strikePrice * underlyingAmount) / PRECISION`.
 
 ```typescript
 @view
@@ -324,13 +205,58 @@ Calculates the collateral required for an option. CALL: `underlyingAmount`. PUT:
 public calculateCollateral(calldata: Calldata): BytesWriter
 ```
 
-### State-Changing Methods
+### getRegisteredPubkey
 
-#### writeOption
-
-Creates a new option by locking collateral. **5 parameters** (not 4 — premium is writer-specified).
+Returns the registered BTC compressed pubkey for an address (33 bytes as bytes32).
 
 ```typescript
+@view
+@method({ name: 'addr', type: ABIDataTypes.ADDRESS })
+@returns({ name: 'pubkey', type: ABIDataTypes.BYTES32 })
+public getRegisteredPubkey(calldata: Calldata): BytesWriter
+```
+
+---
+
+## Base State-Changing Methods (all pool types)
+
+### registerBtcPubkey
+
+Registers a compressed Bitcoin pubkey for the caller. Required before BTC pool operations (type 1 reserveOption, type 2 writeOptionBtc CALL).
+
+```typescript
+@nonReentrant
+@method({ name: 'pubkey', type: ABIDataTypes.BYTES32 })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+public registerBtcPubkey(calldata: Calldata): BytesWriter
+```
+
+### updateFeeRecipient
+
+Updates the protocol fee recipient address. Only callable by the current fee recipient.
+
+```typescript
+@nonReentrant
+@method('updateFeeRecipient', { name: 'newRecipient', type: ABIDataTypes.ADDRESS })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+@emit('FeeRecipientUpdated')
+public updateFeeRecipientMethod(calldata: Calldata): BytesWriter
+```
+
+---
+
+## Type 0: OptionsPool (OP20/OP20)
+
+**Source:** `src/contracts/pool/contract.ts`
+
+Standard pool where both collateral and premium are OP20 tokens.
+
+### writeOption
+
+Creates a new option by locking OP20 collateral.
+
+```typescript
+@nonReentrant
 @method(
     { name: 'optionType', type: ABIDataTypes.UINT8 },
     { name: 'strikePrice', type: ABIDataTypes.UINT256 },
@@ -343,112 +269,68 @@ Creates a new option by locking collateral. **5 parameters** (not 4 — premium 
 public writeOption(calldata: Calldata): BytesWriter
 ```
 
-**Parameters:**
-
-| Name | Type | Description |
-|------|------|-------------|
-| optionType | u8 | 0 = Call, 1 = Put |
-| strikePrice | u256 | Strike price (18-decimal fixed-point) |
-| expiryBlock | u64 | Block height for expiry |
-| underlyingAmount | u256 | Amount of underlying covered (18-decimal) |
-| premium | u256 | Premium price set by writer (18-decimal) |
-
-**Validation:**
-- `optionType` must be 0 or 1
-- `strikePrice`, `underlyingAmount`, `premium` must all be > 0
-- `expiryBlock` must be in future and within `MAX_EXPIRY_BLOCKS` from current block
-
-**Collateral:**
-- CALL: locks `underlyingAmount` of underlying token
-- PUT: locks `(strikePrice * underlyingAmount) / PRECISION` of premium token
+**Collateral:** CALL locks `underlyingAmount` of underlying. PUT locks `(strikePrice * underlyingAmount) / PRECISION` of premium token.
 
 **Prerequisite:** Writer must approve collateral token spend to pool address.
 
-#### buyOption
+### buyOption
 
-Purchases an open option by paying premium. 1% buy fee deducted from premium before writer receives.
+Purchases an open option by paying OP20 premium. 1% buy fee deducted.
 
 ```typescript
+@nonReentrant
 @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
 @returns({ name: 'success', type: ABIDataTypes.BOOL })
 @emit('OptionPurchased')
 public buyOption(calldata: Calldata): BytesWriter
 ```
 
-**Conditions:**
-1. Option must be `OPEN`
-2. Option must not be expired
-3. Buyer must not be the writer
-4. Buyer must have approved premium token spend
+### exercise
 
-**Fee:** `buyFee = ceil(premium * BUY_FEE_BPS / 10000)`, writer receives `premium - buyFee`.
-
-#### exercise
-
-Exercises a purchased option. Only callable by buyer, only during grace period (between expiry and expiry + 144 blocks).
+Exercises a purchased option. Buyer only, during grace period.
 
 ```typescript
+@nonReentrant
 @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
 @returns({ name: 'success', type: ABIDataTypes.BOOL })
 @emit('OptionExercised')
 public exercise(calldata: Calldata): BytesWriter
 ```
 
-**Conditions:**
-1. Option must be `PURCHASED`
-2. Caller must be the buyer
-3. Current block >= expiry block (not before expiry)
-4. Current block < expiry + GRACE_PERIOD_BLOCKS (within grace period)
+**CALL exercise:** Buyer pays `strikeValue` in premium token to writer, receives `underlyingAmount - exerciseFee` of underlying.
 
-**CALL exercise:**
-- Buyer pays `strikeValue = (strikePrice * underlyingAmount) / PRECISION` in premium token to writer
-- Buyer receives `underlyingAmount - exerciseFee` of underlying token
-- `exerciseFee = ceil(underlyingAmount * EXERCISE_FEE_BPS / 10000)`
+**PUT exercise:** Buyer sends `underlyingAmount` of underlying to writer, receives `strikeValue - exerciseFee` of premium token.
 
-**PUT exercise:**
-- Buyer sends `underlyingAmount` of underlying token to writer
-- Buyer receives `strikeValue - exerciseFee` of premium token
-- `exerciseFee = ceil(strikeValue * EXERCISE_FEE_BPS / 10000)`
+### cancelOption
 
-#### settle
-
-Settles an expired, unexercised option after grace period. Returns full collateral to writer. Callable by anyone.
+Cancels an unpurchased option. Writer only. 1% cancel fee (0% if expired).
 
 ```typescript
-@method({ name: 'optionId', type: ABIDataTypes.UINT256 })
-@returns({ name: 'success', type: ABIDataTypes.BOOL })
-@emit('OptionExpired')
-public settle(calldata: Calldata): BytesWriter
-```
-
-**Conditions:**
-1. Option must be `PURCHASED`
-2. Current block >= expiry + GRACE_PERIOD_BLOCKS (grace period ended)
-
-**No fee** — writer receives full collateral back.
-
-#### cancelOption
-
-Cancels an unpurchased option. Writer only. 1% cancel fee applies (0% if already expired).
-
-```typescript
+@nonReentrant
 @method({ name: 'optionId', type: ABIDataTypes.UINT256 })
 @returns({ name: 'success', type: ABIDataTypes.BOOL })
 @emit('OptionCancelled')
 public cancelOption(calldata: Calldata): BytesWriter
 ```
 
-**Conditions:**
-1. Option must be `OPEN`
-2. Caller must be the writer
+### settle
 
-**Fee:** If unexpired: `cancelFee = ceil(collateral * CANCEL_FEE_BPS / 10000)`. If expired: fee = 0 (full collateral returned).
-
-#### transferOption
-
-Transfers ownership of a purchased option to a new buyer. No fee.
+Settles an expired, unexercised option after grace period. Returns full collateral to writer. Callable by anyone.
 
 ```typescript
+@nonReentrant
+@method({ name: 'optionId', type: ABIDataTypes.UINT256 })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+@emit('OptionExpired')
+public settle(calldata: Calldata): BytesWriter
+```
+
+### transferOption
+
+Transfers ownership of a purchased option to a new buyer.
+
+```typescript
+@nonReentrant
 @method(
     { name: 'optionId', type: ABIDataTypes.UINT256 },
     { name: 'to', type: ABIDataTypes.ADDRESS },
@@ -458,18 +340,12 @@ Transfers ownership of a purchased option to a new buyer. No fee.
 public transferOption(calldata: Calldata): BytesWriter
 ```
 
-**Conditions:**
-1. Option must be `PURCHASED`
-2. Caller must be the current buyer
-3. Recipient must not be zero address
-4. Recipient must not be current buyer
-5. Grace period must not have ended
+### rollOption
 
-#### rollOption
-
-Atomically cancels an open option and creates a new one with updated parameters. Same underlying amount and option type are preserved.
+Atomically cancels an open option and creates a new one with updated parameters.
 
 ```typescript
+@nonReentrant
 @method(
     { name: 'optionId', type: ABIDataTypes.UINT256 },
     { name: 'newStrikePrice', type: ABIDataTypes.UINT256 },
@@ -481,41 +357,14 @@ Atomically cancels an open option and creates a new one with updated parameters.
 public rollOption(calldata: Calldata): BytesWriter
 ```
 
-**Conditions:**
-1. Option must be `OPEN`
-2. Caller must be the writer
-3. `newStrikePrice` and `newPremium` must be > 0
-4. `newExpiryBlock` must be in future and within `MAX_EXPIRY_BLOCKS`
+Emits `OptionCancelled` + `OptionWritten` + `OptionRolled` events.
 
-**Collateral handling:**
-- Cancel fee applied to old collateral (0% if expired)
-- Net difference settled: writer tops up if new collateral > (old - fee), surplus returned if less
-- Emits `OptionCancelled` + `OptionWritten` + `OptionRolled` events for indexer compatibility
+### batchCancel
 
-#### updateFeeRecipient
-
-Updates the protocol fee recipient address. Only callable by the current fee recipient.
+Cancels multiple OPEN options atomically. Reverts if ANY option fails.
 
 ```typescript
-@method('updateFeeRecipient', { name: 'newRecipient', type: ABIDataTypes.ADDRESS })
-@returns({ name: 'success', type: ABIDataTypes.BOOL })
-@emit('FeeRecipientUpdated')
-public updateFeeRecipientMethod(calldata: Calldata): BytesWriter
-```
-
-**Conditions:**
-1. Caller must be the current fee recipient
-2. New address must not be zero
-
-### Batch Operations
-
-Both batch methods use fixed 6-param calldata: `count(u256) + id0 + id1 + id2 + id3 + id4`. Always reads 5 IDs; unused slots padded with 0. MAX_BATCH_SIZE = 5.
-
-#### batchCancel
-
-Cancels multiple OPEN options atomically. Reverts if ANY option fails validation.
-
-```typescript
+@nonReentrant
 @method(
     { name: 'count', type: ABIDataTypes.UINT256 },
     { name: 'id0', type: ABIDataTypes.UINT256 },
@@ -529,13 +378,12 @@ Cancels multiple OPEN options atomically. Reverts if ANY option fails validation
 public batchCancel(calldata: Calldata): BytesWriter
 ```
 
-**Behavior:** Atomic — if any option is not found, not open, or not owned by caller, the entire batch reverts. Emits individual `OptionCancelled` events per option.
-
-#### batchSettle
+### batchSettle
 
 Settles multiple expired options. Non-atomic — skips unsettleable options.
 
 ```typescript
+@nonReentrant
 @method(
     { name: 'count', type: ABIDataTypes.UINT256 },
     { name: 'id0', type: ABIDataTypes.UINT256 },
@@ -549,7 +397,293 @@ Settles multiple expired options. Non-atomic — skips unsettleable options.
 public batchSettle(calldata: Calldata): BytesWriter
 ```
 
-**Behavior:** Non-atomic — skips options that don't exist, aren't PURCHASED, or whose grace period hasn't ended. Returns count of successfully settled options. Emits individual `OptionExpired` events per settled option. Callable by anyone.
+---
+
+## Type 1: OptionsPoolBtcQuote (OP20 underlying, BTC quote)
+
+**Source:** `src/contracts/pool/btc-quote.ts`
+
+Premium and strike are denominated in BTC (satoshis). Collateral is OP20 tokens. Uses a two-phase commit for BTC payments: `reserveOption()` → `executeReservation()`.
+
+### Additional View Methods
+
+#### bridge
+
+Returns the NativeSwapBridge address.
+
+```typescript
+@view @method('bridge')
+@returns({ name: 'address', type: ABIDataTypes.ADDRESS })
+public getBridge(_calldata: Calldata): BytesWriter
+```
+
+#### getReservation
+
+Returns reservation data by ID.
+
+```typescript
+@view
+@method({ name: 'reservationId', type: ABIDataTypes.UINT256 })
+public getReservation(calldata: Calldata): BytesWriter
+```
+
+**Response:** `id(u256) + optionId(u256) + buyer(Address) + btcAmount(u256) + csvScriptHash(bytes32) + expiryBlock(u64) + status(u8)`
+
+### State-Changing Methods
+
+#### writeOption
+
+Same as type 0 — locks OP20 collateral. Same signature.
+
+#### reserveOption
+
+Phase 1 of two-phase BTC commit. Transitions option OPEN → RESERVED. Queries bridge for BTC price and generates CSV script hash.
+
+```typescript
+@nonReentrant
+@method({ name: 'optionId', type: ABIDataTypes.UINT256 })
+@returns({ name: 'reservationId', type: ABIDataTypes.UINT256 })
+@emit('OptionReserved')
+public reserveOption(calldata: Calldata): BytesWriter
+```
+
+**Prerequisite:** Writer must have registered BTC pubkey via `registerBtcPubkey`.
+
+#### executeReservation
+
+Phase 2 of two-phase BTC commit. Verifies BTC UTXO output in the calling transaction, transitions RESERVED → PURCHASED.
+
+```typescript
+@nonReentrant
+@method({ name: 'reservationId', type: ABIDataTypes.UINT256 })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+@emit('ReservationExecuted')
+public executeReservation(calldata: Calldata): BytesWriter
+```
+
+**Requires:** BTC `extraOutput` in the same transaction paying to the CSV P2WSH address.
+
+#### cancelReservation
+
+Cancels an expired reservation, returns option to OPEN state.
+
+```typescript
+@nonReentrant
+@method({ name: 'reservationId', type: ABIDataTypes.UINT256 })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+@emit('ReservationCancelled')
+public cancelReservation(calldata: Calldata): BytesWriter
+```
+
+Also emits `OptionRestored` event.
+
+#### exercise
+
+CALL exercise: buyer pays BTC strike via UTXO `extraOutput` to writer's CSV address, receives OP20 underlying minus 0.1% fee.
+
+PUT exercise: same as type 0 (OP20 only, no BTC).
+
+```typescript
+@nonReentrant
+@method({ name: 'optionId', type: ABIDataTypes.UINT256 })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+@emit('OptionExercised')
+public exercise(calldata: Calldata): BytesWriter
+```
+
+#### cancelOption / settle
+
+Same as type 0 — OP20 collateral returned.
+
+### Type 1-Specific Events
+
+| Event | Emitted By | Data |
+|-------|-----------|------|
+| `OptionReserved` | `reserveOption` | reservationId, optionId, buyer, btcAmount, csvScriptHash, expiryBlock |
+| `ReservationExecuted` | `executeReservation` | reservationId, optionId, buyer |
+| `ReservationCancelled` | `cancelReservation` | reservationId, optionId |
+| `OptionRestored` | `cancelReservation` | optionId |
+
+---
+
+## Type 2: OptionsPoolBtcUnderlying (BTC underlying, OP20 quote)
+
+**Source:** `src/contracts/pool/btc-underlying.ts`
+
+Writer locks BTC collateral for CALL options via P2WSH escrow. PUT options use OP20 premium token as collateral (same as base). Premium and strike are denominated in OP20.
+
+### Additional View Methods
+
+#### bridge
+
+Returns the NativeSwapBridge address.
+
+```typescript
+@view @method('bridge')
+@returns({ name: 'address', type: ABIDataTypes.ADDRESS })
+public getBridge(_calldata: Calldata): BytesWriter
+```
+
+### State-Changing Methods
+
+#### writeOptionBtc
+
+Creates an option. CALL: verifies BTC UTXO output to P2WSH escrow. PUT: locks OP20 premium token.
+
+```typescript
+@nonReentrant
+@method(
+    { name: 'optionType', type: ABIDataTypes.UINT8 },
+    { name: 'strikePrice', type: ABIDataTypes.UINT256 },
+    { name: 'expiryBlock', type: ABIDataTypes.UINT64 },
+    { name: 'underlyingAmount', type: ABIDataTypes.UINT256 },
+    { name: 'premium', type: ABIDataTypes.UINT256 },
+)
+@returns({ name: 'optionId', type: ABIDataTypes.UINT256 })
+@emit('OptionWrittenBtc')  // CALL
+@emit('OptionWritten')     // PUT
+public writeOptionBtc(calldata: Calldata): BytesWriter
+```
+
+**CALL requirements:**
+- Writer must have registered BTC pubkey via `registerBtcPubkey`
+- Transaction must include BTC `extraOutput` to escrow P2WSH address
+- `underlyingAmount` is in satoshis (must fit in u64)
+- Escrow derived from: `bridge.generateEscrowScriptHash(placeholderBuyer, writerPubkey, expiryBlock + GRACE_PERIOD_BLOCKS)`
+
+**PUT:** Same as type 0 `writeOption` — locks `(strikePrice * underlyingAmount) / PRECISION` of premium token.
+
+> **Note:** This pool uses `writeOptionBtc` (different selector than `writeOption`). The base `writeOption` selector does not exist on type 2 pools.
+
+#### buyOption
+
+Buyer pays OP20 premium. Same as type 0. 1% buy fee.
+
+```typescript
+@nonReentrant
+@method({ name: 'optionId', type: ABIDataTypes.UINT256 })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+@emit('OptionPurchased')
+public buyOption(calldata: Calldata): BytesWriter
+```
+
+#### exercise
+
+CALL: buyer pays OP20 strike value to writer, BTC collateral marked claimable. Emits `BtcClaimable` event with escrow details for off-chain BTC sweep.
+
+PUT: buyer sends BTC to writer's CSV address via `extraOutput`, receives OP20 strike value minus 0.1% fee.
+
+```typescript
+@nonReentrant
+@method({ name: 'optionId', type: ABIDataTypes.UINT256 })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+@emit('OptionExercised')
+public exercise(calldata: Calldata): BytesWriter
+```
+
+#### cancelOption
+
+CALL: no on-chain fee (BTC in P2WSH escrow). State → CANCELLED, escrow info emitted. Writer reclaims BTC via CLTV off-chain.
+
+PUT: OP20 collateral returned with 1% cancel fee (same as type 0).
+
+```typescript
+@nonReentrant
+@method({ name: 'optionId', type: ABIDataTypes.UINT256 })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+@emit('OptionCancelled')
+public cancelOption(calldata: Calldata): BytesWriter
+```
+
+#### settle
+
+CALL: state → EXPIRED, escrow info emitted. Writer reclaims BTC via CLTV.
+
+PUT: OP20 collateral returned to writer (same as type 0).
+
+```typescript
+@nonReentrant
+@method({ name: 'optionId', type: ABIDataTypes.UINT256 })
+@returns({ name: 'success', type: ABIDataTypes.BOOL })
+@emit('OptionExpired')
+public settle(calldata: Calldata): BytesWriter
+```
+
+### Type 2-Specific Events
+
+| Event | Emitted By | Data |
+|-------|-----------|------|
+| `OptionWrittenBtc` | `writeOptionBtc` (CALL) | id, writer, optionType, strikePrice, underlyingAmount, premium, expiryBlock, escrowHash |
+| `BtcClaimable` | `exercise` (CALL) | optionId, buyer, btcAmount, escrowHash |
+
+### Extended Storage (per option)
+
+| Slot | Contents |
+|------|----------|
+| 7 | btcCollateralAmount (u256, satoshis) |
+| 8 | escrowScriptHash (bytes32) |
+
+---
+
+## SpreadRouter
+
+**Source:** `src/contracts/router/contract.ts`
+
+Stateless orchestrator for atomic multi-leg option strategies. Calls pool methods via `Blockchain.call()` with `stopOnFailure=true`.
+
+**Key:** `Blockchain.tx.sender` is the wallet (not the router), so pool's `_transferFrom()` uses the wallet's balance directly.
+
+### executeSpread
+
+Write one option + buy another atomically (bull call spread, bear put spread).
+
+```typescript
+@method(
+    { name: 'pool', type: ABIDataTypes.ADDRESS },
+    { name: 'writeOptionType', type: ABIDataTypes.UINT8 },
+    { name: 'writeStrikePrice', type: ABIDataTypes.UINT256 },
+    { name: 'writeExpiryBlock', type: ABIDataTypes.UINT64 },
+    { name: 'writeUnderlyingAmount', type: ABIDataTypes.UINT256 },
+    { name: 'writePremium', type: ABIDataTypes.UINT256 },
+    { name: 'buyOptionId', type: ABIDataTypes.UINT256 },
+)
+@returns({ name: 'newOptionId', type: ABIDataTypes.UINT256 })
+public executeSpread(calldata: Calldata): BytesWriter
+```
+
+**Validation:** `buyOptionId` must not be zero.
+
+### executeDualWrite
+
+Write two options atomically (collar, straddle, strangle).
+
+```typescript
+@method(
+    { name: 'pool', type: ABIDataTypes.ADDRESS },
+    { name: 'type1', type: ABIDataTypes.UINT8 },
+    { name: 'strike1', type: ABIDataTypes.UINT256 },
+    { name: 'expiry1', type: ABIDataTypes.UINT64 },
+    { name: 'amount1', type: ABIDataTypes.UINT256 },
+    { name: 'premium1', type: ABIDataTypes.UINT256 },
+    { name: 'type2', type: ABIDataTypes.UINT8 },
+    { name: 'strike2', type: ABIDataTypes.UINT256 },
+    { name: 'expiry2', type: ABIDataTypes.UINT64 },
+    { name: 'amount2', type: ABIDataTypes.UINT256 },
+    { name: 'premium2', type: ABIDataTypes.UINT256 },
+)
+@returns({ name: 'optionId1', type: ABIDataTypes.UINT256 })
+public executeDualWrite(calldata: Calldata): BytesWriter
+```
+
+### Pool Type Compatibility
+
+| Pool Type | executeSpread | executeDualWrite | Reason |
+|-----------|--------------|-----------------|--------|
+| Type 0 (OP20/OP20) | Supported | Supported | Has `writeOption` and `buyOption` |
+| Type 1 (OP20/BTC) | Not supported | Supported | Has `writeOption` but no `buyOption` (uses reservation flow) |
+| Type 2 (BTC/OP20) | Not supported | Not supported | Uses `writeOptionBtc` selector (different from `writeOption`) |
+
+---
 
 ## Option Types
 
@@ -558,10 +692,10 @@ public batchSettle(calldata: Calldata): BytesWriter
 ```
 Call = Right to BUY underlying at strike price
 
-Collateral: underlyingAmount of underlying token
+Collateral: underlyingAmount of underlying token (or BTC for type 2)
 ITM when: currentPrice > strikePrice
 
-Exercise flow:
+Exercise flow (type 0):
 ├── Buyer pays strikeValue in premium token → writer
 ├── Buyer receives underlyingAmount - exerciseFee of underlying → buyer
 └── exerciseFee of underlying → feeRecipient
@@ -575,7 +709,7 @@ Put = Right to SELL underlying at strike price
 Collateral: (strikePrice * underlyingAmount) / PRECISION of premium token
 ITM when: currentPrice < strikePrice
 
-Exercise flow:
+Exercise flow (type 0):
 ├── Buyer sends underlyingAmount of underlying token → writer
 ├── Buyer receives strikeValue - exerciseFee of premium token → buyer
 └── exerciseFee of premium token → feeRecipient
@@ -598,20 +732,24 @@ All fees use ceiling division so the protocol never under-collects on dust:
 fee = (amount * feeBps + 9999) / 10000
 ```
 
+---
+
 ## Storage Layout
+
+### Base (all pool types)
 
 ```
 Pointer 0-1: ReentrancyGuard internal (statusPointer, depthPointer)
 Pointer 2:  underlying (StoredAddress) — constructor-initialized
 Pointer 3:  premiumToken (StoredAddress) — constructor-initialized
-Pointer 4:  nextId (StoredU256) — constructor-initialized, incremented per writeOption/rollOption
-Pointer 5:  feeRecipient (StoredAddress) — lazy-loaded on first access
+Pointer 4:  nextId (StoredU256) — constructor-initialized
+Pointer 5:  feeRecipient (StoredAddress) — lazy-loaded
 Pointer 6:  options base pointer — used by OptionStorage (SHA256-keyed)
+Pointer 7:  pubkeyRegistry (AddressMap<Uint8Array>) — BTC pubkey per address
+Pointer 8:  extended slots base pointer — for BTC pool extra data
 ```
 
-### Option Storage (SHA256-keyed)
-
-Each option uses 7 storage slots, keyed by `SHA256(basePointer || optionId || slotIndex)`:
+### Option Storage (SHA256-keyed, per option)
 
 | Slot | Contents | Size |
 |------|----------|------|
@@ -622,128 +760,56 @@ Each option uses 7 storage slots, keyed by `SHA256(basePointer || optionId || sl
 | 4 | premium (u256) | 32 bytes |
 | 5 | expiryBlock (u64) + createdBlock (u64) — packed | 32 bytes (16 bytes used) |
 | 6 | optionType (u8) + status (u8) — packed | 32 bytes (2 bytes used) |
+| 7 | btcCollateralAmount (u256) — type 2 CALL only | 32 bytes |
+| 8 | escrowScriptHash (bytes32) — type 2 CALL only | 32 bytes |
 
-This pattern supports unlimited options without requiring fixed-size arrays or nested maps.
+### Type 1 Additional Storage
+
+```
+BRIDGE_POINTER: bridge (StoredAddress) — NativeSwapBridge address
+Reservation storage: SHA256-keyed map (ReservationStorage)
+```
+
+### Type 2 Additional Storage
+
+```
+BRIDGE_POINTER: bridge (StoredAddress) — NativeSwapBridge address
+```
+
+---
 
 ## Events
 
-### OptionWritten
+### Shared Events (all pool types)
 
-Emitted by `writeOption` and `rollOption`.
+| Event | Emitted By | Size | Fields |
+|-------|-----------|------|--------|
+| `OptionWritten` | `writeOption`, `rollOption` | 200 bytes | optionId, writer, optionType, strikePrice, underlyingAmount, premium, expiryBlock |
+| `OptionPurchased` | `buyOption` | 168 bytes | optionId, buyer, writer, premium, writerAmount, blockNumber |
+| `OptionExercised` | `exercise` | 193 bytes | optionId, buyer, writer, optionType, underlyingAmount, strikeValue, exerciseFee |
+| `OptionExpired` | `settle`, `batchSettle` | 96 bytes | optionId, writer, collateralReturned |
+| `OptionCancelled` | `cancelOption`, `batchCancel`, `rollOption` | 128 bytes | optionId, writer, collateralReturned, cancellationFee |
+| `OptionTransferred` | `transferOption` | 96 bytes | optionId, from, to |
+| `OptionRolled` | `rollOption` | 168 bytes | oldOptionId, newOptionId, writer, newStrikePrice, newExpiryBlock, newPremium |
+| `FeeRecipientUpdated` | `updateFeeRecipient` | 64 bytes | oldRecipient, newRecipient |
 
-```typescript
-// 200 bytes
-{
-    optionId: u256,         // 32 bytes
-    writer: Address,        // 32 bytes
-    optionType: u8,         // 1 byte
-    strikePrice: u256,      // 32 bytes
-    underlyingAmount: u256, // 32 bytes
-    premium: u256,          // 32 bytes
-    expiryBlock: u64,       // 8 bytes
-}
-```
+### Type 1-Specific Events
 
-### OptionPurchased
+| Event | Emitted By | Fields |
+|-------|-----------|--------|
+| `OptionReserved` | `reserveOption` | reservationId, optionId, buyer, btcAmount, csvScriptHash, expiryBlock |
+| `ReservationExecuted` | `executeReservation` | reservationId, optionId, buyer |
+| `ReservationCancelled` | `cancelReservation` | reservationId, optionId |
+| `OptionRestored` | `cancelReservation` | optionId |
 
-Emitted by `buyOption`.
+### Type 2-Specific Events
 
-```typescript
-// 168 bytes
-{
-    optionId: u256,         // 32 bytes
-    buyer: Address,         // 32 bytes
-    writer: Address,        // 32 bytes
-    premium: u256,          // 32 bytes (full premium)
-    writerAmount: u256,     // 32 bytes (premium - buyFee)
-    blockNumber: u64,       // 8 bytes
-}
-```
+| Event | Emitted By | Fields |
+|-------|-----------|--------|
+| `OptionWrittenBtc` | `writeOptionBtc` (CALL) | optionId, writer, optionType, strikePrice, underlyingAmount, premium, expiryBlock, escrowHash |
+| `BtcClaimable` | `exercise` (CALL) | optionId, buyer, btcAmount, escrowHash |
 
-### OptionExercised
-
-Emitted by `exercise`.
-
-```typescript
-// 193 bytes
-{
-    optionId: u256,         // 32 bytes
-    buyer: Address,         // 32 bytes
-    writer: Address,        // 32 bytes
-    optionType: u8,         // 1 byte
-    underlyingAmount: u256, // 32 bytes
-    strikeValue: u256,      // 32 bytes
-    exerciseFee: u256,      // 32 bytes
-}
-```
-
-### OptionExpired
-
-Emitted by `settle` and `batchSettle`.
-
-```typescript
-// 96 bytes
-{
-    optionId: u256,             // 32 bytes
-    writer: Address,            // 32 bytes
-    collateralReturned: u256,   // 32 bytes
-}
-```
-
-### OptionCancelled
-
-Emitted by `cancelOption`, `batchCancel`, and `rollOption`.
-
-```typescript
-// 128 bytes
-{
-    optionId: u256,             // 32 bytes
-    writer: Address,            // 32 bytes
-    collateralReturned: u256,   // 32 bytes
-    cancellationFee: u256,      // 32 bytes
-}
-```
-
-### OptionTransferred
-
-Emitted by `transferOption`.
-
-```typescript
-// 96 bytes
-{
-    optionId: u256,     // 32 bytes
-    from: Address,      // 32 bytes (previous buyer)
-    to: Address,        // 32 bytes (new buyer)
-}
-```
-
-### OptionRolled
-
-Emitted by `rollOption`.
-
-```typescript
-// 168 bytes
-{
-    oldOptionId: u256,      // 32 bytes
-    newOptionId: u256,      // 32 bytes
-    writer: Address,        // 32 bytes
-    newStrikePrice: u256,   // 32 bytes
-    newExpiryBlock: u64,    // 8 bytes
-    newPremium: u256,       // 32 bytes
-}
-```
-
-### FeeRecipientUpdated
-
-Emitted by `updateFeeRecipient`.
-
-```typescript
-// 64 bytes
-{
-    oldRecipient: Address,  // 32 bytes
-    newRecipient: Address,  // 32 bytes
-}
-```
+---
 
 ## Error Messages
 
@@ -758,50 +824,34 @@ Emitted by `updateFeeRecipient`.
 | `'Not yet expired'` | exercise | Block < expiry |
 | `'Grace period ended'` | exercise, transferOption | Block >= expiry + GRACE_PERIOD_BLOCKS |
 | `'Grace period not ended'` | settle | Block < expiry + GRACE_PERIOD_BLOCKS |
-| `'Writer cannot buy own option'` | buyOption | Buyer address == writer address |
-| `'Invalid recipient'` | transferOption | Recipient is zero address |
+| `'Writer cannot buy own option'` | buyOption | Buyer == writer |
+| `'Invalid recipient'` | transferOption | Zero address |
 | `'Already owner'` | transferOption | Recipient == current buyer |
-| `'Values must be > 0'` | writeOption, rollOption | Strike, amount, or premium is zero |
-| `'Invalid option type'` | writeOption | optionType > 1 |
-| `'Expiry in past'` | writeOption, rollOption | expiryBlock <= currentBlock |
-| `'Expiry too far'` | writeOption, rollOption | expiryBlock > currentBlock + MAX_EXPIRY_BLOCKS |
+| `'Values must be > 0'` | writeOption, rollOption, writeOptionBtc | Strike, amount, or premium is zero |
+| `'Invalid option type'` | writeOption, writeOptionBtc | optionType > 1 |
+| `'Expiry in past'` | writeOption, rollOption, writeOptionBtc | expiryBlock <= currentBlock |
+| `'Expiry too far'` | writeOption, rollOption, writeOptionBtc | expiryBlock > currentBlock + MAX_EXPIRY_BLOCKS |
 | `'Only fee recipient'` | updateFeeRecipient | Caller is not current fee recipient |
-| `'Zero address not allowed'` | updateFeeRecipient | New recipient is zero address |
+| `'Zero address not allowed'` | updateFeeRecipient | New recipient is zero |
 | `'Fee recipient cannot be zero'` | onDeployment | Constructor given zero fee recipient |
 | `'Empty batch'` | batchCancel, batchSettle | count = 0 |
 | `'Batch too large'` | batchCancel, batchSettle | count > MAX_BATCH_SIZE |
-| `'Token transferFrom failed'` | writeOption, buyOption, exercise | Token approval insufficient |
-| `'Transfer out failed'` | cancelOption, exercise, settle, batchCancel, batchSettle, rollOption | Internal token transfer failed |
-
-## Security
-
-### Reentrancy Guard
-
-Contract extends `ReentrancyGuard` with `ReentrancyLevel.STANDARD`. All state-changing methods follow checks-effects-interactions: state updates before external token calls.
-
-### Cross-Contract Token Transfers
-
-The contract uses two internal helpers:
-
-- `_transferFrom(token, from, to, amount)` — calls OP20 `transferFrom()` with `stopOnFailure=true`. Used when pulling tokens from external wallets (collateral deposits, premium payments).
-- `_transfer(token, to, amount)` — calls OP20 `transferFrom(contractAddress, to, amount)` with `stopOnFailure=false`. When `from == contractAddress`, OP20 bypasses allowance check. Used for all outbound transfers (collateral returns, fee routing).
-
-### Block Height Validation
-
-All time checks use block number, never timestamps:
-
-```typescript
-const currentBlock = Blockchain.block.number;
-const expired = currentBlock >= option.expiryBlock;
-const graceEnded = currentBlock >= option.expiryBlock + GRACE_PERIOD_BLOCKS;
-```
+| `'BTC collateral output not found'` | writeOptionBtc (CALL) | No matching P2WSH output in TX |
+| `'Underlying amount overflows u64'` | writeOptionBtc (CALL) | Amount too large for satoshis |
+| `'Invalid writer pubkey length'` | writeOptionBtc (CALL) | Pubkey not 33 bytes |
+| `'Reservation expired'` | executeReservation | Block >= reservation.expiryBlock |
+| `'BTC strike payment not found'` | exercise (type 1 CALL) | No matching BTC output |
+| `'Invalid pool address'` | SpreadRouter | Pool is zero address |
+| `'Invalid buy option ID'` | SpreadRouter.executeSpread | buyOptionId is zero |
+| `'Write leg failed'` | SpreadRouter | Pool writeOption reverted |
+| `'Buy leg failed'` | SpreadRouter | Pool buyOption reverted |
 
 ## Access Control
 
 | Method | Access |
 |--------|--------|
 | All view methods | Public |
-| `writeOption` | Any (locks caller's collateral) |
+| `writeOption` / `writeOptionBtc` | Any (locks caller's collateral) |
 | `buyOption` | Any (except writer of that option) |
 | `exercise` | Buyer only |
 | `cancelOption` | Writer only |
@@ -809,9 +859,21 @@ const graceEnded = currentBlock >= option.expiryBlock + GRACE_PERIOD_BLOCKS;
 | `transferOption` | Buyer only |
 | `rollOption` | Writer only |
 | `updateFeeRecipient` | Current fee recipient only |
+| `registerBtcPubkey` | Any (registers for caller) |
 | `batchCancel` | Writer of all options in batch |
 | `batchSettle` | Any (public good) |
+| `reserveOption` | Any (except writer) |
+| `executeReservation` | Reservation buyer only |
+| `cancelReservation` | Any (after expiry) |
+| `executeSpread` / `executeDualWrite` | Any (SpreadRouter) |
 
-## Source
+## Sources
 
-`src/contracts/pool/contract.ts`
+- `src/contracts/pool/base.ts` — base class
+- `src/contracts/pool/contract.ts` — type 0 (OP20/OP20)
+- `src/contracts/pool/btc-quote.ts` — type 1 (OP20/BTC)
+- `src/contracts/pool/btc-underlying.ts` — type 2 (BTC/OP20)
+- `src/contracts/router/contract.ts` — SpreadRouter
+- `src/contracts/pool/constants.ts` — shared constants
+- `src/contracts/pool/storage.ts` — option storage
+- `src/contracts/pool/events.ts` — event definitions

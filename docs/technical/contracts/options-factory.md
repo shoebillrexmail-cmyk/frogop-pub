@@ -130,18 +130,6 @@ public getPoolByIndex(calldata: Calldata): BytesWriter
 
 **Reverts:** `'Index out of bounds'` if index >= poolCount.
 
-**Example:**
-
-```typescript
-const countResult = await factory.getPoolCount();
-const count = countResult.properties.count;
-
-for (let i = 0n; i < count; i++) {
-    const result = await factory.getPoolByIndex(i);
-    // result contains: poolAddress, underlying, premiumToken
-}
-```
-
 #### getPool
 
 Gets the pool address for a token pair. Returns zero address if not registered.
@@ -178,6 +166,8 @@ Sets the treasury address. Owner only. Rejects zero address.
 public setTreasury(calldata: Calldata): BytesWriter
 ```
 
+**Reverts:** `'Treasury cannot be zero address'` if zero address provided.
+
 #### registerPool
 
 Registers an externally-deployed pool in the factory registry. Owner only. This is the **primary method** for adding pools since `createPool` is not supported by OPNet runtime.
@@ -192,7 +182,11 @@ Registers an externally-deployed pool in the factory registry. Owner only. This 
 public registerPool(calldata: Calldata): BytesWriter
 ```
 
-**Reverts:** `'Pool already registered'` if the token pair already has a pool.
+**Reverts:**
+- `'Invalid pool address'` — zero address
+- `'Invalid underlying'` — zero address
+- `'Invalid premiumToken'` — zero address
+- `'Pool already registered'` — token pair already has a pool
 
 #### createPool
 
@@ -215,7 +209,7 @@ public createPool(calldata: Calldata): BytesWriter
 ## Storage Layout
 
 ```
-Pointer 10: owner (StoredAddress) — contract owner
+Pointer 10: owner (StoredAddress) — contract owner (tx.origin at deployment)
 Pointer 11: poolTemplate (StoredAddress) — template for createPool
 Pointer 12: pools (MapOfMap<u256>) — nested map: underlying → premiumToken → poolAddress
 Pointer 13: treasury (StoredAddress) — lazy-loaded
