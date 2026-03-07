@@ -7,18 +7,21 @@
  * - Single-leg: "Start Earning" opens WriteOptionPanel pre-filled
  * - Multi-leg (Collar, Spreads): inline LegSelector + SpreadRouter execution
  */
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { getContract } from 'opnet';
 import type { AbstractRpcProvider } from 'opnet';
 import { Address } from '@btc-vision/transaction';
 import type { PoolInfo, OptionData } from '../services/types.ts';
 import { OptionType } from '../services/types.ts';
-import { ROUTER_ABI } from '../services/poolAbi.ts';
+import { ROUTER_ABI, TOKEN_APPROVE_ABI } from '../services/poolAbi.ts';
 import {
     getRouterAddress,
     premiumDisplayUnit,
     BLOCK_CONSTANTS,
+    formatTokenAmount,
 } from '../config/index.ts';
+import { useTokenInfo } from '../hooks/useTokenInfo.ts';
+import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import type { WriteOptionInitialValues, StrategyType, StrategyOutcome } from '../utils/strategyMath.ts';
 import { calcLiveOutcome } from '../utils/strategyMath.ts';
 import { OutcomeCard } from './OutcomeCard.tsx';
@@ -68,6 +71,7 @@ interface StrategySectionProps {
 }
 
 export function StrategySection({
+    poolInfo,
     poolAddress,
     motoPillRatio,
     options,
@@ -94,11 +98,46 @@ export function StrategySection({
     // Multi-leg state
     const [leg1, setLeg1] = useState<LegConfig>({ action: 'write', optionType: OptionType.CALL });
     const [leg2, setLeg2] = useState<LegConfig>({ action: 'write', optionType: OptionType.PUT });
-    const [txStatus, setTxStatus] = useState<'idle' | 'executing' | 'done' | 'error'>('idle');
+    const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'executing' | 'done' | 'error'>('idle');
     const [txError, setTxError] = useState<string | null>(null);
     const [txId, setTxId] = useState<string | null>(null);
+    const [approvalLabel, setApprovalLabel] = useState<string>('');
 
     const routerAddress = getRouterAddress();
+    const wsBlockInfo = useWsBlock();
+
+    // Resolve pool hex for allowance spender
+    const [poolHex, setPoolHex] = useState<string | null>(null);
+    useEffect(() => {
+        if (!provider) return;
+        if (poolAddress.startsWith('0x')) {
+            setPoolHex(poolAddress);
+        } else {
+            provider.getPublicKeyInfo(poolAddress, true).then((info: { toString(): string }) => {
+                if (mounted.current) setPoolHex(info.toString());
+            }).catch(() => {
+                if (mounted.current) setPoolHex(null);
+            });
+        }
+    }, [poolAddress, provider]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Token allowance tracking — underlying (MOTO) for CALL write legs
+    const { info: underlyingTokenInfo, refetch: refetchUnderlying } = useTokenInfo({
+        tokenAddress: poolInfo.underlying,
+        spenderHex: poolHex,
+        walletAddress: address,
+        provider,
+        currentBlock: wsBlockInfo?.blockNumber,
+    });
+
+    // Token allowance tracking — premium (PILL) for PUT write legs and buy legs
+    const { info: premiumTokenInfo, refetch: refetchPremium } = useTokenInfo({
+        tokenAddress: poolInfo.premiumToken,
+        spenderHex: poolHex,
+        walletAddress: address,
+        provider,
+        currentBlock: wsBlockInfo?.blockNumber,
+    });
 
     // Summary metrics for cards (quick BS estimate at default params)
     const summaryMetrics = useMemo(() => {
@@ -160,6 +199,158 @@ export function StrategySection({
         onWriteOption(outcome.initialValues, outcome.goalTitle);
     }
 
+    /**
+     * Compute required approval amounts for the active multi-leg strategy.
+     * Returns { underlying, premium } amounts that need allowance on the pool.
+     */
+    function computeRequiredAllowances(): { underlying: bigint; premium: bigint } {
+        let underlying = 0n;
+        let premium = 0n;
+
+        const parseBi = (s: string | undefined) => {
+            const n = Number(s ?? '0');
+            return isNaN(n) || n <= 0 ? 0n : BigInt(Math.round(n * 1e18));
+        };
+
+        if (activeMultiLeg === 'collar') {
+            // Write CALL: locks underlying (MOTO) for underlyingAmount
+            underlying = parseBi(leg1.amountStr);
+            // Write PUT: locks premium (PILL) for strikeValue = strike * amount / 1e18
+            const putStrike = parseBi(leg2.strikeStr);
+            const putAmount = parseBi(leg2.amountStr);
+            premium = (putStrike * putAmount) / (10n ** 18n);
+        } else if (activeMultiLeg === 'bull-call-spread') {
+            // Write CALL: locks underlying (MOTO)
+            underlying = parseBi(leg1.amountStr);
+            // Buy existing CALL: pays premium (PILL) — find the option to buy
+            if (leg2.optionId !== undefined) {
+                const opt = options.find(o => o.id === leg2.optionId);
+                if (opt) premium = opt.premium;
+            }
+        } else if (activeMultiLeg === 'bear-put-spread') {
+            // Write PUT: locks premium (PILL) for strikeValue
+            const putStrike = parseBi(leg1.strikeStr);
+            const putAmount = parseBi(leg1.amountStr);
+            premium = (putStrike * putAmount) / (10n ** 18n);
+            // Buy existing PUT: pays premium (PILL)
+            if (leg2.optionId !== undefined) {
+                const opt = options.find(o => o.id === leg2.optionId);
+                if (opt) premium += opt.premium;
+            }
+        }
+
+        return { underlying, premium };
+    }
+
+    /** Send an increaseAllowance TX for a specific token to the pool. */
+    async function sendApproval(tokenAddress: string, amount: bigint, tokenSymbol: string): Promise<string> {
+        if (!address || !poolHex || !provider || !network) throw new Error('Not connected');
+
+        const tokenContract = getContract(
+            tokenAddress,
+            TOKEN_APPROVE_ABI,
+            provider,
+            network,
+            address,
+        ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+
+        const callResult = await tokenContract['increaseAllowance'](Address.fromString(poolHex), amount);
+        const receipt = await callResult.sendTransaction({
+            signer: null, mldsaSigner: null,
+            refundTo: walletAddress ?? '',
+            maximumAllowedSatToSpend: MAX_SAT,
+            network,
+        });
+
+        addTransaction({
+            txId: receipt.transactionId, type: 'approve', status: 'broadcast',
+            poolAddress, broadcastBlock: null,
+            label: `Approve ${formatTokenAmount(amount, 18)} ${tokenSymbol} for strategy`,
+            flowId: null, flowStep: null,
+            meta: { token: tokenSymbol },
+        });
+
+        return receipt.transactionId;
+    }
+
+    /** Execute the router call (after approvals are sufficient). */
+    async function sendRouterCall(): Promise<string> {
+        if (!activeMultiLeg || !address || !provider || !network || !routerAddress) {
+            throw new Error('Not ready');
+        }
+
+        const routerContract = getContract(
+            routerAddress,
+            ROUTER_ABI,
+            provider,
+            network,
+            address,
+        ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+
+        const info = MULTI_LEG_INFO[activeMultiLeg];
+        const poolAddr = Address.fromString(
+            poolAddress.startsWith('0x')
+                ? poolAddress
+                : (await provider.getPublicKeyInfo(poolAddress, true)).toString(),
+        );
+        const currentBlock = await provider.getBlockNumber();
+
+        let receipt: { transactionId: string };
+
+        if (activeMultiLeg === 'collar' || (leg1.action === 'write' && leg2.action === 'write')) {
+            const expiry1 = BigInt(currentBlock) + BigInt((leg1.selectedDays ?? 7) * BLOCK_CONSTANTS.BLOCKS_PER_DAY);
+            const expiry2 = BigInt(currentBlock) + BigInt((leg2.selectedDays ?? 7) * BLOCK_CONSTANTS.BLOCKS_PER_DAY);
+            const call = await routerContract['executeDualWrite'](
+                poolAddr,
+                leg1.optionType ?? OptionType.CALL,
+                BigInt(Math.round(Number(leg1.strikeStr ?? '50') * 1e18)),
+                expiry1,
+                BigInt(Math.round(Number(leg1.amountStr ?? '1') * 1e18)),
+                BigInt(Math.round(Number(leg1.premiumStr ?? '5') * 1e18)),
+                leg2.optionType ?? OptionType.PUT,
+                BigInt(Math.round(Number(leg2.strikeStr ?? '50') * 1e18)),
+                expiry2,
+                BigInt(Math.round(Number(leg2.amountStr ?? '1') * 1e18)),
+                BigInt(Math.round(Number(leg2.premiumStr ?? '5') * 1e18)),
+            );
+            receipt = await call.sendTransaction({
+                signer: null, mldsaSigner: null,
+                refundTo: walletAddress ?? '',
+                maximumAllowedSatToSpend: MAX_SAT,
+                network,
+            });
+        } else {
+            const writeLeg = leg1.action === 'write' ? leg1 : leg2;
+            const buyLeg = leg1.action === 'buy' ? leg1 : leg2;
+            const expiry = BigInt(currentBlock) + BigInt((writeLeg.selectedDays ?? 7) * BLOCK_CONSTANTS.BLOCKS_PER_DAY);
+            const call = await routerContract['executeSpread'](
+                poolAddr,
+                writeLeg.optionType ?? OptionType.CALL,
+                BigInt(Math.round(Number(writeLeg.strikeStr ?? '50') * 1e18)),
+                expiry,
+                BigInt(Math.round(Number(writeLeg.amountStr ?? '1') * 1e18)),
+                BigInt(Math.round(Number(writeLeg.premiumStr ?? '5') * 1e18)),
+                buyLeg.optionId ?? 0n,
+            );
+            receipt = await call.sendTransaction({
+                signer: null, mldsaSigner: null,
+                refundTo: walletAddress ?? '',
+                maximumAllowedSatToSpend: MAX_SAT,
+                network,
+            });
+        }
+
+        addTransaction({
+            txId: receipt.transactionId, type: 'strategy', status: 'broadcast',
+            poolAddress, broadcastBlock: null,
+            label: `${info.label}: ${underlyingSymbol}/${premiumSymbol}`,
+            flowId: null, flowStep: null,
+            meta: { strategy: activeMultiLeg, strategyLabel: info.label },
+        });
+
+        return receipt.transactionId;
+    }
+
     async function handleExecuteMultiLeg() {
         if (!activeMultiLeg || !address || !provider || !network || sendingRef.current) return;
         if (!routerAddress) {
@@ -167,94 +358,65 @@ export function StrategySection({
             setTxStatus('error');
             return;
         }
+        if (!poolHex) {
+            setTxError('Pool address not resolved yet. Please wait.');
+            setTxStatus('error');
+            return;
+        }
 
         sendingRef.current = true;
-        setTxStatus('executing');
         setTxError(null);
 
         try {
-            const routerContract = getContract(
-                routerAddress,
-                ROUTER_ABI,
-                provider,
-                network,
-                address,
-            ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+            // 1. Check allowances and approve if needed
+            const required = computeRequiredAllowances();
+            const underlyingAllowance = underlyingTokenInfo?.allowance ?? 0n;
+            const premiumAllowance = premiumTokenInfo?.allowance ?? 0n;
 
-            const info = MULTI_LEG_INFO[activeMultiLeg];
-            const poolAddr = Address.fromString(
-                poolAddress.startsWith('0x')
-                    ? poolAddress
-                    : (await provider.getPublicKeyInfo(poolAddress, true)).toString(),
-            );
-            const currentBlock = await provider.getBlockNumber();
-
-            if (activeMultiLeg === 'collar' || (leg1.action === 'write' && leg2.action === 'write')) {
-                const expiry1 = BigInt(currentBlock) + BigInt((leg1.selectedDays ?? 7) * BLOCK_CONSTANTS.BLOCKS_PER_DAY);
-                const expiry2 = BigInt(currentBlock) + BigInt((leg2.selectedDays ?? 7) * BLOCK_CONSTANTS.BLOCKS_PER_DAY);
-                const call = await routerContract['executeDualWrite'](
-                    poolAddr,
-                    leg1.optionType ?? OptionType.CALL,
-                    BigInt(Math.round(Number(leg1.strikeStr ?? '50') * 1e18)),
-                    expiry1,
-                    BigInt(Math.round(Number(leg1.amountStr ?? '1') * 1e18)),
-                    BigInt(Math.round(Number(leg1.premiumStr ?? '5') * 1e18)),
-                    leg2.optionType ?? OptionType.PUT,
-                    BigInt(Math.round(Number(leg2.strikeStr ?? '50') * 1e18)),
-                    expiry2,
-                    BigInt(Math.round(Number(leg2.amountStr ?? '1') * 1e18)),
-                    BigInt(Math.round(Number(leg2.premiumStr ?? '5') * 1e18)),
-                );
-                const receipt = await call.sendTransaction({
-                    signer: null, mldsaSigner: null,
-                    refundTo: walletAddress ?? '',
-                    maximumAllowedSatToSpend: MAX_SAT,
-                    network,
-                });
+            if (required.underlying > 0n && underlyingAllowance < required.underlying) {
+                setTxStatus('approving');
+                setApprovalLabel(`Approving ${underlyingSymbol}...`);
+                await sendApproval(poolInfo.underlying, required.underlying, underlyingSymbol);
                 if (!mounted.current) return;
-                setTxId(receipt.transactionId);
-                addTransaction({
-                    txId: receipt.transactionId, type: 'strategy', status: 'broadcast',
-                    poolAddress, broadcastBlock: null,
-                    label: `${info.label}: ${underlyingSymbol}/${premiumSymbol}`,
-                    flowId: null, flowStep: null,
-                    meta: { strategy: activeMultiLeg, strategyLabel: info.label },
-                });
-            } else {
-                const writeLeg = leg1.action === 'write' ? leg1 : leg2;
-                const buyLeg = leg1.action === 'buy' ? leg1 : leg2;
-                const expiry = BigInt(currentBlock) + BigInt((writeLeg.selectedDays ?? 7) * BLOCK_CONSTANTS.BLOCKS_PER_DAY);
-                const call = await routerContract['executeSpread'](
-                    poolAddr,
-                    writeLeg.optionType ?? OptionType.CALL,
-                    BigInt(Math.round(Number(writeLeg.strikeStr ?? '50') * 1e18)),
-                    expiry,
-                    BigInt(Math.round(Number(writeLeg.amountStr ?? '1') * 1e18)),
-                    BigInt(Math.round(Number(writeLeg.premiumStr ?? '5') * 1e18)),
-                    buyLeg.optionId ?? 0n,
+                refetchUnderlying();
+                // After approval TX is broadcast, user needs to wait for confirmation
+                // before the router call will succeed. Show a message.
+                setTxError(
+                    `${underlyingSymbol} approval broadcast. Wait for confirmation (~10 min), then click Execute again.`
+                    + (required.premium > 0n && premiumAllowance < required.premium
+                        ? ` ${premiumSymbol} approval also needed.`
+                        : ''),
                 );
-                const receipt = await call.sendTransaction({
-                    signer: null, mldsaSigner: null,
-                    refundTo: walletAddress ?? '',
-                    maximumAllowedSatToSpend: MAX_SAT,
-                    network,
-                });
-                if (!mounted.current) return;
-                setTxId(receipt.transactionId);
-                addTransaction({
-                    txId: receipt.transactionId, type: 'strategy', status: 'broadcast',
-                    poolAddress, broadcastBlock: null,
-                    label: `${info.label}: ${underlyingSymbol}/${premiumSymbol}`,
-                    flowId: null, flowStep: null,
-                    meta: { strategy: activeMultiLeg, strategyLabel: info.label },
-                });
+                setTxStatus('idle');
+                return;
             }
 
+            if (required.premium > 0n && premiumAllowance < required.premium) {
+                setTxStatus('approving');
+                setApprovalLabel(`Approving ${premiumSymbol}...`);
+                await sendApproval(poolInfo.premiumToken, required.premium, premiumSymbol);
+                if (!mounted.current) return;
+                refetchPremium();
+                setTxError(
+                    `${premiumSymbol} approval broadcast. Wait for confirmation (~10 min), then click Execute again.`,
+                );
+                setTxStatus('idle');
+                return;
+            }
+
+            // 2. All allowances sufficient — execute the strategy
+            setTxStatus('executing');
+            const txIdResult = await sendRouterCall();
+            if (!mounted.current) return;
+            setTxId(txIdResult);
             setTxStatus('done');
             onRefetch();
         } catch (err) {
             if (!mounted.current) return;
-            setTxError(err instanceof Error ? err.message : 'Strategy execution failed');
+            const msg = err instanceof Error ? err.message : 'Strategy execution failed';
+            setTxError(msg.includes('mempool-chain')
+                ? 'Too many pending transactions. Wait for a confirmation before starting another.'
+                : msg);
             setTxStatus('error');
         } finally {
             sendingRef.current = false;
@@ -378,9 +540,13 @@ export function StrategySection({
                         )}
 
                         {txError && (
-                            <div className="bg-rose-900/20 border border-rose-700 rounded p-3 text-xs font-mono text-rose-400">
+                            <div className={`rounded p-3 text-xs font-mono ${
+                                txError.includes('approval broadcast')
+                                    ? 'bg-amber-900/20 border border-amber-700 text-amber-400'
+                                    : 'bg-rose-900/20 border border-rose-700 text-rose-400'
+                            }`}>
                                 {txError}
-                                <button onClick={() => { setTxError(null); setTxStatus('idle'); }} className="ml-2 underline hover:text-rose-300">Dismiss</button>
+                                <button onClick={() => { setTxError(null); setTxStatus('idle'); }} className="ml-2 underline hover:opacity-80">Dismiss</button>
                             </div>
                         )}
 
@@ -394,11 +560,14 @@ export function StrategySection({
                         {txStatus !== 'done' && (
                             <button
                                 onClick={handleExecuteMultiLeg}
-                                disabled={!routerAddress || !walletConnected || txStatus === 'executing' || sendingRef.current}
+                                disabled={!routerAddress || !walletConnected || txStatus === 'executing' || txStatus === 'approving' || sendingRef.current}
                                 className="w-full btn-primary py-3 text-sm font-mono rounded disabled:opacity-50"
                                 data-testid="btn-execute-strategy"
                             >
-                                {txStatus === 'executing' ? 'Executing...' : !walletConnected ? 'Connect Wallet' : `Execute ${info.label}`}
+                                {txStatus === 'approving' ? approvalLabel
+                                    : txStatus === 'executing' ? 'Executing...'
+                                    : !walletConnected ? 'Connect Wallet'
+                                    : `Execute ${info.label}`}
                             </button>
                         )}
                     </div>
