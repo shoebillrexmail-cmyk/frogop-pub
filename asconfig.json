@@ -1,0 +1,89 @@
+{
+  "targets": {
+    "factory": {
+      "outFile": "build/OptionsFactory.wasm",
+      "textFile": "build/OptionsFactory.wat",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true
+    },
+    "pool": {
+      "outFile": "build/OptionsPool.wasm",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true
+    },
+    "bridge": {
+      "outFile": "build/NativeSwapBridge.wasm",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true
+    },
+    "pool-btc-quote": {
+      "outFile": "build/OptionsPoolBtcQuote.wasm",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true
+    },
+    "pool-btc-underlying": {
+      "outFile": "build/OptionsPoolBtcUnderlying.wasm",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true
+    },
+    "router": {
+      "outFile": "build/SpreadRouter.wasm",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true
+    },
+    "debug": {
+      "outFile": "build/debug/frogop.wasm",
+      "textMap": "build/debug/frogop.wat",
+      "sourceMap": true
+    },
+    "release": {
+      "outFile": "build/release/frogop.wasm",
+      "textFile": "build/release/frogop.wat",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true
+    }
+  },
+  "options": {
+    "transform": "@btc-vision/opnet-transform",
+    "sourceMap": false,
+    "optimizeLevel": 3,
+    "shrinkLevel": 2,
+    "converge": true,
+    "noAssert": true,
+    "enable": [
+      "sign-extension",
+      "mutable-globals",
+      "nontrapping-f2i",
+      "bulk-memory",
+      "simd",
+      "reference-types",
+      "multi-value"
+    ],
+    "runtime": "stub",
+    "memoryBase": 0,
+    "initialMemory": 10,
+    "maximumMemory": 100,
+    "exportStart": "start"
+  }
+}

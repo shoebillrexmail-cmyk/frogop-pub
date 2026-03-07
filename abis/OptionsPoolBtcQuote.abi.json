@@ -1,0 +1,244 @@
+{
+    "functions": [
+        {
+            "name": "bridge",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "address",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "getReservation",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "reservationId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": []
+        },
+        {
+            "name": "writeOption",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionType",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "strikePrice",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "expiryBlock",
+                    "type": "UINT64"
+                },
+                {
+                    "name": "underlyingAmount",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "premium",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "reserveOption",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "reservationId",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "executeReservation",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "reservationId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "cancelReservation",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "reservationId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "exercise",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "cancelOption",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "settle",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        }
+    ],
+    "events": [
+        {
+            "name": "OptionWritten",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionReserved",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "ReservationExecuted",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "ReservationCancelled",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionExercised",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionCancelled",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionExpired",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        }
+    ]
+}

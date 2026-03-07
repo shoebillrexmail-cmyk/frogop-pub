@@ -1,0 +1,13 @@
+{
+  "network": "regtest",
+  "rpcUrl": "https://regtest.opnet.org",
+  "deployer": "bcrt1pfteyvlu2k0jjzr9za4gjrhv6njdfxsefeg9taqjz2f7trkuxq2wq0qwxnn",
+  "tokens": {
+    "frogU": "0x0a6732489a31e6de07917a28ff7df311fc5f98f6e1664943ac1c3fe7893bdab5",
+    "frogP": "0xfb7df2f08d8042d4df0506c0d4cee3cfa5f2d7b02ef01ec76dd699551393a438"
+  },
+  "factory": "opr1sqztwfpj9e538d8yfvh8ez6u9nucu9es7py6r03u5",
+  "deployedAt": "2026-02-25T23:14:19.144Z",
+  "poolTemplate": "opr1sqqk5849yllzyex8av496nh9claxlwt5xxq8n49x3",
+  "pool": "opr1sqz03ydt5n0waykfyz08wmr3xelmpyytfggqj6qpe"
+}

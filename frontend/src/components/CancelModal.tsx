@@ -1,0 +1,250 @@
+/**
+ * CancelModal — lets a writer cancel an OPEN option and recover collateral.
+ *
+ * CALL collateral = underlyingAmount MOTO.
+ * PUT  collateral = strikePrice × underlyingAmount PILL.
+ * Cancel fee = cancelFeeBps % of collateral (ceiling division to match contract).
+ * If the option has expired (expiryBlock <= currentBlock), the fee drops to 0%.
+ */
+import { useState, useEffect, useRef } from 'react';
+import { useMountedRef } from '../hooks/useMountedRef.ts';
+import { getContract } from 'opnet';
+import type { AbstractRpcProvider } from 'opnet';
+import type { Address } from '@btc-vision/transaction';
+import type { OptionData, PoolInfo } from '../services/types.ts';
+import { OptionType } from '../services/types.ts';
+import { POOL_WRITE_ABI } from '../services/poolAbi.ts';
+import { formatTokenAmount } from '../config/index.ts';
+import type { PoolType } from '../../../shared/pool-config.types.ts';
+import { useTransactionContext } from '../hooks/useTransactionContext.ts';
+import { TransactionReceipt } from './TransactionReceipt.tsx';
+import { TxErrorBlock } from './TxErrorBlock.tsx';
+import { EstimatedFee } from './EstimatedFee.tsx';
+import type { WalletConnectNetwork } from '@btc-vision/walletconnect';
+
+interface CancelModalProps {
+    option: OptionData;
+    poolInfo: PoolInfo;
+    poolAddress: string;
+    walletAddress: string | null;
+    address: Address | null;
+    provider: AbstractRpcProvider;
+    network: WalletConnectNetwork;
+    underlyingSymbol?: string;
+    premiumSymbol?: string;
+    poolType?: PoolType;
+    onClose: () => void;
+    onSuccess: () => void;
+}
+
+const MAX_SAT = 10_000_000n;
+
+function fmt(v: bigint) {
+    return formatTokenAmount(v);
+}
+
+export function CancelModal({
+    option,
+    poolInfo,
+    poolAddress,
+    walletAddress,
+    address,
+    provider,
+    network,
+    underlyingSymbol = 'MOTO',
+    premiumSymbol = 'PILL',
+    poolType = 0,
+    onClose,
+    onSuccess,
+}: CancelModalProps) {
+    const isBtcUnderlying = poolType === 2;
+    const mounted = useMountedRef();
+    const sendingRef = useRef(false);
+    const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
+    const [txStatus, setTxStatus] = useState<'idle' | 'cancelling' | 'done' | 'error'>('idle');
+    const [txError, setTxError] = useState<string | null>(null);
+    const [txId, setTxId] = useState<string | null>(null);
+    const { addTransaction } = useTransactionContext();
+
+    // Fetch current block to determine if expired (0% fee)
+    useEffect(() => {
+        provider.getBlockNumber()
+            .then((b) => { if (mounted.current) setCurrentBlock(b); })
+            .catch(() => { if (mounted.current) setCurrentBlock(null); });
+    }, [provider]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const isCall = option.optionType === OptionType.CALL;
+    // Fixed-point: (strike * amount) / 1e18 — both are 18-decimal
+    const collateral = isCall
+        ? option.underlyingAmount
+        : (option.strikePrice * option.underlyingAmount) / (10n ** 18n);
+    const collateralToken = isCall ? underlyingSymbol : premiumSymbol;
+
+    const isExpired = currentBlock !== null && currentBlock >= option.expiryBlock;
+    const feeBps = isExpired ? 0n : poolInfo.cancelFeeBps;
+    const fee = feeBps > 0n ? (collateral * feeBps + 9999n) / 10000n : 0n;
+    const returned = collateral - fee;
+
+    const busy = txStatus === 'cancelling';
+
+    async function handleCancel() {
+        if (!address || sendingRef.current) return;
+        sendingRef.current = true;
+        setTxError(null);
+        setTxStatus('cancelling');
+        try {
+            const poolContract = getContract(
+                poolAddress,
+                POOL_WRITE_ABI,
+                provider,
+                network,
+                address,
+            ) as unknown as Record<string, (...args: unknown[]) => { sendTransaction: (p: unknown) => Promise<{ transactionId: string }> }>;
+
+            const call = await poolContract['cancelOption'](option.id);
+            const receipt = await call.sendTransaction({
+                signer: null,
+                mldsaSigner: null,
+                refundTo: walletAddress ?? '',
+                maximumAllowedSatToSpend: MAX_SAT,
+                network,
+            });
+            if (!mounted.current) return;
+            setTxId(receipt.transactionId);
+            const typeLabel_ = isCall ? 'CALL' : 'PUT';
+            addTransaction({
+                txId: receipt.transactionId, type: 'cancelOption', status: 'broadcast',
+                poolAddress, broadcastBlock: null,
+                label: `Cancel ${typeLabel_} #${option.id} — recover ${fmt(returned)} ${collateralToken}`,
+                flowId: null, flowStep: null,
+                meta: {
+                    optionId: option.id.toString(),
+                    optionType: typeLabel_,
+                    collateral: fmt(collateral),
+                    collateralToken,
+                    fee: fmt(fee),
+                    returned: fmt(returned),
+                },
+            });
+            setTxStatus('done');
+        } catch (err) {
+            if (!mounted.current) return;
+            setTxError(err instanceof Error ? err.message : 'Cancel failed');
+            setTxStatus('error');
+        } finally {
+            sendingRef.current = false;
+        }
+    }
+
+    return (
+        <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            data-testid="cancel-modal-backdrop"
+        >
+            <div
+                className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl w-full max-w-sm shadow-2xl max-h-[90vh] overflow-y-auto"
+                data-testid="cancel-option-modal"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="p-6 space-y-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-base font-bold text-terminal-text-primary font-mono">
+                            Cancel Option{' '}
+                            <span className="text-terminal-text-muted">#{option.id.toString()}</span>
+                        </h2>
+                        <button
+                            onClick={onClose}
+                            className="text-terminal-text-muted hover:text-terminal-text-primary text-xl leading-none"
+                            aria-label="Close modal"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    <hr className="border-terminal-border-subtle" />
+
+                    {/* Collateral breakdown */}
+                    <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 text-xs font-mono space-y-1.5">
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">Collateral locked</span>
+                            <span className="text-terminal-text-secondary">{fmt(collateral)} {collateralToken}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-terminal-text-muted">
+                                Cancel fee ({isExpired ? '0%' : `${Number(poolInfo.cancelFeeBps) / 100}%`})
+                            </span>
+                            <span className={isExpired ? 'text-green-400' : 'text-terminal-text-secondary'}>
+                                {fmt(fee)} {collateralToken}{isExpired ? ' (waived)' : ''}
+                            </span>
+                        </div>
+                        <hr className="border-terminal-border-subtle" />
+                        <div className="flex justify-between font-semibold">
+                            <span className="text-terminal-text-muted">You receive</span>
+                            <span className="text-terminal-text-primary">{fmt(returned)} {collateralToken}</span>
+                        </div>
+                    </div>
+
+                    {isExpired && (
+                        <p className="text-green-400 text-xs font-mono">
+                            Option expired — no cancellation fee applies.
+                        </p>
+                    )}
+
+                    {isBtcUnderlying && isCall && (
+                        <div className="bg-orange-900/20 border border-orange-700/50 rounded p-3 text-xs font-mono space-y-1">
+                            <p className="text-orange-400 font-semibold">BTC Collateral Reclaim</p>
+                            <p className="text-terminal-text-muted">
+                                Your BTC collateral is locked in a CLTV escrow. After the timelock
+                                expires, you can reclaim it using the CSV script from the original
+                                write transaction.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* TX error with retry */}
+                    {txError && (
+                        <TxErrorBlock error={txError} onRetry={() => { setTxError(null); setTxStatus('idle'); }} />
+                    )}
+
+                    {/* Success receipt */}
+                    {txStatus === 'done' && txId && (
+                        <TransactionReceipt
+                            type="cancel"
+                            txId={txId}
+                            movements={[
+                                { direction: 'credit', amount: fmt(returned), token: collateralToken, label: 'Collateral returned' },
+                            ]}
+                            fee={fee > 0n ? { amount: fmt(fee), token: collateralToken } : null}
+                            onDone={onSuccess}
+                        />
+                    )}
+
+                    {/* Estimated BTC fee */}
+                    {txStatus !== 'done' && <EstimatedFee />}
+
+                    {/* Action buttons */}
+                    {txStatus !== 'done' && (
+                        <div className="space-y-2">
+                            <button
+                                onClick={handleCancel}
+                                disabled={busy}
+                                className="w-full btn-primary py-2.5 text-sm rounded disabled:opacity-50"
+                                data-testid="btn-cancel-confirm"
+                            >
+                                {busy ? 'Cancelling…' : 'Confirm Cancel'}
+                            </button>
+                            <button
+                                onClick={onClose}
+                                disabled={busy}
+                                className="w-full btn-secondary py-2 text-sm rounded disabled:opacity-50"
+                            >
+                                Back
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}

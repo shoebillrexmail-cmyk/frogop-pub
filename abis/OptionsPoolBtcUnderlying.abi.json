@@ -1,0 +1,175 @@
+{
+    "functions": [
+        {
+            "name": "bridge",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "address",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "writeOptionBtc",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionType",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "strikePrice",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "expiryBlock",
+                    "type": "UINT64"
+                },
+                {
+                    "name": "underlyingAmount",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "premium",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "buyOption",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "exercise",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "cancelOption",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "settle",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "optionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        }
+    ],
+    "events": [
+        {
+            "name": "OptionWrittenBtc",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionPurchased",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionExercised",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionCancelled",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        },
+        {
+            "name": "OptionExpired",
+            "values": [
+                {
+                    "name": "data",
+                    "type": "STRING"
+                }
+            ],
+            "type": "Event"
+        }
+    ]
+}

@@ -1,0 +1,105 @@
+{
+    "functions": [
+        {
+            "name": "executeSpread",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "pool",
+                    "type": "ADDRESS"
+                },
+                {
+                    "name": "writeOptionType",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "writeStrikePrice",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "writeExpiryBlock",
+                    "type": "UINT64"
+                },
+                {
+                    "name": "writeUnderlyingAmount",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "writePremium",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "buyOptionId",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "newOptionId",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "executeDualWrite",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "pool",
+                    "type": "ADDRESS"
+                },
+                {
+                    "name": "type1",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "strike1",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "expiry1",
+                    "type": "UINT64"
+                },
+                {
+                    "name": "amount1",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "premium1",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "type2",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "strike2",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "expiry2",
+                    "type": "UINT64"
+                },
+                {
+                    "name": "amount2",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "premium2",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "optionId1",
+                    "type": "UINT256"
+                }
+            ]
+        }
+    ],
+    "events": []
+}

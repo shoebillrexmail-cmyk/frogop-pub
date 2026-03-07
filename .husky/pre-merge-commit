@@ -1,0 +1,7 @@
+# Run unit tests before allowing merge into master
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$BRANCH" = "master" ]; then
+  echo "Merging into master — running unit tests..."
+  cd frontend && npx vitest run --reporter=verbose
+fi

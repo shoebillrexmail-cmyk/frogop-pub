@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+
+# Build output
+build/
+dist/
+*.wasm
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment (NEVER commit these)
+.env
+.env.production
+.env.local
+frontend/.env.local
+
+# SSL certificates (NEVER commit — place on server manually)
+# Proxy certs (live in proxy/ssl/ on the server)
+proxy/ssl/*.crt
+proxy/ssl/*.key
+proxy/ssl/*.pem
+
+# Docker swap state
+tests/integration/swap-state.json
+
+# Test output
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Deployed contracts (generated)
+tests/integration/deployed-contracts.json
+
+# Windows artifacts
+nul
+
+# Wrangler local dev state
+.wrangler/
+
+# Claude Code internal state
+.claude/
+
+# Local package copies / token ABIs (not part of source)
+tokens/

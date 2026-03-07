@@ -1,0 +1,7 @@
+name = "frogop-frontend-mainnet"
+compatibility_date = "2026-01-01"
+
+# Static SPA — serves dist/ and routes all 404s to index.html
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"

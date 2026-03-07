@@ -1,0 +1,106 @@
+{
+    "functions": [
+        {
+            "name": "getBtcPrice",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "token",
+                    "type": "ADDRESS"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "price",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "generateCsvScriptHash",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "pubkey",
+                    "type": "BYTES32"
+                },
+                {
+                    "name": "csvBlocks",
+                    "type": "UINT64"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "scriptHash",
+                    "type": "BYTES32"
+                }
+            ]
+        },
+        {
+            "name": "generateEscrowScriptHash",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "buyerPubkey",
+                    "type": "BYTES32"
+                },
+                {
+                    "name": "writerPubkey",
+                    "type": "BYTES32"
+                },
+                {
+                    "name": "cltvBlock",
+                    "type": "UINT64"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "scriptHash",
+                    "type": "BYTES32"
+                }
+            ]
+        },
+        {
+            "name": "verifyBtcOutput",
+            "type": "Function",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [
+                {
+                    "name": "expectedHash",
+                    "type": "BYTES32"
+                },
+                {
+                    "name": "expectedAmount",
+                    "type": "UINT64"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "verified",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "nativeSwap",
+            "type": "View",
+            "payable": false,
+            "onlyOwner": false,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "address",
+                    "type": "ADDRESS"
+                }
+            ]
+        }
+    ],
+    "events": []
+}
