@@ -15,7 +15,7 @@ import { getIntentById } from '../utils/intentDefs.ts';
 import type { IntentId } from '../utils/intentDefs.ts';
 import type { StrategyType, StrategyOutcome } from '../utils/strategyMath.ts';
 import { findBestProtectivePut, countOpenOptionsForStrategy } from '../utils/strategyMath.ts';
-import { findPoolConfigByAddress, getPoolType, getPricePairKey, getNativeSwapAddress, premiumDisplayUnit } from '../config/index.ts';
+import { findPoolConfigByAddress, getPoolType, getPricePairKey, getNativeSwapAddress, premiumDisplayUnit, formatTokenAmount } from '../config/index.ts';
 import type { OptionData } from '../services/types.ts';
 import { OutcomeCard } from './OutcomeCard.tsx';
 import { StrategyConfigurator } from './StrategyConfigurator.tsx';
@@ -191,7 +191,8 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                             );
                         })}
                     </div>
-                    {selectedStrategy && !MULTI_LEG.has(selectedStrategy) && motoPillRatio !== null && (
+                    {/* Write-side configurator (covered-call, write-put) */}
+                    {selectedStrategy && !MULTI_LEG.has(selectedStrategy) && !BUY_SIDE.has(selectedStrategy) && motoPillRatio !== null && (
                         <StrategyConfigurator
                             strategyType={selectedStrategy}
                             spotPrice={motoPillRatio}
@@ -200,6 +201,88 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                             onExecute={handleStrategyExecute}
                             onClose={() => setSelectedStrategy(null)}
                         />
+                    )}
+
+                    {/* Buy-side panel (protective-put): show best available option */}
+                    {selectedStrategy === 'protective-put' && motoPillRatio !== null && (
+                        <div
+                            className="bg-terminal-bg-elevated border border-accent/30 rounded-xl p-4 space-y-3"
+                            data-testid="protective-put-panel"
+                        >
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-bold text-terminal-text-primary font-mono">
+                                    Best Available Put
+                                </h4>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedStrategy(null)}
+                                    className="text-terminal-text-muted hover:text-terminal-text-primary text-lg leading-none"
+                                    aria-label="Close"
+                                >
+                                    x
+                                </button>
+                            </div>
+                            {bestPut ? (
+                                <>
+                                    <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 space-y-1.5">
+                                        <span className="text-[10px] text-terminal-text-muted font-mono uppercase tracking-wider">
+                                            What You'll Get
+                                        </span>
+                                        <div className="flex justify-between text-xs font-mono">
+                                            <span className="text-terminal-text-muted">Type</span>
+                                            <span className="text-rose-400">PUT</span>
+                                        </div>
+                                        <div className="flex justify-between text-xs font-mono">
+                                            <span className="text-terminal-text-muted">Strike</span>
+                                            <span className="text-terminal-text-primary">
+                                                {formatTokenAmount(bestPut.strikePrice)} {premiumDisplayUnit(premiumSymbol)}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-xs font-mono">
+                                            <span className="text-terminal-text-muted">Amount</span>
+                                            <span className="text-terminal-text-primary">
+                                                {formatTokenAmount(bestPut.underlyingAmount)} {underlyingSymbol}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-xs font-mono">
+                                            <span className="text-terminal-text-muted">Cost (premium)</span>
+                                            <span className="text-rose-400">
+                                                {formatTokenAmount(bestPut.premium)} {premiumDisplayUnit(premiumSymbol)}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-xs font-mono">
+                                            <span className="text-terminal-text-muted">Protected below</span>
+                                            <span className="text-green-400">
+                                                {formatTokenAmount(bestPut.strikePrice)} {premiumDisplayUnit(premiumSymbol)}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-xs font-mono">
+                                            <span className="text-terminal-text-muted">Drop from spot</span>
+                                            <span className="text-terminal-text-primary">
+                                                {((1 - Number(bestPut.strikePrice) / 1e18 / motoPillRatio) * 100).toFixed(1)}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={!walletConnected}
+                                        onClick={() => {
+                                            setBuyStrategyLabel('Protective Put');
+                                            setBuyTarget(bestPut);
+                                        }}
+                                        className="w-full btn-primary py-2.5 text-sm font-mono rounded disabled:opacity-50"
+                                        data-testid="buy-protective-put-btn"
+                                    >
+                                        Buy Protection
+                                    </button>
+                                </>
+                            ) : (
+                                <p className="text-xs text-terminal-text-muted font-mono">
+                                    No PUT options available in the 80-95% strike range.
+                                    Check the Chain page for all available options.
+                                </p>
+                            )}
+                        </div>
                     )}
                 </div>
             )}
