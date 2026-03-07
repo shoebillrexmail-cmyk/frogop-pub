@@ -121,9 +121,7 @@ export function PortfolioPage() {
     const { motoPillRatio } = usePriceRatio(null, null, null, null, null, null);
 
     // Unrealized P&L for purchased options
-    const { totalPnlPill, perOption: pnlMap } = usePnL(
-        purchasedOptions, motoPillRatio, currentBlock ?? undefined,
-    );
+    const { totalPnlPill, perOption: pnlMap } = usePnL(purchasedOptions, motoPillRatio);
 
     // Status change notifications
     const { notifications, addNotification, dismissNotification } = useNotifications();

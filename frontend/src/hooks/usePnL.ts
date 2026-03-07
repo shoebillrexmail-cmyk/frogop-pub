@@ -20,12 +20,10 @@ interface PnLResult {
  *
  * @param options - Array of options (filters to PURCHASED internally)
  * @param motoPillRatio - Current MOTO/PILL spot (float), e.g. 50 = 1 MOTO costs 50 PILL
- * @param currentBlock - Current block number (unused for now, reserved for time decay)
  */
 export function usePnL(
     options: OptionData[],
     motoPillRatio: number | null,
-    _currentBlock: bigint | undefined,
 ): PnLResult {
     return useMemo(() => {
         const perOption = new Map<bigint, number>();
@@ -59,5 +57,5 @@ export function usePnL(
         }
 
         return { totalPnlPill: total, perOption };
-    }, [options, motoPillRatio, _currentBlock]);
+    }, [options, motoPillRatio]);
 }
