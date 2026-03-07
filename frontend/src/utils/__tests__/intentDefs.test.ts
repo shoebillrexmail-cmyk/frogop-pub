@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { getAllIntents, getIntentById } from '../intentDefs.ts';
 
 describe('intentDefs', () => {
-    it('defines exactly 6 intents', () => {
-        expect(getAllIntents()).toHaveLength(6);
+    it('defines exactly 7 intents', () => {
+        expect(getAllIntents()).toHaveLength(7);
     });
 
     it('has all required intent IDs', () => {
@@ -12,6 +12,7 @@ describe('intentDefs', () => {
         expect(ids).toContain('protect');
         expect(ids).toContain('speculate-up');
         expect(ids).toContain('speculate-down');
+        expect(ids).toContain('expect-volatility');
         expect(ids).toContain('earn-both');
         expect(ids).toContain('power-user');
     });

@@ -39,7 +39,11 @@ export type StrategyType =
     | 'protective-put'
     | 'collar'
     | 'bull-call-spread'
-    | 'bear-put-spread';
+    | 'bear-put-spread'
+    | 'long-call'
+    | 'long-put'
+    | 'long-straddle'
+    | 'long-strangle';
 
 export type RiskLevel = 'low' | 'medium' | 'high';
 
@@ -220,13 +224,26 @@ export function countOpenOptionsForStrategy(
 ): number {
     const walletLower = walletHex?.toLowerCase() ?? null;
     const notSelf = (o: OptionData) => walletLower === null || o.writer.toLowerCase() !== walletLower;
-    if (type === 'protective-put') {
+    if (type === 'protective-put' || type === 'long-put') {
         return options.filter(o =>
             o.optionType === OptionType.PUT &&
             o.status === OptionStatus.OPEN &&
             Number(o.strikePrice) / 1e18 <= spot &&
             notSelf(o),
         ).length;
+    }
+    if (type === 'long-call') {
+        return options.filter(o =>
+            o.optionType === OptionType.CALL &&
+            o.status === OptionStatus.OPEN &&
+            Number(o.strikePrice) / 1e18 >= spot &&
+            notSelf(o),
+        ).length;
+    }
+    if (type === 'long-straddle' || type === 'long-strangle') {
+        const calls = options.filter(o => o.optionType === OptionType.CALL && o.status === OptionStatus.OPEN && notSelf(o)).length;
+        const puts = options.filter(o => o.optionType === OptionType.PUT && o.status === OptionStatus.OPEN && notSelf(o)).length;
+        return Math.min(calls, puts);
     }
     return 0;
 }
@@ -252,7 +269,139 @@ export function countBuyableOptionsForIntent(
     if (intentId === 'speculate-up') {
         return options.filter(o => o.status === OptionStatus.OPEN && o.optionType === OptionType.CALL && notSelf(o)).length;
     }
+    if (intentId === 'expect-volatility') {
+        // Need at least one CALL and one PUT
+        const calls = options.filter(o => o.status === OptionStatus.OPEN && o.optionType === OptionType.CALL && notSelf(o)).length;
+        const puts = options.filter(o => o.status === OptionStatus.OPEN && o.optionType === OptionType.PUT && notSelf(o)).length;
+        return Math.min(calls, puts);
+    }
     return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Buy-side finders — long call, long put, straddle, strangle
+// ---------------------------------------------------------------------------
+
+const CALL_MID = 1.125; // Prefer strikes closest to 112.5% of spot
+
+/**
+ * Find the best CALL to buy for a long call strategy.
+ * Prefers strike closest to 112.5% of spot (moderate OTM).
+ * Excludes the connected wallet's own options.
+ */
+export function findBestCall(
+    options: OptionData[],
+    spot: number,
+    walletHex?: string | null,
+): OptionData | null {
+    if (spot <= 0) return null;
+    const target = spot * CALL_MID;
+    const walletLower = walletHex?.toLowerCase() ?? null;
+
+    const candidates = options.filter((o) =>
+        o.status === OptionStatus.OPEN &&
+        o.optionType === OptionType.CALL &&
+        Number(o.strikePrice) / 1e18 >= spot &&
+        (walletLower === null || o.writer.toLowerCase() !== walletLower),
+    );
+
+    if (candidates.length === 0) return null;
+
+    return candidates.reduce((best, curr) => {
+        const bestDist = Math.abs(Number(best.strikePrice) / 1e18 - target);
+        const currDist = Math.abs(Number(curr.strikePrice) / 1e18 - target);
+        return currDist < bestDist ? curr : best;
+    });
+}
+
+/**
+ * Find a straddle pair: CALL + PUT at the closest matching strike.
+ * Both must be OPEN and not written by the connected wallet.
+ */
+export function findStraddlePair(
+    options: OptionData[],
+    spot: number,
+    walletHex?: string | null,
+): { call: OptionData; put: OptionData; totalPremium: bigint } | null {
+    if (spot <= 0) return null;
+    const walletLower = walletHex?.toLowerCase() ?? null;
+    const notSelf = (o: OptionData) => walletLower === null || o.writer.toLowerCase() !== walletLower;
+
+    const calls = options.filter(o => o.status === OptionStatus.OPEN && o.optionType === OptionType.CALL && notSelf(o));
+    const puts = options.filter(o => o.status === OptionStatus.OPEN && o.optionType === OptionType.PUT && notSelf(o));
+
+    if (calls.length === 0 || puts.length === 0) return null;
+
+    // Find pair with closest matching strikes, preferring near ATM
+    let bestPair: { call: OptionData; put: OptionData } | null = null;
+    let bestScore = Infinity;
+
+    for (const call of calls) {
+        const callStrike = Number(call.strikePrice) / 1e18;
+        for (const put of puts) {
+            const putStrike = Number(put.strikePrice) / 1e18;
+            const strikeDiff = Math.abs(callStrike - putStrike) / spot;
+            const atmDist = Math.abs((callStrike + putStrike) / 2 - spot) / spot;
+            const score = strikeDiff * 2 + atmDist; // Prioritize matching strikes, then ATM
+            if (score < bestScore) {
+                bestScore = score;
+                bestPair = { call, put };
+            }
+        }
+    }
+
+    if (!bestPair) return null;
+    return {
+        ...bestPair,
+        totalPremium: bestPair.call.premium + bestPair.put.premium,
+    };
+}
+
+/**
+ * Find a strangle pair: OTM CALL (above spot) + OTM PUT (below spot).
+ * Prefers strikes roughly symmetric around spot.
+ */
+export function findStranglePair(
+    options: OptionData[],
+    spot: number,
+    walletHex?: string | null,
+): { call: OptionData; put: OptionData; totalPremium: bigint } | null {
+    if (spot <= 0) return null;
+    const walletLower = walletHex?.toLowerCase() ?? null;
+    const notSelf = (o: OptionData) => walletLower === null || o.writer.toLowerCase() !== walletLower;
+
+    const otmCalls = options.filter(o =>
+        o.status === OptionStatus.OPEN && o.optionType === OptionType.CALL &&
+        Number(o.strikePrice) / 1e18 > spot * 1.02 && notSelf(o),
+    );
+    const otmPuts = options.filter(o =>
+        o.status === OptionStatus.OPEN && o.optionType === OptionType.PUT &&
+        Number(o.strikePrice) / 1e18 < spot * 0.98 && notSelf(o),
+    );
+
+    if (otmCalls.length === 0 || otmPuts.length === 0) return null;
+
+    // Find pair with most symmetric strikes around spot
+    let bestPair: { call: OptionData; put: OptionData } | null = null;
+    let bestScore = Infinity;
+
+    for (const call of otmCalls) {
+        const callDist = Number(call.strikePrice) / 1e18 - spot;
+        for (const put of otmPuts) {
+            const putDist = spot - Number(put.strikePrice) / 1e18;
+            const asymmetry = Math.abs(callDist - putDist) / spot;
+            if (asymmetry < bestScore) {
+                bestScore = asymmetry;
+                bestPair = { call, put };
+            }
+        }
+    }
+
+    if (!bestPair) return null;
+    return {
+        ...bestPair,
+        totalPremium: bestPair.call.premium + bestPair.put.premium,
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -300,6 +449,30 @@ const STRATEGY_META: Record<StrategyType, {
         goalDescription: 'Profit if the price drops, with both your cost and gain capped.',
         riskLevel: 'medium',
         actionLabel: 'Open Position',
+    },
+    'long-call': {
+        goalTitle: 'Bet on Big Rise',
+        goalDescription: 'Buy an existing listing to profit from a large price increase. Uncapped upside.',
+        riskLevel: 'high',
+        actionLabel: 'Buy Call',
+    },
+    'long-put': {
+        goalTitle: 'Bet on Big Drop',
+        goalDescription: 'Buy an existing listing to profit from a large price drop. Large profit potential.',
+        riskLevel: 'high',
+        actionLabel: 'Buy Put',
+    },
+    'long-straddle': {
+        goalTitle: 'Bet on Big Move (Either Way)',
+        goalDescription: 'Buy a CALL and a PUT at the same price level. Profit from a large move in either direction.',
+        riskLevel: 'high',
+        actionLabel: 'Buy Straddle',
+    },
+    'long-strangle': {
+        goalTitle: 'Bet on Big Move (Cheaper)',
+        goalDescription: 'Buy an OTM CALL and OTM PUT. Cheaper than a straddle but needs a bigger move to profit.',
+        riskLevel: 'high',
+        actionLabel: 'Buy Strangle',
     },
 };
 
@@ -518,6 +691,118 @@ export function calcLiveOutcome(
                     amountStr: amount.toString(),
                     strikeStr: formatDecimal(strike),
                     premiumStr: formatDecimal(premium * amount),
+                    selectedDays: days,
+                },
+            };
+        }
+
+        case 'long-call': {
+            const strike = spot * moneyness;
+            const premium = bsPremiumFloat(spot, strike, days, OptionType.CALL);
+            const cost = premium * amount;
+            const breakeven = strike + premium;
+            const deltaPct = Math.round((moneyness - 1) * 100);
+
+            return {
+                ...meta,
+                metrics: [
+                    { label: 'You pay', value: `${cost.toFixed(2)} ${premiumSymbol} (one-time cost)`, color: 'red' },
+                    { label: 'Strike price', value: `${strike.toFixed(2)} ${premiumSymbol} (+${deltaPct}% above current)` },
+                    { label: 'Break-even', value: `${breakeven.toFixed(2)} ${premiumSymbol} — you profit above this price` },
+                    { label: '—', value: '' },
+                    { label: `If price rises above ${breakeven.toFixed(2)}`, value: `You profit — no cap on gains. The higher it goes, the more you earn.`, color: 'green' },
+                    { label: `If price stays below ${strike.toFixed(2)}`, value: `You lose the ${cost.toFixed(2)} ${premiumSymbol} cost. Nothing else happens.`, color: 'red' },
+                ],
+                initialValues: {
+                    optionType: OptionType.CALL,
+                    amountStr: amount.toString(),
+                    strikeStr: formatDecimal(strike),
+                    premiumStr: formatDecimal(cost),
+                    selectedDays: days,
+                },
+            };
+        }
+
+        case 'long-put': {
+            const strike = spot * moneyness;
+            const premium = bsPremiumFloat(spot, strike, days, OptionType.PUT);
+            const cost = premium * amount;
+            const breakeven = strike - premium;
+            const deltaPct = Math.abs(Math.round((moneyness - 1) * 100));
+
+            return {
+                ...meta,
+                metrics: [
+                    { label: 'You pay', value: `${cost.toFixed(2)} ${premiumSymbol} (one-time cost)`, color: 'red' },
+                    { label: 'Strike price', value: `${strike.toFixed(2)} ${premiumSymbol} (${deltaPct}% below current)` },
+                    { label: 'Break-even', value: `${breakeven.toFixed(2)} ${premiumSymbol} — you profit below this price` },
+                    { label: '—', value: '' },
+                    { label: `If price drops below ${breakeven.toFixed(2)}`, value: `You profit — the further it drops, the more you earn.`, color: 'green' },
+                    { label: `If price stays above ${strike.toFixed(2)}`, value: `You lose the ${cost.toFixed(2)} ${premiumSymbol} cost. Nothing else happens.`, color: 'red' },
+                ],
+                initialValues: {
+                    optionType: OptionType.PUT,
+                    amountStr: amount.toString(),
+                    strikeStr: formatDecimal(strike),
+                    premiumStr: formatDecimal(cost),
+                    selectedDays: days,
+                },
+            };
+        }
+
+        case 'long-straddle': {
+            const strike = spot * moneyness;
+            const callPrem = bsPremiumFloat(spot, strike, days, OptionType.CALL);
+            const putPrem = bsPremiumFloat(spot, strike, days, OptionType.PUT);
+            const totalCost = (callPrem + putPrem) * amount;
+            const upperBreakeven = strike + callPrem + putPrem;
+            const lowerBreakeven = strike - callPrem - putPrem;
+
+            return {
+                ...meta,
+                metrics: [
+                    { label: 'Total cost', value: `${totalCost.toFixed(2)} ${premiumSymbol} (CALL + PUT premium)`, color: 'red' },
+                    { label: 'Strike', value: `${strike.toFixed(2)} ${premiumSymbol}` },
+                    { label: 'Break-even', value: `Below ${lowerBreakeven.toFixed(2)} or above ${upperBreakeven.toFixed(2)}` },
+                    { label: '—', value: '' },
+                    { label: 'If price moves a lot in either direction', value: `You profit — no cap on gains. The bigger the move, the more you earn.`, color: 'green' },
+                    { label: `If price stays near ${strike.toFixed(2)}`, value: `You lose up to ${totalCost.toFixed(2)} ${premiumSymbol}. Maximum loss if price equals strike at expiry.`, color: 'red' },
+                ],
+                initialValues: {
+                    optionType: OptionType.CALL,
+                    amountStr: amount.toString(),
+                    strikeStr: formatDecimal(strike),
+                    premiumStr: formatDecimal(callPrem * amount),
+                    selectedDays: days,
+                },
+            };
+        }
+
+        case 'long-strangle': {
+            const callStrike = spot * moneyness;
+            const putStrike = spot * (moneyness2 ?? 0.8);
+            const callPrem = bsPremiumFloat(spot, callStrike, days, OptionType.CALL);
+            const putPrem = bsPremiumFloat(spot, putStrike, days, OptionType.PUT);
+            const totalCost = (callPrem + putPrem) * amount;
+            const upperBreakeven = callStrike + callPrem + putPrem;
+            const lowerBreakeven = putStrike - callPrem - putPrem;
+
+            return {
+                ...meta,
+                metrics: [
+                    { label: 'Total cost', value: `${totalCost.toFixed(2)} ${premiumSymbol} (CALL + PUT premium)`, color: 'red' },
+                    { label: 'CALL strike', value: `${callStrike.toFixed(2)} ${premiumSymbol} (above spot)` },
+                    { label: 'PUT strike', value: `${putStrike.toFixed(2)} ${premiumSymbol} (below spot)` },
+                    { label: 'Break-even', value: `Below ${lowerBreakeven.toFixed(2)} or above ${upperBreakeven.toFixed(2)}` },
+                    { label: '—', value: '' },
+                    { label: 'If price moves big in either direction', value: `You profit — cheaper than a straddle but needs a bigger move.`, color: 'green' },
+                    { label: `If price stays between ${putStrike.toFixed(2)} and ${callStrike.toFixed(2)}`, value: `You lose up to ${totalCost.toFixed(2)} ${premiumSymbol}.`, color: 'red' },
+                ],
+                initialValues: {
+                    optionType: OptionType.CALL,
+                    amountStr: amount.toString(),
+                    strikeStr: formatDecimal(callStrike),
+                    premiumStr: formatDecimal(callPrem * amount),
                     selectedDays: days,
                 },
             };

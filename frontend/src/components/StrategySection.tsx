@@ -60,6 +60,10 @@ const P2P_BADGES: Record<StrategyType | 'custom', P2PBadge> = {
     'collar':           { type: 'marketplace', tooltip: 'Lists two offers on the marketplace. You earn when other users take them.' },
     'bull-call-spread': { type: 'mixed',       tooltip: 'Lists one offer AND buys from another user in one transaction.' },
     'bear-put-spread':  { type: 'mixed',       tooltip: 'Lists one offer AND buys from another user in one transaction.' },
+    'long-call':        { type: 'instant',     tooltip: 'Buys a CALL from another user. Executes immediately.' },
+    'long-put':         { type: 'instant',     tooltip: 'Buys a PUT from another user. Executes immediately.' },
+    'long-straddle':    { type: 'instant',     tooltip: 'Buys a CALL + PUT pair from other users. Two transactions.' },
+    'long-strangle':    { type: 'instant',     tooltip: 'Buys an OTM CALL + PUT pair from other users. Two transactions.' },
     'custom':           { type: 'marketplace', tooltip: 'Lists on the marketplace.' },
 };
 

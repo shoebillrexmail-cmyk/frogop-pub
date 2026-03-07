@@ -24,6 +24,10 @@ const STRATEGY_EXPLAINER: Record<StrategyType, string> = {
     'collar': 'You list both a sell-above and buy-below price. If other users take either side, you earn fees from both.',
     'bull-call-spread': 'A two-leg position: you buy the right to profit from a rise, while capping your gain by selling a higher position.',
     'bear-put-spread': 'A two-leg position: you buy the right to profit from a drop, while capping your gain by selling a lower position.',
+    'long-call': 'You buy an existing CALL listing from another user. If the price rises above the strike, you can exercise for a profit. Your maximum loss is the premium you paid.',
+    'long-put': 'You buy an existing PUT listing from another user. If the price drops below the strike, you can exercise for a profit. Your maximum loss is the premium you paid.',
+    'long-straddle': 'You buy a CALL and a PUT at the same strike price. You profit from a large move in either direction. Your maximum loss is the combined premium paid.',
+    'long-strangle': 'You buy an OTM CALL and an OTM PUT at different strikes. Cheaper than a straddle, but needs a bigger move to profit.',
 };
 
 /** Dynamic strike ranges that scale with expiry — crypto markets are volatile. */
@@ -71,6 +75,30 @@ function getMoneyRanges(strategyType: StrategyType, days: number): {
                 min: putMin, max: 0.90, default: 0.80, step: 0.01,
                 label: 'Lower target price',
                 leg2: { min: 0.90, max: 1.10, default: 1.00, step: 0.01, label: 'Upper entry price' },
+            };
+        case 'long-call':
+            return {
+                min: 1.00, max: callMax, default: 1.125, step: 0.01,
+                label: 'Target strike (buy a CALL above)',
+            };
+        case 'long-put':
+            return {
+                min: putMin, max: 1.00, default: 0.875, step: 0.01,
+                label: 'Target strike (buy a PUT below)',
+            };
+        case 'long-straddle':
+            return {
+                min: putMin, max: callMax, default: 1.00, step: 0.01,
+                label: 'Target strike (ATM)',
+            };
+        case 'long-strangle':
+            return {
+                min: 1.05, max: callMax, default: 1.15, step: 0.01,
+                label: 'Call strike (above spot)',
+                leg2: {
+                    min: putMin, max: 0.95, default: 0.85, step: 0.01,
+                    label: 'Put strike (below spot)',
+                },
             };
     }
 }

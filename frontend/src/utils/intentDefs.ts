@@ -11,6 +11,7 @@ export type IntentId =
     | 'protect'
     | 'speculate-up'
     | 'speculate-down'
+    | 'expect-volatility'
     | 'earn-both'
     | 'power-user';
 
@@ -45,15 +46,23 @@ const INTENTS: readonly IntentDef[] = [
         label: 'Bet on Price Going Up',
         tagline: 'Profit if the price rises, with your maximum loss capped',
         riskLevel: 'high',
-        strategies: ['bull-call-spread'],
+        strategies: ['long-call', 'bull-call-spread'],
         role: 'buyer',
     },
     {
         id: 'speculate-down',
         label: 'Bet on Price Going Down',
-        tagline: 'Profit if the price drops, with your maximum loss capped',
+        tagline: 'Profit if the price drops — choose capped or uncapped gains',
         riskLevel: 'high',
-        strategies: ['bear-put-spread'],
+        strategies: ['long-put', 'bear-put-spread'],
+        role: 'buyer',
+    },
+    {
+        id: 'expect-volatility',
+        label: 'Expect a Big Move',
+        tagline: 'Profit from a large price swing in either direction',
+        riskLevel: 'high',
+        strategies: ['long-straddle', 'long-strangle'],
         role: 'buyer',
     },
     {
@@ -84,5 +93,5 @@ export function getIntentById(id: string): IntentDef | undefined {
 
 /** Returns true if this intent requires existing options on-chain to be useful (buyer role). */
 export function intentNeedsLiquidity(id: IntentId): boolean {
-    return id === 'protect' || id === 'speculate-up' || id === 'speculate-down';
+    return id === 'protect' || id === 'speculate-up' || id === 'speculate-down' || id === 'expect-volatility';
 }

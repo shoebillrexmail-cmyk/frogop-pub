@@ -17,6 +17,7 @@
 | Network Mismatch Guard + Multi-Network Deployment | pending | 2026-03-07 |
 | Strategy UX Redesign — Outcome-First + BTC Fix | pending | 2026-03-07 |
 | BTC Pool Integration Tests — Full Lifecycle Coverage | pending | 2026-03-07 |
+| Expanded Speculation Strategies — Long Call/Put + Straddle/Strangle | pending | 2026-03-07 |
 
 ---
 
@@ -910,10 +911,62 @@ wired into the strategy UI.
 
 ---
 
+## Sprint: Expanded Speculation Strategies — Long Call/Put + Straddle/Strangle
+
+> **Goal:** Add 4 new buy-side strategies so users can bet on large price moves
+> (uncapped directional) and volatility events (non-directional). No contract
+> changes needed — all strategies use existing buyOption functionality.
+
+### Context
+
+Current speculation strategies (bull-call-spread, bear-put-spread) cap both risk
+AND reward. Crypto users want uncapped upside for big moves. Additionally,
+non-directional strategies (straddle/strangle) let users profit from volatility
+without predicting direction.
+
+### Stories
+
+- [x] **Story 1: Core types + finder functions** ✅
+  - Add `long-call`, `long-put`, `long-straddle`, `long-strangle` to `StrategyType`
+  - Add `findBestCall()` — find best OPEN CALL to buy (mirror of `findBestProtectivePut`)
+  - Add `findBestPut()` — alias/reuse of existing `findBestProtectivePut`
+  - Add `findStraddlePair()` — find CALL+PUT at closest matching strike
+  - Add `findStranglePair()` — find OTM CALL + OTM PUT at different strikes
+  - Add `calcLiveOutcome` cases with scenario-based metrics
+  - Update `countBuyableOptionsForIntent` and `countOpenOptionsForStrategy`
+
+- [x] **Story 2: Intent definitions + wizard integration** ✅
+  - Add `long-call` to `speculate-up` strategies
+  - Add `long-put` to `speculate-down` strategies
+  - Add new intent `expect-volatility` with `long-straddle`, `long-strangle`
+  - Update `intentNeedsLiquidity` for new intent
+  - Add labels, taglines, risk levels to TradeConfigurator maps
+  - Add buy-side panels in TradeConfigurator for all 4 strategies
+  - Update `BUY_SIDE` set and per-strategy liquidity counts
+
+- [x] **Story 3: StrategyConfigurator + StrategySection integration** ✅
+  - Add `getMoneyRanges` cases for new strategy types
+  - Add strategy explainers in `STRATEGY_EXPLAINER`
+  - Add P2P badges in StrategySection for new types
+  - Update `STRATEGY_META` in strategyMath
+
+- [x] **Story 4: Straddle/strangle two-leg buy UX** ✅
+  - TradeConfigurator panel showing combined CALL+PUT with total cost
+  - Two-button layout: "Buy Call Leg" / "Buy Put Leg" (user buys in any order)
+  - Handle "no pair found" gracefully
+  - Combined PnL scenarios and break-even display
+
+- [x] **Story 5: Tests + cleanup** ✅
+  - Unit tests for calcLiveOutcome new cases (in strategyMath)
+  - Update intentDefs tests for new intent (7 intents, expect-volatility)
+  - All 569 tests pass, clean TypeScript
+
+---
+
 ## Status (2026-03-07)
 
 All integration test sprints **COMPLETE**. Strategy UX Redesign **COMPLETE** (Stories 1-3).
-Market Tab Enhancements sprint queued.
+Expanded Speculation Strategies sprint **COMPLETE** (Stories 1-5).
 
 **Frontend BTC pools deployed** (2026-03-06) with bridge:
 - moto-btc, btc-moto, pill-btc, btc-pill — all verified live
