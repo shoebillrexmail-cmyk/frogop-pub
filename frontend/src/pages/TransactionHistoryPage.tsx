@@ -181,8 +181,8 @@ export function TransactionHistoryPage() {
                             : 'No transactions match the selected filters.'}
                     </p>
                     {transactions.length === 0 && (
-                        <Link to="/markets" className="btn-primary px-4 py-2 text-sm rounded inline-block">
-                            Go to Markets
+                        <Link to="/chain" className="btn-primary px-4 py-2 text-sm rounded inline-block">
+                            Go to Chain
                         </Link>
                     )}
                 </div>

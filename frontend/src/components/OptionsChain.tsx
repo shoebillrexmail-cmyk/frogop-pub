@@ -31,6 +31,8 @@ interface OptionsChainProps {
     underlyingSymbol?: string;
     premiumSymbol?: string;
     onBuy?: (option: OptionData) => void;
+    /** Write callback — called with (strikePrice, optionType) when user clicks Write on a row. 0n = new strike. */
+    onWrite?: (strikePrice: bigint, optionType: number) => void;
     /** Strategy filter — highlight matching strikes, dim others */
     strategyFilter?: StrategyFilter | null;
     /** Show listing status in expanded listings (for "My Listings" view) */
@@ -352,6 +354,7 @@ export function OptionsChain({
     underlyingSymbol = 'MOTO',
     premiumSymbol = 'PILL',
     onBuy,
+    onWrite,
     strategyFilter,
 }: OptionsChainProps) {
     const [activeBucket, setActiveBucket] = useState<ExpiryBucket | 'all'>('all');
@@ -513,6 +516,27 @@ export function OptionsChain({
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Write at new strike footer */}
+            {onWrite && (
+                <div className="mt-3 flex items-center gap-2" data-testid="chain-write-footer">
+                    <button
+                        onClick={() => onWrite(0n, 0)}
+                        className="text-xs font-mono text-accent hover:underline transition-colors"
+                        data-testid="chain-write-new-call"
+                    >
+                        + Write CALL at new strike
+                    </button>
+                    <span className="text-terminal-text-muted text-xs">|</span>
+                    <button
+                        onClick={() => onWrite(0n, 1)}
+                        className="text-xs font-mono text-accent hover:underline transition-colors"
+                        data-testid="chain-write-new-put"
+                    >
+                        + Write PUT at new strike
+                    </button>
                 </div>
             )}
         </div>

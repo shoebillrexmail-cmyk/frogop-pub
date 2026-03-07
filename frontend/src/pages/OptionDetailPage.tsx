@@ -87,7 +87,7 @@ export function OptionDetailPage() {
                 <p className="text-rose-400 font-mono text-sm mb-4">
                     {error ?? 'Option not found.'}
                 </p>
-                <Link to={addr ? `/markets/${addr}` : '/markets'} className="btn-secondary px-4 py-2 text-sm rounded inline-block">
+                <Link to={addr ? `/chain?market=${addr}` : '/chain'} className="btn-secondary px-4 py-2 text-sm rounded inline-block">
                     Back to Pool
                 </Link>
             </div>
@@ -107,9 +107,9 @@ export function OptionDetailPage() {
         <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
             {/* Breadcrumb */}
             <nav className="text-xs font-mono text-terminal-text-muted flex items-center gap-1" data-testid="breadcrumb">
-                <Link to="/markets" className="hover:text-terminal-text-primary transition-colors">Markets</Link>
+                <Link to="/chain" className="hover:text-terminal-text-primary transition-colors">Chain</Link>
                 <span>/</span>
-                <Link to={addr ? `/markets/${addr}` : '/markets'} className="hover:text-terminal-text-primary transition-colors">
+                <Link to={addr ? `/chain?market=${addr}` : '/chain'} className="hover:text-terminal-text-primary transition-colors">
                     {addr ? `${addr.slice(0, 8)}...` : 'Pool'}
                 </Link>
                 <span>/</span>
@@ -203,7 +203,7 @@ export function OptionDetailPage() {
 
             {/* Back link */}
             <Link
-                to={addr ? `/markets/${addr}` : '/markets'}
+                to={addr ? `/chain?market=${addr}` : '/chain'}
                 className="btn-secondary px-4 py-2 text-sm rounded inline-block"
             >
                 Back to Pool

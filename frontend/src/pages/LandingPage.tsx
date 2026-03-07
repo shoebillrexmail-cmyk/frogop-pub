@@ -22,7 +22,7 @@ export function LandingPage() {
           </p>
           <div className="flex items-center justify-center gap-4">
             <Link
-              to="/markets"
+              to="/trade"
               className="btn-primary px-6 py-3 text-lg font-medium rounded-lg"
             >
               Launch App
@@ -450,7 +450,7 @@ export function LandingPage() {
             Connect your wallet and start trading trustless options on Bitcoin.
           </p>
           <Link
-            to="/markets"
+            to="/trade"
             className="btn-primary inline-block px-8 py-4 text-lg font-medium rounded-lg"
           >
             Explore Markets

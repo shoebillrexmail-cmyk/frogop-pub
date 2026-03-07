@@ -655,7 +655,7 @@ export function OptionsTable({
                                     <td className="py-2 pr-4 text-terminal-text-muted">
                                         {poolAddress ? (
                                             <Link
-                                                to={`/markets/${poolAddress}/options/${option.id.toString()}`}
+                                                to={`/chain/${poolAddress}/options/${option.id.toString()}`}
                                                 className="text-accent hover:text-accent/80 underline"
                                                 data-testid={`option-link-${option.id}`}
                                             >

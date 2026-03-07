@@ -41,6 +41,8 @@ vi.mock('../hooks/useTokenInfo.ts', () => ({
 import { PoolListPage } from '../pages/PoolListPage';
 import { PoolDetailPage } from '../pages/PoolDetailPage';
 import { PortfolioPage } from '../pages/PortfolioPage';
+import { TradePage } from '../pages/TradePage';
+import { ChainPage } from '../pages/ChainPage';
 
 describe('Smoke tests — pages render without crashing', () => {
     beforeEach(() => {
@@ -58,9 +60,9 @@ describe('Smoke tests — pages render without crashing', () => {
 
     it('PoolDetailPage renders', () => {
         const { container } = render(
-            <MemoryRouter initialEntries={['/markets/opt1test']}>
+            <MemoryRouter initialEntries={['/chain/opt1test']}>
                 <Routes>
-                    <Route path="markets/:address" element={<PoolDetailPage />} />
+                    <Route path="chain/:address" element={<PoolDetailPage />} />
                 </Routes>
             </MemoryRouter>
         );
@@ -75,5 +77,27 @@ describe('Smoke tests — pages render without crashing', () => {
         );
         // Without a wallet connected, the page shows the connect gate
         expect(screen.getByText(/Connect your OPWallet/i)).toBeInTheDocument();
+    });
+
+    it('TradePage renders Step 1 (no params)', () => {
+        render(
+            <MemoryRouter initialEntries={['/trade']}>
+                <Routes>
+                    <Route path="trade" element={<TradePage />} />
+                </Routes>
+            </MemoryRouter>
+        );
+        expect(screen.getByTestId('intent-grid')).toBeInTheDocument();
+    });
+
+    it('ChainPage renders', () => {
+        const { container } = render(
+            <MemoryRouter initialEntries={['/chain']}>
+                <Routes>
+                    <Route path="chain" element={<ChainPage />} />
+                </Routes>
+            </MemoryRouter>
+        );
+        expect(container.firstChild).toBeInTheDocument();
     });
 });

@@ -145,11 +145,11 @@ describe('PoolDetailPage', () => {
     });
 
     // Breadcrumb
-    it('renders breadcrumb with link to /markets', () => {
+    it('renders breadcrumb with link to /chain', () => {
         renderPage();
         const breadcrumb = screen.getByTestId('breadcrumb');
         expect(breadcrumb).toBeInTheDocument();
-        expect(breadcrumb.querySelector('a[href="/markets"]')).toBeInTheDocument();
+        expect(breadcrumb.querySelector('a[href="/chain"]')).toBeInTheDocument();
     });
 
     // Single-page layout — all sections visible

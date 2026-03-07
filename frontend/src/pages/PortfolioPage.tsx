@@ -349,11 +349,11 @@ export function PortfolioPage() {
                                     Go to Markets to write a CALL or PUT option.
                                 </p>
                                 <Link
-                                    to={selectedPoolAddr ? `/markets/${selectedPoolAddr}` : '/markets'}
+                                    to={selectedPoolAddr ? `/chain?market=${selectedPoolAddr}` : '/chain'}
                                     className="btn-primary px-4 py-2 text-sm rounded inline-block"
                                     data-testid="go-to-pools-written"
                                 >
-                                    Go to Markets →
+                                    Go to Chain →
                                 </Link>
                             </div>
                         ) : (
@@ -408,11 +408,11 @@ export function PortfolioPage() {
                                     Browse open options on the Markets page to buy one.
                                 </p>
                                 <Link
-                                    to={selectedPoolAddr ? `/markets/${selectedPoolAddr}` : '/markets'}
+                                    to={selectedPoolAddr ? `/chain?market=${selectedPoolAddr}` : '/chain'}
                                     className="btn-primary px-4 py-2 text-sm rounded inline-block"
                                     data-testid="go-to-pools-purchased"
                                 >
-                                    Go to Markets →
+                                    Go to Chain →
                                 </Link>
                             </div>
                         ) : (

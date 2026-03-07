@@ -34,7 +34,7 @@ export function PoolCard({ pool, provider, compact = false }: PoolCardProps) {
 
     return (
         <Link
-            to={`/pools/${pool.address}`}
+            to={`/chain?market=${pool.address}`}
             className={outerClass}
             data-testid={`pool-card-${pool.address}`}
         >

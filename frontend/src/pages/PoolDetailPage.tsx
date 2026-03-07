@@ -247,7 +247,7 @@ export function PoolDetailPage() {
         return (
             <div className="max-w-7xl mx-auto px-4 py-16 text-center">
                 <p className="text-terminal-text-muted font-mono text-sm">Pool not found.</p>
-                <Link to="/markets" className="btn-secondary px-4 py-2 text-sm rounded inline-block mt-4">
+                <Link to="/chain" className="btn-secondary px-4 py-2 text-sm rounded inline-block mt-4">
                     Back to Markets
                 </Link>
             </div>
@@ -262,7 +262,7 @@ export function PoolDetailPage() {
 
             {/* Breadcrumb */}
             <nav className="text-xs font-mono text-terminal-text-muted flex items-center gap-1 mb-4" data-testid="breadcrumb">
-                <Link to="/markets" className="hover:text-terminal-text-primary transition-colors">Markets</Link>
+                <Link to="/chain" className="hover:text-terminal-text-primary transition-colors">Markets</Link>
                 <span>/</span>
                 <span className="text-terminal-text-primary">
                     {underlyingSymbol}/{premiumSymbol}
