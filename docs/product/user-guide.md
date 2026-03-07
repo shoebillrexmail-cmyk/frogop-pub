@@ -100,10 +100,37 @@ FroGop includes pre-built strategy templates:
 
 Access via the **Quick Strategies** panel on the Pools page.
 
+## Grace Period
+
+Every option pool has a **grace period** — a configurable window of time after an option expires during which the buyer can still exercise.
+
+- **Default:** 144 blocks (~1 day)
+- **Range:** 6 blocks (~1 hour) to 4,320 blocks (~30 days)
+- **Set at deployment:** Each pool's grace period is fixed when the pool contract is deployed
+
+### How it works
+
+1. **Option expires** at its `expiryBlock`
+2. **Grace period begins** — the buyer has `gracePeriodBlocks` additional blocks to exercise
+3. **Grace period ends** at `expiryBlock + gracePeriodBlocks` — the option can no longer be exercised
+4. **Settle available** — after the grace period, the writer (or anyone) can call settle to return collateral
+
+### Where to see it
+
+- **Pool cards** on the Pools page show the grace period duration
+- **Pool header** on the pool detail page shows blocks + human-readable time
+- **Options table** shows per-option grace warnings (amber for >1 day, red for <1 day)
+- **Portfolio page** shows expiry alert banners for purchased options nearing grace end
+
+### Tips
+
+- Exercise well before the grace period ends — Bitcoin L1 transactions take ~10 minutes to confirm
+- The grace period countdown is based on block height, not wall-clock time
+- If you miss the grace period, the writer can settle and reclaim the collateral
+
 ## Important Notes
 
 - **Block times:** OPNet runs on Signet (~10 min blocks). Transactions take time to confirm.
 - **Parallel transactions:** You can submit multiple transactions simultaneously — no nonce serialization.
 - **Flow tracking:** The transaction pill in the header shows pending and confirmed transactions.
-- **Expiry:** Options expire at a specific block height. Grace period is 144 blocks (~1 day) after expiry.
 - **All values use 18-decimal encoding:** "50 PILL" = 50 * 10^18 on-chain.

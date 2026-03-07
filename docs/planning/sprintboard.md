@@ -722,12 +722,12 @@ wired into the strategy UI.
 ### Frontend
 - [x] **BTC pool user flows — complete extraOutputs** — Promoted to sprint: "BTC Pool Frontend Flows — Complete extraOutputs"
 - [ ] **On-chain TX history** — Replace localStorage-only TX tracking with RPC/indexer queries for persistent data
-- [ ] **UX flow redesign** — Parallel TX support, modal persistence, per-TX status in pill ([research](../research/ux-flow-redesign.md))
-- [ ] **Grace period UX & documentation** — Make configurable grace period clearly visible in frontend (countdown timer, block estimates, human-readable durations). Document grace period concept in user-facing docs (user-guide.md, tooltips). Show per-pool grace period in pool cards/headers. Educate users on exercise window mechanics.
+- [x] ~~**UX flow redesign**~~ — Parallel TX support, modal persistence, per-TX status in pill — all implemented. Dead collar code removed, strategy pill labels added, BTC pool metadata wired to Portfolio modals.
+- [x] ~~**Grace period UX & documentation**~~ — Dynamic `blocksToTime()` labels in PoolCard, PoolHeaderBar (top row + details), PoolInfoCard. Comprehensive grace period section in user-guide.md. Tooltips on pool cards.
 
 ### Indexer
 - [ ] **Historical yield analytics** — Time-series snapshots in D1 for yield trends, TVL, volume metrics
-- [ ] **Per-pool grace period** — Query each pool's `gracePeriodBlocks()` view at registration and cache in D1. Currently hardcoded to 144.
+- [x] ~~**Per-pool grace period**~~ — Added `grace_period_blocks` column to pools table. Poller queries `gracePeriodBlocks()` view at startup, caches in D1. Decoder uses per-pool value for `grace_end_block` calculation.
 
 ### CI/CD
 - [x] ~~**Create Cloudflare Pages project for frontend**~~ — Already done.

@@ -38,14 +38,36 @@ export async function upsertPool(db: D1Database, pool: PoolRow): Promise<void> {
         .prepare(`
             INSERT OR IGNORE INTO pools
                 (address, address_hex, underlying, premium_token, fee_recipient,
-                 created_block, created_tx, indexed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 grace_period_blocks, created_block, created_tx, indexed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .bind(
             pool.address, pool.address_hex, pool.underlying, pool.premium_token,
-            pool.fee_recipient, pool.created_block, pool.created_tx, pool.indexed_at,
+            pool.fee_recipient, pool.grace_period_blocks, pool.created_block, pool.created_tx, pool.indexed_at,
         )
         .run();
+}
+
+export async function updatePoolGracePeriod(
+    db: D1Database,
+    address: string,
+    gracePeriodBlocks: number,
+): Promise<void> {
+    await db
+        .prepare('UPDATE pools SET grace_period_blocks = ? WHERE address = ?')
+        .bind(gracePeriodBlocks, address)
+        .run();
+}
+
+export async function getPoolGracePeriod(
+    db: D1Database,
+    addressHex: string,
+): Promise<number> {
+    const row = await db
+        .prepare('SELECT grace_period_blocks FROM pools WHERE address_hex = ?')
+        .bind(addressHex)
+        .first<{ grace_period_blocks: number }>();
+    return row?.grace_period_blocks ?? 144;
 }
 
 export async function getAllPools(db: D1Database): Promise<PoolRow[]> {

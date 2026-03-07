@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 import type { PoolInfo } from '../services/types.ts';
-import { formatAddress } from '../config/index.ts';
+import { formatAddress, blocksToTime } from '../config/index.ts';
 import { PoolTypeBadge } from './PoolTypeBadge.tsx';
 import type { PoolType } from '../../../shared/pool-config.types.ts';
 
@@ -72,6 +72,10 @@ export function PoolHeaderBar({ poolInfo, poolAddress, motoPillRatio, priceLastU
                     Options: <span className="text-terminal-text-primary">{poolInfo.optionCount.toString()}</span>
                 </span>
 
+                <span className="text-terminal-text-muted" title="Exercise window after option expiry">
+                    Grace: <span className="text-terminal-text-primary">{blocksToTime(poolInfo.gracePeriodBlocks)}</span>
+                </span>
+
                 <button
                     onClick={() => setDetailsOpen((v) => !v)}
                     className="text-xs text-terminal-text-muted hover:text-terminal-text-primary transition-colors flex items-center gap-1 ml-auto"
@@ -98,7 +102,7 @@ export function PoolHeaderBar({ poolInfo, poolAddress, motoPillRatio, priceLastU
                         Premium token: <span className="text-terminal-text-secondary">{formatAddress(poolInfo.premiumToken)}</span>
                     </span>
                     <span>
-                        Grace period: <span className="text-terminal-text-secondary">{poolInfo.gracePeriodBlocks.toString()} blocks (~24h)</span>
+                        Grace period: <span className="text-terminal-text-secondary">{poolInfo.gracePeriodBlocks.toString()} blocks (~{blocksToTime(poolInfo.gracePeriodBlocks)})</span>
                     </span>
                     <span>
                         Buy: <span className="text-terminal-text-secondary">{bpsToPct(poolInfo.buyFeeBps)}</span>

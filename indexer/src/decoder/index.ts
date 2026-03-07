@@ -36,10 +36,10 @@ const EV_RESERVATION_CANCELLED   = 'ReservationCancelled';
 const EV_OPTION_WRITTEN_BTC      = 'OptionWrittenBtc';
 const EV_BTC_CLAIMABLE           = 'BtcClaimable';
 
-// TODO: Grace period is now configurable per-pool at deployment time.
-// This hardcoded default (144) works for pools deployed with the default value.
-// When pools with custom grace periods are deployed, the indexer should query
-// each pool's gracePeriodBlocks() view at registration time and cache the value.
+// Grace period is configurable per-pool at deployment time.
+// The poller queries each pool's gracePeriodBlocks() view at startup
+// and caches the value in the pools table. The decoder uses the per-pool
+// value when computing grace_end_block. Falls back to 144 if unknown.
 const DEFAULT_GRACE_PERIOD_BLOCKS = 144;
 
 /**
@@ -53,6 +53,7 @@ export function decodeBlock(
     txs: Array<{ id: string; events: TxEvent[] }>,
     trackedPools: Set<string>,
     swapLabelMap: Map<string, string> = new Map(),
+    poolGracePeriods: Map<string, number> = new Map(),
 ): D1PreparedStatement[] {
     const stmts: D1PreparedStatement[] = [];
 
@@ -78,7 +79,7 @@ export function decodeBlock(
 
             if (!trackedPools.has(normalizedEvent.contractAddress)) continue;
             try {
-                const s = decodeEvent(db, normalizedEvent, blockNumber, tx.id);
+                const s = decodeEvent(db, normalizedEvent, blockNumber, tx.id, poolGracePeriods);
                 if (s) stmts.push(...s);
             } catch (err) {
                 console.warn(
@@ -97,9 +98,10 @@ function decodeEvent(
     event: TxEvent,
     blockNumber: number,
     txId: string,
+    poolGracePeriods: Map<string, number>,
 ): D1PreparedStatement[] | null {
     switch (event.type) {
-        case EV_WRITTEN:   return handleWritten(db, event, blockNumber, txId);
+        case EV_WRITTEN:   return handleWritten(db, event, blockNumber, txId, poolGracePeriods);
         case EV_CANCELLED: return handleCancelled(db, event, blockNumber, txId);
         case EV_PURCHASED: return handlePurchased(db, event, blockNumber, txId);
         case EV_EXERCISED: return handleExercised(db, event, blockNumber, txId);
@@ -109,7 +111,7 @@ function decodeEvent(
         case EV_OPTION_RESERVED:       return handleOptionReserved(db, event, blockNumber, txId);
         case EV_RESERVATION_EXECUTED:  return handleReservationExecuted(db, event, blockNumber, txId);
         case EV_RESERVATION_CANCELLED: return handleReservationCancelled(db, event, blockNumber, txId);
-        case EV_OPTION_WRITTEN_BTC:    return handleWrittenBtc(db, event, blockNumber, txId);
+        case EV_OPTION_WRITTEN_BTC:    return handleWrittenBtc(db, event, blockNumber, txId, poolGracePeriods);
         case EV_BTC_CLAIMABLE:         return null; // Informational event, no DB update needed
         default:                       return null;
     }
@@ -124,10 +126,11 @@ function handleWritten(
     event: TxEvent,
     blockNumber: number,
     txId: string,
+    poolGracePeriods: Map<string, number>,
 ): D1PreparedStatement[] {
     // OptionWritten: [optionId U256, writer Address, optionType U8,
     //   strikePrice U256, underlyingAmount U256, premium U256, expiryBlock U64]
-    // Note: graceEndBlock is NOT emitted — it is derived (expiryBlock + DEFAULT_GRACE_PERIOD_BLOCKS)
+    // Note: graceEndBlock is NOT emitted — it is derived (expiryBlock + gracePeriod)
     const f = parseEventData(event.data, [
         { name: 'optionId',        type: 'u256'    },
         { name: 'writer',          type: 'address' },
@@ -139,6 +142,9 @@ function handleWritten(
     ]);
     if (!f) return [];
 
+    // Use per-pool grace period, fallback to default
+    const gracePeriod = poolGracePeriods.get(event.contractAddress) ?? DEFAULT_GRACE_PERIOD_BLOCKS;
+
     const row: OptionRow = {
         pool_address:    event.contractAddress,
         option_id:       Number(f['optionId']),
@@ -149,8 +155,7 @@ function handleWritten(
         underlying_amt:  f['underlyingAmount'] ?? '0',
         premium:         f['premium'] ?? '0',
         expiry_block:    Number(f['expiryBlock']),
-        // graceEndBlock is not in the event — derive from expiryBlock + DEFAULT_GRACE_PERIOD_BLOCKS
-        grace_end_block: Number(f['expiryBlock']) + DEFAULT_GRACE_PERIOD_BLOCKS,
+        grace_end_block: Number(f['expiryBlock']) + gracePeriod,
         status:          OptionStatus.OPEN,
         created_block:   blockNumber,
         created_tx:      txId,
@@ -373,6 +378,7 @@ function handleWrittenBtc(
     event: TxEvent,
     blockNumber: number,
     txId: string,
+    poolGracePeriods: Map<string, number>,
 ): D1PreparedStatement[] {
     // OptionWrittenBtc: [optionId U256, writer ADDRESS, optionType U8,
     //   strikePrice U256, underlyingAmount U256, premium U256, expiryBlock U64,
@@ -390,6 +396,9 @@ function handleWrittenBtc(
     ]);
     if (!f) return [];
 
+    // Use per-pool grace period, fallback to default
+    const gracePeriod = poolGracePeriods.get(event.contractAddress) ?? DEFAULT_GRACE_PERIOD_BLOCKS;
+
     // Insert option same as regular write, with BTC collateral info in premium field
     const row: OptionRow = {
         pool_address:    event.contractAddress,
@@ -401,7 +410,7 @@ function handleWrittenBtc(
         underlying_amt:  f['underlyingAmount'] ?? '0',
         premium:         f['premium'] ?? '0',
         expiry_block:    Number(f['expiryBlock']),
-        grace_end_block: Number(f['expiryBlock']) + DEFAULT_GRACE_PERIOD_BLOCKS,
+        grace_end_block: Number(f['expiryBlock']) + gracePeriod,
         status:          OptionStatus.OPEN,
         created_block:   blockNumber,
         created_tx:      txId,

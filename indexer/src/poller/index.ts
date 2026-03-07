@@ -26,11 +26,18 @@ import {
     getSnapshotsInRange,
     getSwapEventsInBlockRange,
     upsertPool,
+    updatePoolGracePeriod,
+    getPoolGracePeriod,
 } from '../db/queries.js';
 import { decodeBlock } from '../decoder/index.js';
+import { ABICoder } from '@btc-vision/transaction';
 
 /** 18-decimal fixed-point precision constant for cross-rate math. */
 const PRECISION = 10n ** 18n;
+
+/** Precomputed selector for gracePeriodBlocks() view. */
+const abi = new ABICoder();
+const GRACE_PERIOD_SELECTOR = '0x' + abi.encodeSelector('gracePeriodBlocks()');
 
 /** Cross-rate tokens contain an underscore (e.g. MOTO_PILL, MOTO_BTC). */
 function isCrossRate(token: string): boolean {
@@ -51,9 +58,39 @@ export async function pollNewBlocks(env: Env): Promise<void> {
         await upsertPool(env.DB, {
             address: hex, address_hex: hex,
             underlying: '', premium_token: '', fee_recipient: '',
+            grace_period_blocks: 144,
             created_block: 0, created_tx: '',
             indexed_at: new Date().toISOString(),
         });
+    }
+
+    // Query each pool's gracePeriodBlocks() view and cache in D1
+    const poolGracePeriods = new Map<string, number>();
+    for (const hex of poolHexSet) {
+        try {
+            // Check if we already have a cached value
+            const cached = await getPoolGracePeriod(env.DB, hex);
+            if (cached !== 144) {
+                // Non-default value already cached
+                poolGracePeriods.set(hex, cached);
+                continue;
+            }
+            // Query the contract's gracePeriodBlocks() view
+            const result = await provider.call(hex, GRACE_PERIOD_SELECTOR);
+            const reader = result && typeof result === 'object' && 'result' in result
+                ? (result as { result?: { readU64?: () => bigint } }).result
+                : undefined;
+            if (reader && typeof reader.readU64 === 'function') {
+                const gracePeriod = Number(reader.readU64());
+                poolGracePeriods.set(hex, gracePeriod);
+                if (gracePeriod !== 144) {
+                    await updatePoolGracePeriod(env.DB, hex, gracePeriod);
+                    console.log(`[poller] Pool ${hex.slice(0, 12)}... grace period: ${gracePeriod} blocks`);
+                }
+            }
+        } catch (err) {
+            console.warn(`[poller] Failed to query gracePeriodBlocks for ${hex.slice(0, 12)}...:`, err);
+        }
     }
 
     const lastIndexed = await getLastIndexedBlock(env.DB);
@@ -88,7 +125,7 @@ export async function pollNewBlocks(env: Env): Promise<void> {
     const allStmts: D1PreparedStatement[] = [];
 
     for (let n = from; n <= to; n++) {
-        const stmts = await collectBlockStatements(provider, n, env.DB, poolHexSet, swapLabelMap);
+        const stmts = await collectBlockStatements(provider, n, env.DB, poolHexSet, swapLabelMap, poolGracePeriods);
         allStmts.push(...stmts);
     }
 
@@ -142,6 +179,7 @@ export async function collectBlockStatements(
     db: D1Database,
     trackedPools: Set<string>,
     swapLabelMap: Map<string, string> = new Map(),
+    poolGracePeriods: Map<string, number> = new Map(),
 ): Promise<D1PreparedStatement[]> {
     const block = await provider.getBlock(BigInt(blockNumber), true);
     if (!block) {
@@ -202,7 +240,7 @@ export async function collectBlockStatements(
     });
 
     // Decode events → D1 prepared statements
-    const eventStmts = decodeBlock(db, blockNumber, txs, trackedPools, swapLabelMap);
+    const eventStmts = decodeBlock(db, blockNumber, txs, trackedPools, swapLabelMap, poolGracePeriods);
 
     if (eventStmts.length > 0) {
         console.log(`[poller] Block ${blockNumber}: ${eventStmts.length} event statement(s)`);

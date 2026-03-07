@@ -51,6 +51,7 @@ function makePool(address: string, createdBlock = 100): PoolRow {
         underlying:    '0xtokenA',
         premium_token: '0xtokenB',
         fee_recipient: '0xfee',
+        grace_period_blocks: 144,
         created_block: createdBlock,
         created_tx:    '0xtx1',
         indexed_at:    '2025-01-01T00:00:00Z',

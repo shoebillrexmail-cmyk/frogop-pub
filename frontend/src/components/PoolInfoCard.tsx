@@ -2,7 +2,7 @@
  * PoolInfoCard — displays pool metadata (tokens, fees, option count, grace period).
  */
 import type { PoolInfo } from '../services/types.ts';
-import { formatAddress } from '../config/index.ts';
+import { formatAddress, blocksToTime } from '../config/index.ts';
 
 interface PoolInfoCardProps {
     poolInfo: PoolInfo;
@@ -72,7 +72,7 @@ export function PoolInfoCard({ poolInfo, poolAddress, motoPillRatio, priceLastUp
                 <span className="text-terminal-text-muted">
                     Grace period:{' '}
                     <span className="text-terminal-text-primary">
-                        {poolInfo.gracePeriodBlocks.toString()} blocks (~24h)
+                        {poolInfo.gracePeriodBlocks.toString()} blocks (~{blocksToTime(poolInfo.gracePeriodBlocks)})
                     </span>
                 </span>
                 <span className="text-terminal-text-muted">

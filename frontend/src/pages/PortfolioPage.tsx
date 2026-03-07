@@ -26,7 +26,7 @@ import { ExerciseModal } from '../components/ExerciseModal.tsx';
 import { SettleModal } from '../components/SettleModal.tsx';
 import { RollModal } from '../components/RollModal.tsx';
 import { TransferModal } from '../components/TransferModal.tsx';
-import { formatAddress } from '../config/index.ts';
+import { formatAddress, findPoolConfigByAddress, getPoolType } from '../config/index.ts';
 import { NotificationBanner } from '../components/NotificationBanner.tsx';
 import { ExpiryAlertBanner } from '../components/ExpiryAlertBanner.tsx';
 import { useExpiryAlerts } from '../hooks/useExpiryAlerts.ts';
@@ -134,18 +134,14 @@ export function PortfolioPage() {
         }
     }, [addNotification, walletHex]));
 
-    // Read collar strategy progress from localStorage
-    const collarStatus = useMemo(() => {
-        if (!walletAddress) return null;
-        try {
-            const raw = localStorage.getItem(`frogop_collar_${walletAddress}`);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw) as { callDone?: boolean; putDone?: boolean };
-            if (!parsed.callDone && !parsed.putDone) return null;
-            if (parsed.callDone && parsed.putDone) return null; // complete → hide
-            return { callDone: !!parsed.callDone, putDone: !!parsed.putDone };
-        } catch { return null; }
-    }, [walletAddress]);
+    // Derive pool metadata from config (match by pool bech32 address)
+    const poolConfig = useMemo(() => {
+        if (selectedPoolAddr) return findPoolConfigByAddress(selectedPoolAddr);
+        return null;
+    }, [selectedPoolAddr]);
+    const underlyingSymbol = poolConfig?.underlying.symbol ?? 'MOTO';
+    const premiumSymbol = poolConfig?.premium.symbol ?? 'PILL';
+    const poolType = getPoolType(poolConfig);
 
     // Expiry alerts for purchased options
     const expiryAlerts = useExpiryAlerts(
@@ -339,33 +335,6 @@ export function PortfolioPage() {
                         poolInfo={poolInfo}
                     />
 
-                    {/* Active strategy status (collar) */}
-                    {collarStatus && (
-                        <div
-                            className="bg-terminal-bg-elevated border border-terminal-border-subtle rounded-xl p-4"
-                            data-testid="active-strategy-banner"
-                        >
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <span className="text-xs font-bold text-terminal-text-muted font-mono uppercase tracking-wider">
-                                        Active Strategy: Collar
-                                    </span>
-                                    <div className="flex items-center gap-3 mt-1 text-xs font-mono">
-                                        <span className={collarStatus.callDone ? 'text-green-400' : 'text-terminal-text-muted'}>
-                                            {collarStatus.callDone ? '\u2713' : '\u25CB'} Write CALL
-                                        </span>
-                                        <span className={collarStatus.putDone ? 'text-green-400' : 'text-terminal-text-muted'}>
-                                            {collarStatus.putDone ? '\u2713' : '\u25CB'} Buy PUT
-                                        </span>
-                                    </div>
-                                </div>
-                                <Link to={selectedPoolAddr ? `/pools/${selectedPoolAddr}` : '/pools'} className="btn-secondary px-3 py-1 text-xs rounded">
-                                    Continue
-                                </Link>
-                            </div>
-                        </div>
-                    )}
-
                     {/* My Written Options */}
                     <section data-testid="written-section">
                         <h2 className="text-xs font-bold text-terminal-text-muted font-mono uppercase tracking-wider mb-3">
@@ -477,6 +446,9 @@ export function PortfolioPage() {
                     address={address}
                     provider={provider}
                     network={network}
+                    poolType={poolType}
+                    underlyingSymbol={underlyingSymbol}
+                    premiumSymbol={premiumSymbol}
                     onClose={() => setCancelTarget(null)}
                     onSuccess={() => {
                         setCancelTarget(null);
@@ -495,6 +467,9 @@ export function PortfolioPage() {
                     address={address}
                     provider={provider}
                     network={network}
+                    poolType={poolType}
+                    underlyingSymbol={underlyingSymbol}
+                    premiumSymbol={premiumSymbol}
                     onClose={() => setExerciseTarget(null)}
                     onSuccess={() => {
                         setExerciseTarget(null);
@@ -512,6 +487,9 @@ export function PortfolioPage() {
                     address={address}
                     provider={provider}
                     network={network}
+                    poolType={poolType}
+                    underlyingSymbol={underlyingSymbol}
+                    premiumSymbol={premiumSymbol}
                     onClose={() => setSettleTarget(null)}
                     onSuccess={() => {
                         setSettleTarget(null);

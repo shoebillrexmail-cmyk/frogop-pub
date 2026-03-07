@@ -64,6 +64,7 @@ const fakePool: PoolRow = {
     underlying:    '0xtoken1',
     premium_token: '0xtoken2',
     fee_recipient: '0xfee',
+    grace_period_blocks: 144,
     created_block: 100,
     created_tx:    '0xtx',
     indexed_at:    '2025-01-01T00:00:00Z',

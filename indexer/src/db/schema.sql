@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS pools (
     underlying    TEXT NOT NULL,
     premium_token TEXT NOT NULL,
     fee_recipient TEXT NOT NULL,
+    grace_period_blocks INTEGER NOT NULL DEFAULT 144,
     created_block INTEGER NOT NULL,
     created_tx    TEXT NOT NULL,
     indexed_at    TEXT NOT NULL       -- ISO 8601

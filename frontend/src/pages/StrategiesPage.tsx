@@ -237,7 +237,7 @@ export function StrategiesPage() {
                     label: `${info.label}: ${underlyingSymbol}/${premiumSymbol}`,
                     flowId: null,
                     flowStep: null,
-                    meta: { strategy: strategyType },
+                    meta: { strategy: strategyType, strategyLabel: info.label },
                 });
             } else {
                 // Spread: write + buy via executeSpread
@@ -278,7 +278,7 @@ export function StrategiesPage() {
                     label: `${info.label}: ${underlyingSymbol}/${premiumSymbol}`,
                     flowId: null,
                     flowStep: null,
-                    meta: { strategy: strategyType },
+                    meta: { strategy: strategyType, strategyLabel: info.label },
                 });
             }
 
@@ -404,6 +404,9 @@ export function StrategiesPage() {
             {txStatus === 'done' && txId && (
                 <div className="bg-green-900/20 border border-green-700 rounded p-3 text-xs font-mono text-green-400">
                     Strategy executed successfully! TX: {txId.slice(0, 16)}...
+                    <div className="text-green-500/70 mt-1">
+                        Confirmation typically takes ~10 minutes (1 Signet block).
+                    </div>
                 </div>
             )}
 

@@ -77,6 +77,7 @@ export interface PoolRow {
     underlying:    string;
     premium_token: string;
     fee_recipient: string;
+    grace_period_blocks: number;
     created_block: number;
     created_tx:    string;
     indexed_at:    string;   // ISO datetime

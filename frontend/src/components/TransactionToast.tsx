@@ -9,14 +9,12 @@
  * Dropdown renders via React portal at document.body with z-[70] to float above
  * modal backdrops (z-50) without header stacking context clipping.
  */
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
-import { useWalletConnect } from '@btc-vision/walletconnect';
 import { useTransactionContext } from '../hooks/useTransactionContext.ts';
 import type { TrackedTransaction, TxStatus } from '../contexts/TransactionContext.tsx';
 import { FlowResumeCard } from './FlowResumeCard.tsx';
-import { CollarProgressCard } from './CollarProgressCard.tsx';
 
 function statusIcon(status: TxStatus): string {
     switch (status) {
@@ -53,11 +51,9 @@ function elapsed(createdAt: string): string {
 
 export function TransactionToast() {
     const { recentTransactions, pendingCount, activeFlows, requestResume, abandonFlow, requestReopen } = useTransactionContext();
-    const { walletAddress } = useWalletConnect();
     const navigate = useNavigate();
     const [expanded, setExpanded] = useState(false);
     const [, setTick] = useState(0);
-    const [collarDismissed, setCollarDismissed] = useState(false);
     const pillRef = useRef<HTMLButtonElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
@@ -114,20 +110,10 @@ export function TransactionToast() {
     const failedCount = visible.filter((tx) => tx.status === 'failed').length;
     const hasFlows = activeFlows.length > 0;
 
-    const collarInProgress = useMemo(() => {
-        if (!walletAddress || collarDismissed) return false;
-        try {
-            const raw = localStorage.getItem(`frogop_collar_${walletAddress}`);
-            if (!raw) return false;
-            const { callDone, putDone } = JSON.parse(raw) as { callDone?: boolean; putDone?: boolean };
-            return (callDone || putDone) && !(callDone && putDone);
-        } catch { return false; }
-    }, [walletAddress, collarDismissed]);
+    if (visible.length === 0 && pendingCount === 0 && !hasFlows) return null;
 
-    if (visible.length === 0 && pendingCount === 0 && !hasFlows && !collarInProgress) return null;
-
-    const showPill = pendingCount > 0 || failedCount > 0 || hasFlows || collarInProgress;
-    const showDropdown = expanded && (visible.length > 0 || hasFlows || collarInProgress);
+    const showPill = pendingCount > 0 || failedCount > 0 || hasFlows;
+    const showDropdown = expanded && (visible.length > 0 || hasFlows);
 
     return (
         <>
@@ -193,24 +179,6 @@ export function TransactionToast() {
                             onAbandon={() => abandonFlow(flow.flowId)}
                         />
                     ))}
-                    {collarInProgress && walletAddress && (
-                        <CollarProgressCard
-                            walletAddress={walletAddress}
-                            onContinue={() => {
-                                setExpanded(false);
-                                // Read poolAddress from collar localStorage
-                                let collarPoolAddr: string | undefined;
-                                try {
-                                    const raw = localStorage.getItem(`frogop_collar_${walletAddress}`);
-                                    if (raw) {
-                                        collarPoolAddr = (JSON.parse(raw) as { poolAddress?: string }).poolAddress;
-                                    }
-                                } catch { /* noop */ }
-                                navigate(collarPoolAddr ? `/pools/${collarPoolAddr}?openCollar=true` : '/pools');
-                            }}
-                            onDismiss={() => setCollarDismissed(true)}
-                        />
-                    )}
                     <div className="max-h-64 overflow-y-auto">
                         {visible.map((tx: TrackedTransaction) => (
                             <button

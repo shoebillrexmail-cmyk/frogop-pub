@@ -4,7 +4,7 @@
  * Fetches pool info on mount for live data.
  */
 import { Link } from 'react-router-dom';
-import { formatAddress, bpsToPct, findPoolConfigByAddress, getPoolType } from '../config/index.ts';
+import { formatAddress, bpsToPct, findPoolConfigByAddress, getPoolType, blocksToTime } from '../config/index.ts';
 import { usePool } from '../hooks/usePool.ts';
 import { PoolTypeBadge } from './PoolTypeBadge.tsx';
 import { directionLabel } from '../utils/poolGrouping.ts';
@@ -83,6 +83,9 @@ export function PoolCard({ pool, provider, compact = false }: PoolCardProps) {
                     </span>
                     <span>
                         Exercise: <span className="text-terminal-text-secondary">{bpsToPct(poolInfo.exerciseFeeBps)}</span>
+                    </span>
+                    <span title="Exercise window after option expiry">
+                        Grace: <span className="text-terminal-text-secondary">{blocksToTime(poolInfo.gracePeriodBlocks)}</span>
                     </span>
                 </div>
             )}
