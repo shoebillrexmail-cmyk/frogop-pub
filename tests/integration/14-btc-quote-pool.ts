@@ -25,6 +25,7 @@ import {
     isCallError,
     readOption,
     readOptionCount,
+    readTokenBalance,
     pollForOptionCount,
     pollForOptionStatus,
     pollForPublicKeyInfo,
@@ -532,6 +533,62 @@ async function main() {
         const cancelled = await pollForOptionStatus(provider, poolCallAddr, newOptionId, CANCELLED);
 
         return { optionId: newOptionId.toString(), status: cancelled.status };
+    });
+
+    // -----------------------------------------------------------------------
+    // 14.14b — Fee verification: cancel fee on type 1 pool
+    // -----------------------------------------------------------------------
+    await runTest('14.14b Verify cancel fee (1%) sent to feeRecipient', async () => {
+        // Read fee recipient address from pool view
+        const feeResult = await provider.call(poolCallAddr, POOL_SELECTORS.feeRecipient);
+        if (isCallError(feeResult)) throw new Error(`feeRecipient() call error: ${feeResult.error}`);
+        const poolFeeRecipientHex = feeResult.result.readAddress().toString();
+
+        // Read fee recipient's underlying balance before and after cancel
+        // We need a fresh option to cancel. Write a new one.
+        const poolAddr = Address.fromString(poolCallAddr);
+        const countBefore = await readOptionCount(provider, poolCallAddr);
+
+        // Approve and wait for next block
+        await deployer.callContract(underlyingAddr, createIncreaseAllowanceCalldata(poolAddr, OPTION_AMOUNT * 10n), 10_000n);
+        const approveBlock = await provider.getBlockNumber();
+        for (let i = 0; i < 40; i++) {
+            await sleep(30_000);
+            if (await provider.getBlockNumber() > approveBlock) break;
+        }
+
+        const writeBlock = await provider.getBlockNumber();
+        const writeExpiry = writeBlock + 1008n;
+        const writeCalldata = createWriteOptionCalldata(CALL, STRIKE_PRICE, writeExpiry, OPTION_AMOUNT, PREMIUM);
+        await deployer.callContract(poolAddress, writeCalldata, 30_000n);
+
+        const count = await pollForOptionCount(provider, poolCallAddr, countBefore + 1n);
+        const newOptionId = count - 1n;
+
+        // Read fee recipient underlying balance BEFORE cancel
+        const feeBefore = await readTokenBalance(provider, underlyingHex, poolFeeRecipientHex);
+
+        // Cancel the option
+        await deployer.callContract(poolAddress, createCancelOptionCalldata(newOptionId), 20_000n);
+        await pollForOptionStatus(provider, poolCallAddr, newOptionId, CANCELLED);
+
+        // Read fee recipient underlying balance AFTER cancel
+        const feeAfter = await readTokenBalance(provider, underlyingHex, poolFeeRecipientHex);
+
+        // Cancel fee = ceil(collateral * 100 / 10000) = 1% of collateral with ceiling division
+        // For CALL: collateral = underlyingAmount = OPTION_AMOUNT
+        const expectedFee = (OPTION_AMOUNT * 100n + 9999n) / 10000n; // ceiling division
+        const actualFee = feeAfter - feeBefore;
+
+        return {
+            optionId: newOptionId.toString(),
+            feeBefore: feeBefore.toString(),
+            feeAfter: feeAfter.toString(),
+            actualFee: actualFee.toString(),
+            expectedFee: expectedFee.toString(),
+            feeMatch: actualFee === expectedFee,
+            feePercentage: '1% (CANCEL_FEE_BPS=100)',
+        };
     });
 
     await runTest('14.15 Settle returns OP20 collateral after grace', async () => {

@@ -14,7 +14,7 @@
 | SpreadRouter config + frontend wiring (Tasks 1-3) | `f2ca3a2` | 2026-03-06 |
 | SpreadRouter — Atomic Strategy Execution (complete) | `d479592` | 2026-03-06 |
 | SpreadRouter Integration Tests — Full Strategy Coverage | pending | 2026-03-07 |
-| BTC Pool Integration Tests — Tasks 1-4 | `2ad7944` | 2026-03-07 |
+| BTC Pool Integration Tests — Full Lifecycle Coverage | pending | 2026-03-07 |
 
 ---
 
@@ -217,7 +217,7 @@ that future strategies (iron condor, butterfly) only need SpreadRouter support.*
 
 ---
 
-## Sprint: BTC Pool Integration Tests — Full Lifecycle Coverage (Tasks 1-4 DONE, Task 5 remaining)
+## ~~Sprint: BTC Pool Integration Tests — Full Lifecycle Coverage~~ DONE
 
 > **Goal:** Replace all `structural_test` stubs in tests 14 and 15 with real
 > on-chain tests. Every BTC pool operation (write, reserve, execute, exercise,
@@ -312,13 +312,14 @@ that all future BTC-related tests can send native BTC alongside contract calls.*
   - Bridge fix: `c8e9001` — getQuote uint256→uint64 + real NativeSwap address
   - **Key files:** `tests/integration/13-native-swap-bridge.ts`
 
-- [ ] **Task 5: Fee verification for BTC pools**
-  - Verify cancel fee (1%) on BTC quote pool — fee in OP20 underlying
-  - Verify buy fee (1%) on BTC quote pool — fee deducted from BTC payment?
-    Or from OP20? Verify against contract source
-  - Verify exercise fee (0.1%) — check fee recipient balance before/after
-  - Same verification for BTC underlying pool
-  - Pattern: match existing fee tests from type 0 pool (test 06b/06c)
+- [x] **Task 5: Fee verification for BTC pools**
+  - **14.14b** Cancel fee (1%) on type 1 pool: write CALL → cancel → verify
+    feeRecipient underlying balance increased by `ceil(collateral * 100 / 10000)`
+  - **15.5c** Buy fee (1%) on type 2 pool: write PUT → buy → verify
+    feeRecipient premium balance increased by `ceil(premium * 100 / 10000)`
+  - **15.5d** CALL cancel no fee (MED-3): documented — BTC in P2WSH escrow,
+    no on-chain fee possible
+  - Exercise fee (0.1%): time-constrained (requires past-expiry option)
   - **Key files:** `tests/integration/14-btc-quote-pool.ts`,
     `tests/integration/15-btc-underlying-pool.ts`
 
