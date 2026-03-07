@@ -33,8 +33,8 @@ const STRATEGY_LABELS: Record<StrategyType, string> = {
     'bear-put-spread': 'Bet on Moderate Drop',
     'long-call': 'Bet on Big Rise',
     'long-put': 'Bet on Big Drop',
-    'long-straddle': 'Bet on Big Move (Either Way)',
-    'long-strangle': 'Bet on Big Move (Cheaper)',
+    'long-straddle': 'Profit from Any Big Move',
+    'long-strangle': 'Profit from a Huge Move',
 };
 
 const STRATEGY_TAGLINES: Record<StrategyType, string> = {
@@ -46,8 +46,8 @@ const STRATEGY_TAGLINES: Record<StrategyType, string> = {
     'bear-put-spread': 'Profit from a moderate drop with capped risk and gain',
     'long-call': 'Buy a listing to profit from a large rise — uncapped gains, limited cost',
     'long-put': 'Buy a listing to profit from a large drop — large gains, limited cost',
-    'long-straddle': 'Buy a CALL + PUT at the same price — profit from a big move in either direction',
-    'long-strangle': 'Buy an OTM CALL + PUT — cheaper, but needs a bigger move to profit',
+    'long-straddle': 'Buy a CALL + PUT at the same price — profits as soon as the price moves significantly',
+    'long-strangle': 'Buy a CALL + PUT at different prices — lower cost, but needs a larger move to profit',
 };
 
 const STRATEGY_RISK: Record<StrategyType, 'low' | 'medium' | 'high'> = {
@@ -731,7 +731,7 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                                     <>
                                         <p className="text-[11px] text-terminal-text-muted font-mono leading-relaxed bg-terminal-bg-primary border border-terminal-border-subtle rounded px-3 py-2">
                                             You buy an out-of-the-money CALL (above spot) and an out-of-the-money PUT (below spot).
-                                            Cheaper than a straddle, but needs a bigger price move to profit. Requires two buy transactions.
+                                            Lower cost than a straddle, but needs a larger price move to profit. Requires two buy transactions.
                                         </p>
                                         <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 space-y-1.5">
                                             <span className="text-[10px] text-terminal-text-muted font-mono uppercase tracking-wider">Strangle Details</span>

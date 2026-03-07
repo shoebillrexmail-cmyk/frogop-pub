@@ -463,14 +463,14 @@ const STRATEGY_META: Record<StrategyType, {
         actionLabel: 'Buy Put',
     },
     'long-straddle': {
-        goalTitle: 'Bet on Big Move (Either Way)',
-        goalDescription: 'Buy a CALL and a PUT at the same price level. Profit from a large move in either direction.',
+        goalTitle: 'Profit from Any Big Move',
+        goalDescription: 'Buy a CALL and a PUT at the same price level. Profits as soon as the price moves significantly.',
         riskLevel: 'high',
         actionLabel: 'Buy Straddle',
     },
     'long-strangle': {
-        goalTitle: 'Bet on Big Move (Cheaper)',
-        goalDescription: 'Buy an OTM CALL and OTM PUT. Cheaper than a straddle but needs a bigger move to profit.',
+        goalTitle: 'Profit from a Huge Move',
+        goalDescription: 'Buy a CALL and a PUT at different prices. Lower cost, but needs a larger move to profit.',
         riskLevel: 'high',
         actionLabel: 'Buy Strangle',
     },

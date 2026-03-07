@@ -26,8 +26,8 @@ const STRATEGY_EXPLAINER: Record<StrategyType, string> = {
     'bear-put-spread': 'A two-leg position: you buy the right to profit from a drop, while capping your gain by selling a lower position.',
     'long-call': 'You buy an existing CALL listing from another user. If the price rises above the strike, you can exercise for a profit. Your maximum loss is the premium you paid.',
     'long-put': 'You buy an existing PUT listing from another user. If the price drops below the strike, you can exercise for a profit. Your maximum loss is the premium you paid.',
-    'long-straddle': 'You buy a CALL and a PUT at the same strike price. You profit from a large move in either direction. Your maximum loss is the combined premium paid.',
-    'long-strangle': 'You buy an OTM CALL and an OTM PUT at different strikes. Cheaper than a straddle, but needs a bigger move to profit.',
+    'long-straddle': 'You buy a CALL and a PUT at the same strike price. You profit as soon as the price moves significantly in either direction. Your maximum loss is the combined premium paid.',
+    'long-strangle': 'You buy a CALL and a PUT at different strike prices. Lower cost than a straddle, but needs a larger move to profit. Your maximum loss is the combined premium paid.',
 };
 
 /** Dynamic strike ranges that scale with expiry — crypto markets are volatile. */
