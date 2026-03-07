@@ -1,5 +1,5 @@
 /**
- * PoolDetailPage tests — two-tab layout (Market | Write), filter controls, row action visibility.
+ * PoolDetailPage tests — single-page layout, filter controls, row action visibility.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -98,9 +98,9 @@ const EMPTY_REFETCH = vi.fn();
 
 function renderPage() {
     return render(
-        <MemoryRouter initialEntries={[`/pools/${POOL_ADDR}`]}>
+        <MemoryRouter initialEntries={[`/markets/${POOL_ADDR}`]}>
             <Routes>
-                <Route path="pools/:address" element={<PoolDetailPage />} />
+                <Route path="markets/:address" element={<PoolDetailPage />} />
             </Routes>
         </MemoryRouter>
     );
@@ -132,10 +132,6 @@ describe('PoolDetailPage', () => {
         } as ReturnType<typeof useWalletConnect>);
     });
 
-    function switchToWriteTab() {
-        fireEvent.click(screen.getByTestId('tab-write'));
-    }
-
     function switchToList() {
         fireEvent.click(screen.getByTestId('view-mode-list'));
     }
@@ -149,63 +145,50 @@ describe('PoolDetailPage', () => {
     });
 
     // Breadcrumb
-    it('renders breadcrumb with link to /pools', () => {
+    it('renders breadcrumb with link to /markets', () => {
         renderPage();
         const breadcrumb = screen.getByTestId('breadcrumb');
         expect(breadcrumb).toBeInTheDocument();
-        expect(breadcrumb.querySelector('a[href="/pools"]')).toBeInTheDocument();
+        expect(breadcrumb.querySelector('a[href="/markets"]')).toBeInTheDocument();
     });
 
-    // Tab structure
-    it('defaults to market tab with chain visible', () => {
+    // Single-page layout — all sections visible
+    it('renders all sections on single scrollable page', () => {
         renderPage();
-        expect(screen.getByTestId('market-tab-content')).toBeInTheDocument();
-        expect(screen.queryByTestId('write-tab-content')).not.toBeInTheDocument();
         expect(screen.getByText('Options Chain')).toBeInTheDocument();
-    });
-
-    it('tab labels are Market and Write', () => {
-        renderPage();
-        expect(screen.getByTestId('tab-market')).toHaveTextContent('Market');
-        expect(screen.getByTestId('tab-write')).toHaveTextContent('Write');
-    });
-
-    it('click write tab shows yield overview and strategy section', () => {
-        renderPage();
-        switchToWriteTab();
-        expect(screen.getByTestId('write-tab-content')).toBeInTheDocument();
-        expect(screen.getByTestId('yield-overview')).toBeInTheDocument();
-        expect(screen.getByTestId('writer-how-it-works')).toBeInTheDocument();
-        expect(screen.getByTestId('strategy-section')).toBeInTheDocument();
-        expect(screen.getByTestId('strategy-covered-call')).toBeInTheDocument();
-        expect(screen.getByTestId('strategy-write-custom')).toBeInTheDocument();
-        expect(screen.queryByTestId('market-tab-content')).not.toBeInTheDocument();
-    });
-
-    it('tab persists to sessionStorage', () => {
-        renderPage();
-        switchToWriteTab();
-        expect(sessionStorage.getItem('frogop_pool_tab')).toBe('write');
-    });
-
-    it('market strategy cards appear on market tab', () => {
-        renderPage();
         expect(screen.getByTestId('market-strategy-cards')).toBeInTheDocument();
         expect(screen.getByTestId('market-protective-put')).toBeInTheDocument();
+        expect(screen.getByTestId('strategy-section')).toBeInTheDocument();
+        expect(screen.getByTestId('writer-how-it-works')).toBeInTheDocument();
+        expect(screen.getByTestId('yield-overview')).toBeInTheDocument();
     });
 
-    it('market value prop line is visible on market tab', () => {
+    it('market value prop line is visible', () => {
         renderPage();
         expect(screen.getByTestId('market-value-prop')).toBeInTheDocument();
     });
 
-    // Multi-leg strategies on write tab
-    it('write tab shows collar, bull spread, and bear spread cards', () => {
+    // Strategy cards
+    it('shows collar, bull spread, and bear spread cards', () => {
         renderPage();
-        switchToWriteTab();
         expect(screen.getByTestId('strategy-collar')).toBeInTheDocument();
         expect(screen.getByTestId('strategy-bull-call-spread')).toBeInTheDocument();
         expect(screen.getByTestId('strategy-bear-put-spread')).toBeInTheDocument();
+    });
+
+    it('shows covered call and custom strategy cards', () => {
+        renderPage();
+        expect(screen.getByTestId('strategy-covered-call')).toBeInTheDocument();
+        expect(screen.getByTestId('strategy-write-custom')).toBeInTheDocument();
+    });
+
+    // Options filter tabs
+    it('renders options filter tabs', () => {
+        renderPage();
+        expect(screen.getByTestId('options-filter-tabs')).toBeInTheDocument();
+        expect(screen.getByTestId('options-filter-all')).toBeInTheDocument();
+        expect(screen.getByTestId('options-filter-buy')).toBeInTheDocument();
+        expect(screen.getByTestId('options-filter-mine')).toBeInTheDocument();
     });
 
     // Options table (list view)

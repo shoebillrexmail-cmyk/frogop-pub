@@ -924,7 +924,7 @@ export function AboutPage() {
             GitHub
           </a>
           <Link
-            to="/pools"
+            to="/markets"
             className="btn-primary px-4 py-2 rounded-lg inline-block"
           >
             Launch App

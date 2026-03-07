@@ -58,9 +58,9 @@ describe('Smoke tests — pages render without crashing', () => {
 
     it('PoolDetailPage renders', () => {
         const { container } = render(
-            <MemoryRouter initialEntries={['/pools/opt1test']}>
+            <MemoryRouter initialEntries={['/markets/opt1test']}>
                 <Routes>
-                    <Route path="pools/:address" element={<PoolDetailPage />} />
+                    <Route path="markets/:address" element={<PoolDetailPage />} />
                 </Routes>
             </MemoryRouter>
         );

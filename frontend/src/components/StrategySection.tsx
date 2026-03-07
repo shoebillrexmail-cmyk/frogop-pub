@@ -25,6 +25,7 @@ import { useWsBlock } from '../hooks/useWebSocketProvider.ts';
 import type { WriteOptionInitialValues, StrategyType, StrategyOutcome } from '../utils/strategyMath.ts';
 import { calcLiveOutcome } from '../utils/strategyMath.ts';
 import { OutcomeCard } from './OutcomeCard.tsx';
+import type { P2PBadge } from './OutcomeCard.tsx';
 import { StrategyConfigurator } from './StrategyConfigurator.tsx';
 import { LegSelector } from './LegSelector.tsx';
 import type { LegConfig } from './LegSelector.tsx';
@@ -47,10 +48,20 @@ const SINGLE_LEG_CARDS: { type: StrategyType; tagline: string; summaryHint: stri
 ];
 
 const MULTI_LEG_CARDS: { type: StrategyType; mlType: MultiLegStrategy; tagline: string }[] = [
-    { type: 'collar', mlType: 'collar', tagline: 'Limit both upside and downside' },
+    { type: 'collar', mlType: 'collar', tagline: 'Earn premium on both upside and downside' },
     { type: 'bull-call-spread', mlType: 'bull-call-spread', tagline: 'Profit on moderate price rise' },
     { type: 'bear-put-spread', mlType: 'bear-put-spread', tagline: 'Profit on moderate price drop' },
 ];
+
+const P2P_BADGES: Record<StrategyType | 'custom', P2PBadge> = {
+    'covered-call':     { type: 'marketplace', tooltip: 'Creates a new CALL listing. Another user must buy it for you to earn premium.' },
+    'write-put':        { type: 'marketplace', tooltip: 'Creates a new PUT listing. Another user must buy it for you to earn premium.' },
+    'protective-put':   { type: 'instant',     tooltip: 'Buys an existing PUT option from another user. Executes immediately.' },
+    'collar':           { type: 'marketplace', tooltip: 'Creates both a CALL and PUT listing. Other users must buy them.' },
+    'bull-call-spread': { type: 'mixed',       tooltip: 'Creates a new CALL listing AND buys an existing CALL in one transaction.' },
+    'bear-put-spread':  { type: 'mixed',       tooltip: 'Creates a new PUT listing AND buys an existing PUT in one transaction.' },
+    'custom':           { type: 'marketplace', tooltip: 'Creates a new option listing.' },
+};
 
 const MAX_SAT = 10_000_000n;
 
@@ -439,6 +450,7 @@ export function StrategySection({
                             tagline={tagline}
                             riskLevel={meta?.riskLevel ?? 'low'}
                             summaryMetric={noPrice ? undefined : summaryMetrics[type]}
+                            p2pBadge={P2P_BADGES[type]}
                             active={activeStrategy === type && !activeMultiLeg}
                             disabled={noPrice}
                             testId={`strategy-${type}`}
@@ -457,6 +469,7 @@ export function StrategySection({
                             tagline={tagline}
                             riskLevel={meta?.riskLevel ?? 'medium'}
                             summaryMetric={noPrice ? undefined : summaryMetrics[type]}
+                            p2pBadge={P2P_BADGES[type]}
                             active={activeStrategy === type && activeMultiLeg === mlType}
                             disabled={noPrice}
                             testId={`strategy-${type}`}
@@ -470,6 +483,7 @@ export function StrategySection({
                     goalTitle="Build Custom Strategy"
                     tagline="Full control over all parameters"
                     riskLevel="medium"
+                    p2pBadge={P2P_BADGES['custom']}
                     active={activeStrategy === 'custom' as StrategyType}
                     disabled={false}
                     testId="strategy-write-custom"
@@ -523,16 +537,44 @@ export function StrategySection({
                         )}
 
                         <div className="space-y-3">
-                            <LegSelector
-                                legNumber={1} label={info.leg1Label}
-                                availableOptions={options} value={leg1} onChange={setLeg1}
-                                spotPrice={motoPillRatio} underlyingSymbol={underlyingSymbol} premiumSymbol={premiumSymbol}
-                            />
-                            <LegSelector
-                                legNumber={2} label={info.leg2Label}
-                                availableOptions={options} value={leg2} onChange={setLeg2}
-                                spotPrice={motoPillRatio} underlyingSymbol={underlyingSymbol} premiumSymbol={premiumSymbol}
-                            />
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-sm font-mono text-terminal-text-primary">{info.leg1Label}</span>
+                                    <span className="text-[10px] font-mono font-semibold bg-amber-900/30 text-amber-400 px-1.5 py-0.5 rounded" title="Creates a new listing that waits for a buyer">
+                                        MARKETPLACE
+                                    </span>
+                                </div>
+                                <LegSelector
+                                    legNumber={1} label={info.leg1Label}
+                                    availableOptions={options} value={leg1} onChange={setLeg1}
+                                    spotPrice={motoPillRatio} underlyingSymbol={underlyingSymbol} premiumSymbol={premiumSymbol}
+                                />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-sm font-mono text-terminal-text-primary">{info.leg2Label}</span>
+                                    {leg2.action === 'buy' ? (
+                                        leg2.optionId ? (
+                                            <span className="text-[10px] font-mono font-semibold bg-green-900/30 text-green-400 px-1.5 py-0.5 rounded" title="Buys an existing option. Executes immediately.">
+                                                INSTANT
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] font-mono text-terminal-text-muted">
+                                                Select an option below
+                                            </span>
+                                        )
+                                    ) : (
+                                        <span className="text-[10px] font-mono font-semibold bg-amber-900/30 text-amber-400 px-1.5 py-0.5 rounded" title="Creates a new listing that waits for a buyer">
+                                            MARKETPLACE
+                                        </span>
+                                    )}
+                                </div>
+                                <LegSelector
+                                    legNumber={2} label={info.leg2Label}
+                                    availableOptions={options} value={leg2} onChange={setLeg2}
+                                    spotPrice={motoPillRatio} underlyingSymbol={underlyingSymbol} premiumSymbol={premiumSymbol}
+                                />
+                            </div>
                         </div>
 
                         {motoPillRatio != null && motoPillRatio > 0 && (

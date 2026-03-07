@@ -346,14 +346,14 @@ export function PortfolioPage() {
                                 <p className="text-terminal-text-muted font-mono text-sm mb-4">
                                     No written options yet.
                                     <br />
-                                    Go to Pools to write a CALL or PUT option.
+                                    Go to Markets to write a CALL or PUT option.
                                 </p>
                                 <Link
-                                    to={selectedPoolAddr ? `/pools/${selectedPoolAddr}` : '/pools'}
+                                    to={selectedPoolAddr ? `/markets/${selectedPoolAddr}` : '/markets'}
                                     className="btn-primary px-4 py-2 text-sm rounded inline-block"
                                     data-testid="go-to-pools-written"
                                 >
-                                    Go to Pools →
+                                    Go to Markets →
                                 </Link>
                             </div>
                         ) : (
@@ -405,14 +405,14 @@ export function PortfolioPage() {
                                 <p className="text-terminal-text-muted font-mono text-sm mb-4">
                                     No purchased options.
                                     <br />
-                                    Browse open options on the Pools page to buy one.
+                                    Browse open options on the Markets page to buy one.
                                 </p>
                                 <Link
-                                    to={selectedPoolAddr ? `/pools/${selectedPoolAddr}` : '/pools'}
+                                    to={selectedPoolAddr ? `/markets/${selectedPoolAddr}` : '/markets'}
                                     className="btn-primary px-4 py-2 text-sm rounded inline-block"
                                     data-testid="go-to-pools-purchased"
                                 >
-                                    Go to Pools →
+                                    Go to Markets →
                                 </Link>
                             </div>
                         ) : (

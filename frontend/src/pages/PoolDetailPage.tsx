@@ -1,10 +1,10 @@
 /**
- * PoolDetailPage — per-pool detail view with two-tab layout:
- *   "Market" — options chain/table with protective put card + price chart
- *   "Write" — yield overview, strategy section (single + multi-leg), how-it-works
+ * PoolDetailPage — single scrollable per-market detail view.
  *
- * Route: /pools/:address
- * Pool is determined by URL param, not a selector.
+ * Sections: buy-side cards, options chain/table, write-side strategy cards,
+ * how-it-works, market stats, price chart.
+ *
+ * Route: /markets/:address
  */
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -39,10 +39,11 @@ import { useNotifications } from '../hooks/useNotifications.ts';
 import { useStatusChangeDetector, describeChange } from '../hooks/useStatusChangeDetector.ts';
 import { OnboardingOverlay } from '../components/OnboardingOverlay.tsx';
 import { useOnboardingState } from '../hooks/useOnboardingState.ts';
+import { OptionStatus } from '../services/types.ts';
 import type { OptionData } from '../services/types.ts';
 import type { ResumeRequest } from '../contexts/flowDefs.ts';
 
-type PoolTab = 'market' | 'write';
+type OptionsFilter = 'all' | 'buy' | 'mine';
 
 export function PoolDetailPage() {
     const { address: poolAddress } = useParams<{ address: string }>();
@@ -80,21 +81,6 @@ export function PoolDetailPage() {
         network ?? null,
     );
 
-    // Tab state — persisted to sessionStorage
-    const [activeTab, setActiveTab] = useState<PoolTab>(() => {
-        try {
-            const stored = sessionStorage.getItem('frogop_pool_tab');
-            // Migrate old values
-            if (stored === 'buy') return 'market';
-            if (stored === 'market' || stored === 'write') return stored;
-            return 'market';
-        } catch { return 'market'; }
-    });
-    const handleTabChange = (tab: PoolTab) => {
-        setActiveTab(tab);
-        try { sessionStorage.setItem('frogop_pool_tab', tab); } catch { /* noop */ }
-    };
-
     type ViewMode = 'chain' | 'list';
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
         try { return (sessionStorage.getItem('frogop_options_view') as ViewMode) || 'chain'; } catch { return 'chain'; }
@@ -124,8 +110,23 @@ export function PoolDetailPage() {
         confirmedCountRef.current = confirmed;
     }, [transactions, poolAddress, refetchPool]);
 
-    // Strategy filter for Market tab chain highlighting
+    // address.toString() = 0x-prefixed MLDSA hash; used for action visibility
+    const walletHex = address ? address.toString() : null;
+
+    // Strategy filter for chain highlighting
     const [strategyFilter, setStrategyFilter] = useState<StrategyFilter | null>(null);
+
+    // Options marketplace filter
+    const [optionsFilter, setOptionsFilter] = useState<OptionsFilter>('all');
+    const filteredOptions = useMemo(() => {
+        if (optionsFilter === 'buy') {
+            return options.filter(o => o.status === OptionStatus.OPEN && o.writer !== walletHex);
+        }
+        if (optionsFilter === 'mine') {
+            return options.filter(o => walletHex !== null && o.writer.toLowerCase() === walletHex.toLowerCase());
+        }
+        return options;
+    }, [options, optionsFilter, walletHex]);
 
     const [writeOpen, setWriteOpen] = useState(false);
     const [writeInitialValues, setWriteInitialValues] = useState<WriteOptionInitialValues | undefined>(undefined);
@@ -203,9 +204,6 @@ export function PoolDetailPage() {
         applyResume(resumeRequest);
     }, [resumeRequest, poolAddress, clearResumeRequest, applyResume]);
 
-    // address.toString() = 0x-prefixed MLDSA hash; used for action visibility
-    const walletHex = address ? address.toString() : null;
-
     // Status change notifications
     const { notifications, addNotification, dismissNotification, requestPermission } = useNotifications();
     useStatusChangeDetector(options, useCallback((changes) => {
@@ -249,8 +247,8 @@ export function PoolDetailPage() {
         return (
             <div className="max-w-7xl mx-auto px-4 py-16 text-center">
                 <p className="text-terminal-text-muted font-mono text-sm">Pool not found.</p>
-                <Link to="/pools" className="btn-secondary px-4 py-2 text-sm rounded inline-block mt-4">
-                    Back to Pools
+                <Link to="/markets" className="btn-secondary px-4 py-2 text-sm rounded inline-block mt-4">
+                    Back to Markets
                 </Link>
             </div>
         );
@@ -264,7 +262,7 @@ export function PoolDetailPage() {
 
             {/* Breadcrumb */}
             <nav className="text-xs font-mono text-terminal-text-muted flex items-center gap-1 mb-4" data-testid="breadcrumb">
-                <Link to="/pools" className="hover:text-terminal-text-primary transition-colors">Pools</Link>
+                <Link to="/markets" className="hover:text-terminal-text-primary transition-colors">Markets</Link>
                 <span>/</span>
                 <span className="text-terminal-text-primary">
                     {underlyingSymbol}/{premiumSymbol}
@@ -295,49 +293,54 @@ export function PoolDetailPage() {
                         poolType={poolType}
                     />
 
-                    {/* Tab bar */}
-                    <div className="flex gap-0 border-b border-terminal-border-subtle" data-testid="pool-tabs">
-                        {(['market', 'write'] as const).map((tab) => (
-                            <button
-                                key={tab}
-                                onClick={() => handleTabChange(tab)}
-                                className={`px-5 py-2.5 text-sm font-mono font-semibold transition-colors border-b-2 ${
-                                    activeTab === tab
-                                        ? 'text-accent border-accent'
-                                        : 'text-terminal-text-muted border-transparent hover:text-terminal-text-primary'
-                                }`}
-                                data-testid={`tab-${tab}`}
-                            >
-                                {tab === 'market' ? 'Market' : 'Write'}
-                            </button>
-                        ))}
-                    </div>
+                    {/* -- What do you want to do? -- */}
+                    <section id="buy-strategies">
+                        <h3 className="text-sm font-bold text-terminal-text-primary font-mono mb-2">What do you want to do?</h3>
+                        <p className="text-xs text-terminal-text-muted font-mono mb-3" data-testid="market-value-prop">
+                            Capped risk &middot; Leveraged exposure &middot; No liquidation
+                        </p>
+                        <MarketStrategyCards
+                            options={options}
+                            spotPrice={motoPillRatio}
+                            underlyingSymbol={underlyingSymbol}
+                            premiumSymbol={premiumSymbol}
+                            onBuyOption={(opt, label) => {
+                                if (!walletConnected) return;
+                                setBuyStrategyLabel(label);
+                                setBuyTarget(opt);
+                            }}
+                            onStrategyFilter={setStrategyFilter}
+                            activeFilter={strategyFilter}
+                        />
+                    </section>
 
-                    {/* MARKET TAB */}
-                    {activeTab === 'market' && (
-                        <div className="space-y-4" data-testid="market-tab-content">
-                            <p className="text-xs text-terminal-text-muted font-mono" data-testid="market-value-prop">
-                                Capped risk &middot; Leveraged exposure &middot; No liquidation
-                            </p>
+                    {/* -- Options Available -- */}
+                    <section id="options-available">
+                        <h3 className="text-sm font-bold text-terminal-text-primary font-mono mb-2">Options Available</h3>
 
-                            {/* Buy-side strategy cards */}
-                            <MarketStrategyCards
-                                options={options}
-                                spotPrice={motoPillRatio}
-                                underlyingSymbol={underlyingSymbol}
-                                premiumSymbol={premiumSymbol}
-                                onBuyOption={(opt, label) => {
-                                    if (!walletConnected) return;
-                                    setBuyStrategyLabel(label);
-                                    setBuyTarget(opt);
-                                }}
-                                onStrategyFilter={setStrategyFilter}
-                                activeFilter={strategyFilter}
-                            />
+                        {/* Filter tabs */}
+                        <div className="flex items-center gap-2 mb-3" data-testid="options-filter-tabs">
+                            {([
+                                { key: 'all' as const, label: 'All Options' },
+                                { key: 'buy' as const, label: 'Available to Buy' },
+                                { key: 'mine' as const, label: 'My Listings' },
+                            ]).map(({ key, label }) => (
+                                <button
+                                    key={key}
+                                    onClick={() => setOptionsFilter(key)}
+                                    className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
+                                        optionsFilter === key
+                                            ? 'bg-accent text-terminal-bg-primary'
+                                            : 'text-terminal-text-muted border border-terminal-border-subtle hover:text-terminal-text-primary'
+                                    }`}
+                                    data-testid={`options-filter-${key}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
 
                             {/* View toggle */}
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs text-terminal-text-muted font-mono">View:</span>
+                            <div className="ml-auto flex items-center gap-1">
                                 {(['chain', 'list'] as const).map((m) => (
                                     <button
                                         key={m}
@@ -353,122 +356,104 @@ export function PoolDetailPage() {
                                     </button>
                                 ))}
                             </div>
+                        </div>
 
-                            {/* Options Chain / Table */}
-                            {viewMode === 'chain' ? (
-                                <OptionsChain
-                                    options={options}
+                        {/* Options Chain / Table */}
+                        {viewMode === 'chain' ? (
+                            <OptionsChain
+                                options={filteredOptions}
+                                walletHex={walletHex}
+                                walletConnected={walletConnected}
+                                currentBlock={currentBlock ?? undefined}
+                                motoPillRatio={motoPillRatio}
+                                poolAddress={poolAddress}
+                                buyFeeBps={poolInfo.buyFeeBps}
+                                underlyingSymbol={underlyingSymbol}
+                                premiumSymbol={premiumSymbol}
+                                onBuy={handleBuy}
+                                strategyFilter={strategyFilter}
+                                showListingStatus={optionsFilter === 'mine'}
+                            />
+                        ) : (
+                            <ErrorBoundary inline label="Options Table">
+                                <OptionsTable
+                                    options={filteredOptions}
                                     walletHex={walletHex}
                                     walletConnected={walletConnected}
                                     currentBlock={currentBlock ?? undefined}
+                                    gracePeriodBlocks={poolInfo.gracePeriodBlocks}
                                     motoPillRatio={motoPillRatio}
                                     poolAddress={poolAddress}
-                                    buyFeeBps={poolInfo.buyFeeBps}
                                     underlyingSymbol={underlyingSymbol}
                                     premiumSymbol={premiumSymbol}
                                     onBuy={handleBuy}
+                                    onCancel={handleCancel}
+                                    onExercise={handleExercise}
+                                    onSettle={handleSettle}
                                     strategyFilter={strategyFilter}
+                                    showListingStatus={optionsFilter === 'mine'}
                                 />
-                            ) : (
-                                <ErrorBoundary inline label="Options Table">
-                                    <OptionsTable
-                                        options={options}
-                                        walletHex={walletHex}
-                                        walletConnected={walletConnected}
-                                        currentBlock={currentBlock ?? undefined}
-                                        gracePeriodBlocks={poolInfo.gracePeriodBlocks}
-                                        motoPillRatio={motoPillRatio}
-                                        poolAddress={poolAddress}
-                                        underlyingSymbol={underlyingSymbol}
-                                        premiumSymbol={premiumSymbol}
-                                        onBuy={handleBuy}
-                                        onCancel={handleCancel}
-                                        onExercise={handleExercise}
-                                        onSettle={handleSettle}
-                                        strategyFilter={strategyFilter}
-                                    />
-                                </ErrorBoundary>
-                            )}
+                            </ErrorBoundary>
+                        )}
+                    </section>
 
-                            {/* Collapsible PriceChart */}
-                            <div>
-                                <button
-                                    onClick={() => setChartOpen((v) => !v)}
-                                    className="text-xs font-mono text-terminal-text-muted hover:text-terminal-text-primary transition-colors flex items-center gap-1 mb-2"
-                                    data-testid="toggle-chart"
-                                >
-                                    <span className={`transition-transform ${chartOpen ? 'rotate-90' : ''}`}>&#9654;</span>
-                                    Price Chart
-                                </button>
-                                {chartOpen && (
-                                    <ErrorBoundary inline label="Price Chart">
-                                        <PriceChart
-                                            candles={candles}
-                                            token={chartToken}
-                                            interval={chartInterval}
-                                            onIntervalChange={setChartInterval}
-                                            onTokenChange={setChartToken}
-                                            underlyingSymbol={underlyingSymbol}
-                                            premiumSymbol={premiumSymbol}
-                                        />
-                                    </ErrorBoundary>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                    {/* -- Create & Earn -- */}
+                    <section id="create-earn">
+                        <h3 className="text-sm font-bold text-terminal-text-primary font-mono mb-2">Create &amp; Earn</h3>
+                        <StrategySection
+                            poolInfo={poolInfo}
+                            poolAddress={poolAddress}
+                            options={options}
+                            motoPillRatio={motoPillRatio}
+                            walletConnected={walletConnected}
+                            walletAddress={walletAddress}
+                            address={address}
+                            provider={provider}
+                            network={network}
+                            underlyingSymbol={underlyingSymbol}
+                            premiumSymbol={premiumSymbol}
+                            onWriteOption={handleWriteOption}
+                            onRefetch={refetchPool}
+                        />
+                    </section>
 
-                    {/* WRITE TAB */}
-                    {activeTab === 'write' && (
-                        <div className="space-y-4" data-testid="write-tab-content">
-                            <YieldOverview
-                                options={options}
-                                motoPillRatio={motoPillRatio}
-                                walletHex={walletHex}
-                                premiumSymbol={premiumSymbol}
-                            />
-                            <WriterHowItWorks />
-                            <StrategySection
-                                poolInfo={poolInfo}
-                                poolAddress={poolAddress}
-                                options={options}
-                                motoPillRatio={motoPillRatio}
-                                walletConnected={walletConnected}
-                                walletAddress={walletAddress}
-                                address={address}
-                                provider={provider}
-                                network={network}
-                                underlyingSymbol={underlyingSymbol}
-                                premiumSymbol={premiumSymbol}
-                                onWriteOption={handleWriteOption}
-                                onRefetch={refetchPool}
-                            />
+                    {/* -- How It Works -- */}
+                    <WriterHowItWorks />
 
-                            {candles.length > 0 && (
-                                <div>
-                                    <button
-                                        onClick={() => setChartOpen((v) => !v)}
-                                        className="text-xs font-mono text-terminal-text-muted hover:text-terminal-text-primary transition-colors flex items-center gap-1 mb-2"
-                                    >
-                                        <span className={`transition-transform ${chartOpen ? 'rotate-90' : ''}`}>&#9654;</span>
-                                        Price Chart
-                                    </button>
-                                    {chartOpen && (
-                                        <ErrorBoundary inline label="Price Chart">
-                                            <PriceChart
-                                                candles={candles}
-                                                token={chartToken}
-                                                interval={chartInterval}
-                                                onIntervalChange={setChartInterval}
-                                                onTokenChange={setChartToken}
-                                                underlyingSymbol={underlyingSymbol}
-                                                premiumSymbol={premiumSymbol}
-                                            />
-                                        </ErrorBoundary>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    {/* -- Market Stats -- */}
+                    <section id="market-stats">
+                        <YieldOverview
+                            options={options}
+                            motoPillRatio={motoPillRatio}
+                            walletHex={walletHex}
+                            premiumSymbol={premiumSymbol}
+                        />
+                    </section>
+
+                    {/* -- Price Chart -- */}
+                    <div>
+                        <button
+                            onClick={() => setChartOpen((v) => !v)}
+                            className="text-xs font-mono text-terminal-text-muted hover:text-terminal-text-primary transition-colors flex items-center gap-1 mb-2"
+                            data-testid="toggle-chart"
+                        >
+                            <span className={`transition-transform ${chartOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+                            Price Chart
+                        </button>
+                        {chartOpen && (
+                            <ErrorBoundary inline label="Price Chart">
+                                <PriceChart
+                                    candles={candles}
+                                    token={chartToken}
+                                    interval={chartInterval}
+                                    onIntervalChange={setChartInterval}
+                                    onTokenChange={setChartToken}
+                                    underlyingSymbol={underlyingSymbol}
+                                    premiumSymbol={premiumSymbol}
+                                />
+                            </ErrorBoundary>
+                        )}
+                    </div>
                 </div>
             )}
 

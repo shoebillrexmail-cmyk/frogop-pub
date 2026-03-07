@@ -31,7 +31,7 @@ export function Layout() {
 
   const navLinks = [
     { path: '/', label: 'Home', testId: 'nav-home' },
-    { path: '/pools', label: 'Pools', testId: 'nav-pools' },
+    { path: '/markets', label: 'Markets', testId: 'nav-markets' },
 { path: '/portfolio', label: 'Portfolio', testId: 'nav-portfolio' },
     { path: '/transactions', label: 'History', testId: 'nav-history' },
     { path: '/about', label: 'About', testId: 'nav-about' },
@@ -172,7 +172,7 @@ export function Layout() {
                 <button
                   onClick={() => {
                     try { localStorage.removeItem('frogop_onboarding_complete'); } catch { /* noop */ }
-                    window.location.href = '/pools';
+                    window.location.href = '/markets';
                   }}
                   className="hover:text-terminal-text-primary transition-colors"
                   data-testid="show-tutorial"

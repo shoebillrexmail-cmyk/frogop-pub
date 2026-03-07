@@ -55,7 +55,7 @@ export function PoolListPage() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 py-8 space-y-4">
-            <h1 className="text-lg font-bold text-terminal-text-primary font-mono">Pools</h1>
+            <h1 className="text-lg font-bold text-terminal-text-primary font-mono">Markets</h1>
 
             {/* Error state */}
             {error && (

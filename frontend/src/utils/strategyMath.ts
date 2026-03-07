@@ -209,6 +209,28 @@ export function calcCollarParams(
 }
 
 // ---------------------------------------------------------------------------
+// Liquidity check — count open options matching a buy-side strategy
+// ---------------------------------------------------------------------------
+
+/**
+ * Count OPEN options matching the criteria for a buy-side strategy.
+ * Used to gate buy-side cards when no matching liquidity exists.
+ */
+export function countOpenOptionsForStrategy(
+    options: OptionData[], type: StrategyType, spot: number,
+): number {
+    if (type === 'protective-put') {
+        return options.filter(o =>
+            o.optionType === OptionType.PUT &&
+            o.status === OptionStatus.OPEN &&
+            Number(o.strikePrice) / 1e18 >= spot * 0.70 &&
+            Number(o.strikePrice) / 1e18 <= spot * 0.95,
+        ).length;
+    }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
 // Live outcome computation (Story 3)
 // ---------------------------------------------------------------------------
 
@@ -237,10 +259,10 @@ const STRATEGY_META: Record<StrategyType, {
         actionLabel: 'Get Protection',
     },
     'collar': {
-        goalTitle: 'Lock In a Price Range',
-        goalDescription: 'Write a CALL + PUT to limit both upside and downside. Often near-zero cost.',
+        goalTitle: 'Earn on Both Sides',
+        goalDescription: 'Write a CALL + PUT to earn premium on both upside and downside moves.',
         riskLevel: 'low',
-        actionLabel: 'Setup Protection',
+        actionLabel: 'Start Earning',
     },
     'bull-call-spread': {
         goalTitle: 'Bet on Moderate Rise',

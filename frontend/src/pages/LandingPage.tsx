@@ -22,7 +22,7 @@ export function LandingPage() {
           </p>
           <div className="flex items-center justify-center gap-4">
             <Link
-              to="/pools"
+              to="/markets"
               className="btn-primary px-6 py-3 text-lg font-medium rounded-lg"
             >
               Launch App
@@ -246,9 +246,9 @@ export function LandingPage() {
           <div className="grid md:grid-cols-4 gap-4">
             <div className="terminal-card rounded-xl p-5 text-center">
               <div className="text-sm font-mono text-accent mb-2">01</div>
-              <h4 className="text-sm font-semibold text-terminal-text-primary mb-1">Browse Pools</h4>
+              <h4 className="text-sm font-semibold text-terminal-text-primary mb-1">Browse Markets</h4>
               <p className="text-xs text-terminal-text-muted">
-                Find a pool for your target token pair
+                Find a market for your target token pair
               </p>
             </div>
             <div className="terminal-card rounded-xl p-5 text-center">
@@ -450,10 +450,10 @@ export function LandingPage() {
             Connect your wallet and start trading trustless options on Bitcoin.
           </p>
           <Link
-            to="/pools"
+            to="/markets"
             className="btn-primary inline-block px-8 py-4 text-lg font-medium rounded-lg"
           >
-            Explore Pools
+            Explore Markets
           </Link>
         </div>
       </section>

@@ -33,6 +33,8 @@ interface OptionsChainProps {
     onBuy?: (option: OptionData) => void;
     /** Strategy filter — highlight matching strikes, dim others */
     strategyFilter?: StrategyFilter | null;
+    /** Show listing status in expanded listings (for "My Listings" view) */
+    showListingStatus?: boolean;
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────

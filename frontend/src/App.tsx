@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { LandingPage } from './pages/LandingPage';
 import { PoolListPage } from './pages/PoolListPage';
@@ -9,6 +9,11 @@ import { TransactionHistoryPage } from './pages/TransactionHistoryPage';
 import { AboutPage } from './pages/AboutPage';
 import { TransactionProvider } from './contexts/TransactionContext';
 
+function PoolRedirect() {
+  const { address } = useParams();
+  return <Navigate to={`/markets/${address ?? ''}`} replace />;
+}
+
 function App() {
   return (
     <TransactionProvider>
@@ -16,12 +21,14 @@ function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<LandingPage />} />
-            <Route path="pools" element={<PoolListPage />} />
-            <Route path="pools/:address" element={<PoolDetailPage />} />
-            <Route path="pools/:addr/options/:id" element={<OptionDetailPage />} />
+            <Route path="markets" element={<PoolListPage />} />
+            <Route path="markets/:address" element={<PoolDetailPage />} />
+            <Route path="markets/:addr/options/:id" element={<OptionDetailPage />} />
             <Route path="portfolio" element={<PortfolioPage />} />
-            {/* Redirect old /strategies route to pools */}
-            <Route path="strategies" element={<Navigate to="/pools" replace />} />
+            {/* Redirects from old routes */}
+            <Route path="pools" element={<Navigate to="/markets" replace />} />
+            <Route path="pools/:address" element={<PoolRedirect />} />
+            <Route path="strategies" element={<Navigate to="/markets" replace />} />
             <Route path="transactions" element={<TransactionHistoryPage />} />
             <Route path="about" element={<AboutPage />} />
           </Route>

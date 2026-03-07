@@ -78,6 +78,8 @@ interface OptionsTableProps {
     onBatchSettle?: (options: OptionData[]) => void;
     /** Strategy filter — highlight matching options, dim others */
     strategyFilter?: StrategyFilter | null;
+    /** Show listing status column (for "My Listings" view) */
+    showListingStatus?: boolean;
 }
 
 const STATUS_LABELS: Record<number, string> = {
@@ -101,6 +103,25 @@ const STATUS_BADGE_CLASSES: Record<number, string> = {
 const FILTER_OPTIONS: FilterStatus[] = ['ALL', 'OPEN', 'PURCHASED', 'RESERVED', 'EXPIRED', 'CANCELLED'];
 
 const ZERO_HEX = '0x' + '0'.repeat(64);
+
+function getListingStatus(option: OptionData): { label: string; color: string } {
+    if (option.status === OptionStatus.OPEN) {
+        return { label: 'Waiting for buyer', color: 'text-amber-400' };
+    }
+    if (option.status === OptionStatus.PURCHASED) {
+        return { label: 'Bought - active', color: 'text-green-400' };
+    }
+    if (option.status === OptionStatus.EXPIRED) {
+        return { label: 'Expired', color: 'text-rose-400' };
+    }
+    if (option.status === OptionStatus.EXERCISED) {
+        return { label: 'Exercised', color: 'text-terminal-text-muted' };
+    }
+    if (option.status === OptionStatus.CANCELLED) {
+        return { label: 'Cancelled', color: 'text-terminal-text-muted' };
+    }
+    return { label: String(option.status), color: 'text-terminal-text-muted' };
+}
 
 function StatusBadge({ status }: { status: number }) {
     return (
@@ -311,6 +332,7 @@ export function OptionsTable({
     underlyingSymbol = 'MOTO',
     premiumSymbol = 'PILL',
     strategyFilter,
+    showListingStatus = false,
 }: OptionsTableProps) {
     const [filter, setFilter] = useState<FilterStatus>('ALL');
     const [selected, setSelected] = useState<Set<bigint>>(new Set());
@@ -604,6 +626,7 @@ export function OptionsTable({
                                 <th className="text-left py-2 pr-4">Yield</th>
                                 {pnlMap && <th className="text-left py-2 pr-4">P&L</th>}
                                 <th className="text-left py-2 pr-4">Status</th>
+                                {showListingStatus && <th className="text-left py-2 pr-4">Listing</th>}
                                 <th className="text-left py-2">Action</th>
                             </tr>
                         </thead>
@@ -632,7 +655,7 @@ export function OptionsTable({
                                     <td className="py-2 pr-4 text-terminal-text-muted">
                                         {poolAddress ? (
                                             <Link
-                                                to={`/pools/${poolAddress}/options/${option.id.toString()}`}
+                                                to={`/markets/${poolAddress}/options/${option.id.toString()}`}
                                                 className="text-accent hover:text-accent/80 underline"
                                                 data-testid={`option-link-${option.id}`}
                                             >
@@ -704,6 +727,14 @@ export function OptionsTable({
                                             <StatusBadge status={option.status} />
                                         )}
                                     </td>
+                                    {showListingStatus && (
+                                        <td className="py-2 pr-4">
+                                            {(() => {
+                                                const ls = getListingStatus(option);
+                                                return <span className={`text-xs font-mono ${ls.color}`}>{ls.label}</span>;
+                                            })()}
+                                        </td>
+                                    )}
                                     <td className="py-2">
                                         <RowAction
                                             option={option}

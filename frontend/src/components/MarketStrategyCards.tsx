@@ -6,9 +6,10 @@
  */
 import { useState, useMemo, useCallback } from 'react';
 import { OutcomeCard } from './OutcomeCard.tsx';
+import type { P2PBadge } from './OutcomeCard.tsx';
 import { StrategyConfigurator } from './StrategyConfigurator.tsx';
 import type { StrategyType, StrategyFilter } from '../utils/strategyMath.ts';
-import { calcLiveOutcome } from '../utils/strategyMath.ts';
+import { calcLiveOutcome, countOpenOptionsForStrategy } from '../utils/strategyMath.ts';
 import { OptionType } from '../services/types.ts';
 import type { OptionData } from '../services/types.ts';
 import { premiumDisplayUnit } from '../config/index.ts';
@@ -22,7 +23,13 @@ interface MarketStrategyCardsProps {
     onBuyOption: (option: OptionData, strategyLabel?: string) => void;
     onStrategyFilter: (filter: StrategyFilter | null) => void;
     activeFilter: StrategyFilter | null;
+    onScrollToWrite?: () => void;
 }
+
+const PROTECTIVE_PUT_BADGE: P2PBadge = {
+    type: 'instant',
+    tooltip: 'Buys an existing PUT option from another user. Executes immediately.',
+};
 
 export function MarketStrategyCards({
     options,
@@ -32,6 +39,7 @@ export function MarketStrategyCards({
     onBuyOption,
     onStrategyFilter,
     activeFilter,
+    onScrollToWrite,
 }: MarketStrategyCardsProps) {
     const pUnit = premiumDisplayUnit(premiumSymbol);
     const noPrice = spotPrice === null || spotPrice <= 0;
@@ -41,6 +49,12 @@ export function MarketStrategyCards({
         () => (!noPrice ? findBestProtectivePut(options, spotPrice) : null),
         [options, spotPrice, noPrice],
     );
+
+    const putLiquidity = useMemo(
+        () => (!noPrice ? countOpenOptionsForStrategy(options, 'protective-put', spotPrice) : 0),
+        [options, spotPrice, noPrice],
+    );
+    const noLiquidity = putLiquidity === 0;
 
     const protectivePutSummary = useMemo(() => {
         if (noPrice) return undefined;
@@ -85,9 +99,19 @@ export function MarketStrategyCards({
                     goalTitle="Protect Against Drops"
                     tagline={`Buy downside protection for your ${underlyingSymbol}`}
                     riskLevel="low"
-                    summaryMetric={protectivePutSummary}
+                    summaryMetric={noLiquidity ? undefined : protectivePutSummary}
+                    p2pBadge={noLiquidity ? undefined : PROTECTIVE_PUT_BADGE}
+                    disabledMessage={noLiquidity ? 'No options available yet' : undefined}
+                    ctaLink={noLiquidity ? {
+                        label: 'Want to earn by providing this? Write a Put →',
+                        onClick: () => {
+                            const el = document.getElementById('create-earn');
+                            if (el) el.scrollIntoView({ behavior: 'smooth' });
+                            onScrollToWrite?.();
+                        },
+                    } : undefined}
                     active={activeCard === 'protective-put'}
-                    disabled={noPrice}
+                    disabled={noPrice || noLiquidity}
                     testId="market-protective-put"
                     onClick={() => handleCardClick('protective-put')}
                 />

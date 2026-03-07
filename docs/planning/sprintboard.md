@@ -758,6 +758,12 @@ wired into the strategy UI.
 ### Frontend
 - [x] **BTC pool user flows — complete extraOutputs** — Promoted to sprint: "BTC Pool Frontend Flows — Complete extraOutputs"
 - [ ] **On-chain TX history** — Replace localStorage-only TX tracking with RPC/indexer queries for persistent data
+- [ ] **About page → Docs hub** *(needs discussion before implementation)* — Expand the About page
+  into a comprehensive in-app documentation hub. Should cover: platform overview, how options work,
+  strategy guides (covered call, protective put, collar, spreads) with examples, pool types
+  (OP20/OP20 vs BTC pools), fee structure, grace period mechanics, links to deployed contract
+  addresses (factory, pools, SpreadRouter, tokens), glossary of terms. Consider tabbed or
+  accordion layout. Reference existing docs in `docs/product/user-guide.md` as source material.
 - [x] ~~**UX flow redesign**~~ — Parallel TX support, modal persistence, per-TX status in pill — all implemented. Dead collar code removed, strategy pill labels added, BTC pool metadata wired to Portfolio modals.
 - [x] ~~**Grace period UX & documentation**~~ — Dynamic `blocksToTime()` labels in PoolCard, PoolHeaderBar (top row + details), PoolInfoCard. Comprehensive grace period section in user-guide.md. Tooltips on pool cards.
 
@@ -769,6 +775,25 @@ wired into the strategy UI.
 - [x] ~~**Create Cloudflare Pages project for frontend**~~ — Already done.
   CI/CD in `.github/workflows/frontend.yml` (lint/typecheck/test/build + deploy to CF Workers on master push).
   Also: `contracts.yml`, `indexer.yml`.
+
+### Dependencies
+- [ ] **Update OPNet packages to stable releases** — All OPNet packages have stable releases
+  but we're still on `rc` tags. Update to stable, verify no breaking changes.
+
+  | Package | Current (Indexer) | Current (Frontend) | Target |
+  |---------|-------------------|--------------------|--------|
+  | `@btc-vision/bitcoin` | 7.0.0-rc.6 | 7.0.0-rc.6 | **7.0.0** (stable) |
+  | `@btc-vision/transaction` | 1.8.0-rc.10 | 1.8.0-rc.8 | **1.8.0** (stable) |
+  | `opnet` | 1.8.1-rc.17 | 1.8.1-rc.11 | **1.8.2** (stable) |
+  | `@btc-vision/walletconnect` | — | 1.10.3 | **1.10.4** (stable) |
+
+  Steps:
+  1. Update all packages in both `frontend/` and `indexer/`
+  2. Remove `@noble/hashes` override in indexer (stable releases should resolve correctly)
+  3. Run full test suite in both projects
+  4. Verify wallet connect flow still works (manual test)
+  5. Run integration tests against testnet to verify RPC compatibility
+  6. Check for API changes in changelogs (especially `opnet` 1.8.1→1.8.2)
 
 ### Pre-Launch
 - [ ] **Security audit** — Complete [audit checklist](../research/audit-checklist.md)

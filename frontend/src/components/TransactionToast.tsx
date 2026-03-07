@@ -173,7 +173,7 @@ export function TransactionToast() {
                                 requestResume(flow.flowId);
                                 setExpanded(false);
                                 if (flow.poolAddress) {
-                                    navigate(`/pools/${flow.poolAddress}`);
+                                    navigate(`/markets/${flow.poolAddress}`);
                                 }
                             }}
                             onAbandon={() => abandonFlow(flow.flowId)}
@@ -189,7 +189,7 @@ export function TransactionToast() {
                                     if (tx.flowId) {
                                         requestResume(tx.flowId);
                                         if (tx.poolAddress) {
-                                            navigate(`/pools/${tx.poolAddress}`);
+                                            navigate(`/markets/${tx.poolAddress}`);
                                         }
                                     } else {
                                         requestReopen(tx);
