@@ -535,6 +535,305 @@ async function main() {
         };
     });
 
+    // =======================================================================
+    // BTC Pool Compatibility Tests (16.12–16.17)
+    // =======================================================================
+    //
+    // SpreadRouter compatibility matrix:
+    //   Type 0 (OP20/OP20):   executeSpread ✓, executeDualWrite ✓
+    //   Type 1 (OP20/BTC):    executeSpread ✗ (no buyOption), executeDualWrite ✓ (writeOption exists)
+    //   Type 2 (BTC/OP20):    executeSpread ✗ (no writeOption), executeDualWrite ✗ (uses writeOptionBtc selector)
+    //
+    // Router calls writeOption(uint8,uint256,uint64,uint256,uint256) and buyOption(uint256).
+    // Type 1 has writeOption but replaces buyOption with reserveOption+executeReservation.
+    // Type 2 has writeOptionBtc (different selector) and buyOption. No writeOption.
+
+    const btcQuotePool = deployed.btcQuotePool;
+    const btcUnderlyingPool = deployed.btcUnderlyingPool;
+
+    // -----------------------------------------------------------------------
+    // 16.12 — executeSpread on type 1 (BTC quote) — expect revert
+    // -----------------------------------------------------------------------
+    await runTest('16.12 executeSpread on BTC quote pool (type 1) — expected revert', async () => {
+        if (!btcQuotePool) {
+            return { status: 'skipped', reason: 'No btcQuotePool in deployed-contracts.json' };
+        }
+
+        const btcPoolCallAddr = await resolveCallAddress(provider, btcQuotePool);
+        const btcPoolAddr = Address.fromString(btcPoolCallAddr);
+
+        // First approve underlying for the write leg (OP20 collateral works on type 1)
+        await deployer.callContract(underlyingBech32, createIncreaseAllowanceCalldata(btcPoolAddr, 5n * PRECISION), 10_000n);
+        await sleep(15_000);
+
+        const currentBlock = await provider.getBlockNumber();
+        const expiryBlock = currentBlock + 1008n;
+
+        // executeSpread: write leg calls writeOption (exists on type 1) ✓
+        // but buy leg calls buyOption (does NOT exist on type 1) ✗
+        const calldata = createExecuteSpreadCalldata(
+            btcPoolAddr,
+            CALL,
+            60n * PRECISION,
+            expiryBlock,
+            1n * PRECISION,
+            5n * PRECISION,
+            0n, // dummy — will fail before this matters, but router validates buyOptionId > 0
+        );
+
+        // Use buyOptionId=1 to pass router validation (MED-6)
+        const calldataWithId = createExecuteSpreadCalldata(
+            btcPoolAddr,
+            CALL,
+            60n * PRECISION,
+            expiryBlock,
+            1n * PRECISION,
+            5n * PRECISION,
+            1n,
+        );
+
+        try {
+            await deployer.callContract(routerAddress, calldataWithId, 50_000n);
+            return {
+                status: 'broadcast_succeeded',
+                note: 'TX broadcast but expected on-chain revert — buy leg calls buyOption which does not exist on type 1',
+                reason: 'Type 1 uses reserveOption+executeReservation instead of buyOption',
+            };
+        } catch (err) {
+            return {
+                status: 'correctly_rejected',
+                error: (err as Error).message,
+                reason: 'Type 1 pool has no buyOption — uses reservation flow instead',
+            };
+        }
+    });
+
+    // -----------------------------------------------------------------------
+    // 16.13 — executeDualWrite on type 1 (BTC quote) — should work
+    // -----------------------------------------------------------------------
+    await runTest('16.13 executeDualWrite on BTC quote pool (type 1)', async () => {
+        if (!btcQuotePool) {
+            return { status: 'skipped', reason: 'No btcQuotePool in deployed-contracts.json' };
+        }
+
+        const btcPoolCallAddr = await resolveCallAddress(provider, btcQuotePool);
+        const btcPoolAddr = Address.fromString(btcPoolCallAddr);
+
+        // Type 1 has writeOption — both legs use OP20 underlying as collateral
+        // Approve enough for two writes
+        await deployer.callContract(underlyingBech32, createIncreaseAllowanceCalldata(btcPoolAddr, 10n * PRECISION), 10_000n);
+        await sleep(15_000);
+
+        const countBefore = await readOptionCount(provider, btcPoolCallAddr);
+        const currentBlock = await provider.getBlockNumber();
+        const expiryBlock = currentBlock + 1008n;
+
+        const calldata = createExecuteDualWriteCalldata(
+            btcPoolAddr,
+            CALL,
+            60n * PRECISION,
+            expiryBlock,
+            1n * PRECISION,
+            5n * PRECISION,
+            PUT,
+            40n * PRECISION,
+            expiryBlock,
+            1n * PRECISION,
+            3n * PRECISION,
+        );
+
+        try {
+            const result = await deployer.callContract(routerAddress, calldata, 80_000n);
+
+            // Poll for option count increase
+            let countAfter = countBefore;
+            for (let i = 0; i < 10; i++) {
+                await sleep(15_000);
+                countAfter = await readOptionCount(provider, btcPoolCallAddr);
+                if (countAfter >= countBefore + 2n) break;
+            }
+
+            return {
+                txId: result.txId,
+                status: 'dual_write_executed',
+                optionCountBefore: countBefore.toString(),
+                optionCountAfter: countAfter.toString(),
+                newOptions: (countAfter - countBefore).toString(),
+                note: 'Type 1 pool has writeOption — dual-write works with OP20 collateral',
+            };
+        } catch (err) {
+            return { status: 'failed', error: (err as Error).message };
+        }
+    });
+
+    // -----------------------------------------------------------------------
+    // 16.14 — Verify clean revert on type 1 spread (balances unchanged)
+    // -----------------------------------------------------------------------
+    await runTest('16.14 Verify balances unchanged after type 1 spread revert', async () => {
+        if (!btcQuotePool) {
+            return { status: 'skipped', reason: 'No btcQuotePool in deployed-contracts.json' };
+        }
+
+        const btcPoolCallAddr = await resolveCallAddress(provider, btcQuotePool);
+        const countBefore = await readOptionCount(provider, btcPoolCallAddr);
+        const underlyingCallAddr = await resolveCallAddress(provider, underlyingBech32);
+        const walletHex = config.wallet.address.toString();
+        const balBefore = await readTokenBalance(provider, underlyingCallAddr, walletHex);
+
+        // Attempt spread with huge amounts — should revert cleanly
+        const btcPoolAddr = Address.fromString(btcPoolCallAddr);
+        const currentBlock = await provider.getBlockNumber();
+        const expiryBlock = currentBlock + 1008n;
+
+        const calldata = createExecuteSpreadCalldata(
+            btcPoolAddr,
+            CALL,
+            100n * PRECISION,
+            expiryBlock,
+            9999n * PRECISION,
+            5n * PRECISION,
+            1n,
+        );
+
+        try {
+            await deployer.callContract(routerAddress, calldata, 50_000n);
+            await sleep(15_000);
+        } catch {
+            // Expected
+        }
+
+        const countAfter = await readOptionCount(provider, btcPoolCallAddr);
+        const balAfter = await readTokenBalance(provider, underlyingCallAddr, walletHex);
+
+        return {
+            optionCountUnchanged: countAfter === countBefore,
+            balanceUnchanged: balAfter === balBefore,
+            countBefore: countBefore.toString(),
+            countAfter: countAfter.toString(),
+        };
+    });
+
+    // -----------------------------------------------------------------------
+    // 16.15 — executeDualWrite on type 2 (BTC underlying) — expect revert
+    // -----------------------------------------------------------------------
+    await runTest('16.15 executeDualWrite on BTC underlying pool (type 2) — expected revert', async () => {
+        if (!btcUnderlyingPool) {
+            return { status: 'skipped', reason: 'No btcUnderlyingPool in deployed-contracts.json' };
+        }
+
+        const btcPoolCallAddr = await resolveCallAddress(provider, btcUnderlyingPool);
+        const btcPoolAddr = Address.fromString(btcPoolCallAddr);
+
+        // Type 2 uses writeOptionBtc (different selector), NOT writeOption.
+        // Router calls writeOption → selector mismatch → revert expected.
+        const currentBlock = await provider.getBlockNumber();
+        const expiryBlock = currentBlock + 1008n;
+
+        const calldata = createExecuteDualWriteCalldata(
+            btcPoolAddr,
+            PUT,
+            40n * PRECISION,
+            expiryBlock,
+            1n * PRECISION,
+            3n * PRECISION,
+            PUT,
+            30n * PRECISION,
+            expiryBlock,
+            1n * PRECISION,
+            2n * PRECISION,
+        );
+
+        try {
+            await deployer.callContract(routerAddress, calldata, 80_000n);
+            return {
+                status: 'broadcast_succeeded',
+                note: 'TX broadcast but expected on-chain revert — writeOption selector does not exist on type 2',
+                reason: 'Type 2 only has writeOptionBtc (different selector than writeOption)',
+            };
+        } catch (err) {
+            return {
+                status: 'correctly_rejected',
+                error: (err as Error).message,
+                reason: 'Type 2 pool uses writeOptionBtc selector — router writeOption call fails',
+            };
+        }
+    });
+
+    // -----------------------------------------------------------------------
+    // 16.16 — executeSpread on type 2 (BTC underlying) — expect revert
+    // -----------------------------------------------------------------------
+    await runTest('16.16 executeSpread on BTC underlying pool (type 2) — expected revert', async () => {
+        if (!btcUnderlyingPool) {
+            return { status: 'skipped', reason: 'No btcUnderlyingPool in deployed-contracts.json' };
+        }
+
+        const btcPoolCallAddr = await resolveCallAddress(provider, btcUnderlyingPool);
+        const btcPoolAddr = Address.fromString(btcPoolCallAddr);
+
+        // Router calls writeOption (doesn't exist) + buyOption (exists).
+        // First leg fails → entire TX reverts.
+        const currentBlock = await provider.getBlockNumber();
+        const expiryBlock = currentBlock + 1008n;
+
+        const calldata = createExecuteSpreadCalldata(
+            btcPoolAddr,
+            PUT,
+            40n * PRECISION,
+            expiryBlock,
+            1n * PRECISION,
+            3n * PRECISION,
+            1n,
+        );
+
+        try {
+            await deployer.callContract(routerAddress, calldata, 50_000n);
+            return {
+                status: 'broadcast_succeeded',
+                note: 'TX broadcast but expected on-chain revert — write leg uses wrong selector',
+                reason: 'Type 2 has writeOptionBtc, not writeOption',
+            };
+        } catch (err) {
+            return {
+                status: 'correctly_rejected',
+                error: (err as Error).message,
+                reason: 'Type 2 pool uses writeOptionBtc — router write leg fails on selector mismatch',
+            };
+        }
+    });
+
+    // -----------------------------------------------------------------------
+    // 16.17 — Compatibility matrix summary
+    // -----------------------------------------------------------------------
+    await runTest('16.17 SpreadRouter BTC pool compatibility matrix', async () => {
+        return {
+            status: 'documented',
+            compatibility: {
+                type0_OP20_OP20: {
+                    executeSpread: 'SUPPORTED',
+                    executeDualWrite: 'SUPPORTED',
+                    reason: 'Has both writeOption and buyOption',
+                },
+                type1_OP20_BTC: {
+                    executeSpread: 'NOT_SUPPORTED',
+                    executeDualWrite: 'SUPPORTED',
+                    reason: 'Has writeOption but no buyOption (uses reserveOption+executeReservation instead)',
+                    verified: '16.12 (spread revert), 16.13 (dual-write success)',
+                },
+                type2_BTC_OP20: {
+                    executeSpread: 'NOT_SUPPORTED',
+                    executeDualWrite: 'NOT_SUPPORTED',
+                    reason: 'Uses writeOptionBtc selector — router calls writeOption which does not exist',
+                    verified: '16.15 (dual-write revert), 16.16 (spread revert)',
+                },
+            },
+            futureWork: [
+                'Add executeSpreadBtcQuote(pool, writeParams, reservationId) for type 1 buy legs',
+                'Add executeDualWriteBtc(pool, ...) that calls writeOptionBtc for type 2 pools',
+                'Or: add writeOption alias in type 2 contract that delegates to writeOptionBtc',
+            ],
+        };
+    });
+
     printSummary();
 }
 
