@@ -840,11 +840,13 @@ export function WriteOptionPanel({
                             {!needsApproval && (
                                 <button
                                     onClick={handleWrite}
-                                    disabled={busy || tokenLoading}
+                                    disabled={busy || tokenLoading || (approvalPending && !approvalReady)}
                                     className="w-full btn-primary py-2.5 text-sm rounded disabled:opacity-50"
                                     data-testid="btn-write"
                                 >
-                                    {txStatus === 'writing' ? 'Writing…' : 'Write Option'}
+                                    {approvalPending && !approvalReady
+                                        ? 'Waiting for approval confirmation...'
+                                        : txStatus === 'writing' ? 'Writing…' : 'Write Option'}
                                 </button>
                             )}
                         </div>

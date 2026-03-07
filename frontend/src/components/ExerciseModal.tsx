@@ -490,11 +490,13 @@ export function ExerciseModal({
                             ) : (
                                 <button
                                     onClick={handleExercise}
-                                    disabled={busy || tokenLoading || !hasBalance}
+                                    disabled={busy || tokenLoading || !hasBalance || (approvalPending && !approvalReady)}
                                     className="w-full btn-primary py-2.5 text-sm rounded disabled:opacity-50"
                                     data-testid="btn-exercise"
                                 >
-                                    {txStatus === 'exercising' ? 'Exercising…' : 'Confirm Exercise'}
+                                    {approvalPending && !approvalReady
+                                        ? 'Waiting for approval confirmation...'
+                                        : txStatus === 'exercising' ? 'Exercising…' : 'Confirm Exercise'}
                                 </button>
                             )}
                             <button

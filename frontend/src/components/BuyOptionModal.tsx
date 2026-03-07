@@ -667,11 +667,13 @@ export function BuyOptionModal({
                             ) : (
                                 <button
                                     onClick={handleBuy}
-                                    disabled={busy || tokenLoading || !hasBalance}
+                                    disabled={busy || tokenLoading || !hasBalance || (approvalPending && !approvalReady)}
                                     className="w-full btn-primary py-2.5 text-sm rounded disabled:opacity-50"
                                     data-testid="btn-buy"
                                 >
-                                    {txStatus === 'buying' ? 'Purchasing…' : 'Confirm Purchase'}
+                                    {approvalPending && !approvalReady
+                                        ? 'Waiting for approval confirmation...'
+                                        : txStatus === 'buying' ? 'Purchasing…' : 'Confirm Purchase'}
                                 </button>
                             )}
                             <button
