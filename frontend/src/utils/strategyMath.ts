@@ -12,9 +12,7 @@ const DEFAULT_VOL = 0.8;         // 80% annualized
 const DEFAULT_DAYS = 30;
 const CALL_STRIKE_MULT = 1.20;   // 120% OTM
 const PUT_STRIKE_MULT = 0.80;    // 80% OTM
-const PUT_LOWER = 0.80;          // Protective put search range
-const PUT_UPPER = 0.95;
-const PUT_MID = 0.875;           // Prefer strikes closest to midpoint
+const PUT_MID = 0.875;           // Prefer strikes closest to 87.5% of spot
 
 // ---------------------------------------------------------------------------
 // Types
@@ -122,25 +120,25 @@ export function calcCoveredCallParams(
 
 /**
  * Find the best protective put from available OPEN options.
- * Searches for PUT options with strike in [80%–95% of spot].
- * Prefers strike closest to 87.5% (midpoint of range).
+ * Considers ALL open PUTs below spot, prefers strike closest to 87.5% of spot.
+ * Excludes the connected wallet's own options (can't buy your own).
  * Returns null if no suitable option found.
  */
 export function findBestProtectivePut(
     options: OptionData[],
     spot: number,
+    walletHex?: string | null,
 ): OptionData | null {
     if (spot <= 0) return null;
 
-    const lower = spot * PUT_LOWER;
-    const upper = spot * PUT_UPPER;
     const target = spot * PUT_MID;
+    const walletLower = walletHex?.toLowerCase() ?? null;
 
     const candidates = options.filter((o) =>
         o.status === OptionStatus.OPEN &&
         o.optionType === OptionType.PUT &&
-        Number(o.strikePrice) / 1e18 >= lower &&
-        Number(o.strikePrice) / 1e18 <= upper,
+        Number(o.strikePrice) / 1e18 <= spot &&
+        (walletLower === null || o.writer.toLowerCase() !== walletLower),
     );
 
     if (candidates.length === 0) return null;
@@ -215,16 +213,19 @@ export function calcCollarParams(
 /**
  * Count OPEN options matching the criteria for a buy-side strategy.
  * Used to gate buy-side cards when no matching liquidity exists.
+ * Excludes the connected wallet's own options (can't buy your own).
  */
 export function countOpenOptionsForStrategy(
-    options: OptionData[], type: StrategyType, spot: number,
+    options: OptionData[], type: StrategyType, spot: number, walletHex?: string | null,
 ): number {
+    const walletLower = walletHex?.toLowerCase() ?? null;
+    const notSelf = (o: OptionData) => walletLower === null || o.writer.toLowerCase() !== walletLower;
     if (type === 'protective-put') {
         return options.filter(o =>
             o.optionType === OptionType.PUT &&
             o.status === OptionStatus.OPEN &&
-            Number(o.strikePrice) / 1e18 >= spot * 0.70 &&
-            Number(o.strikePrice) / 1e18 <= spot * 0.95,
+            Number(o.strikePrice) / 1e18 <= spot &&
+            notSelf(o),
         ).length;
     }
     return 0;
@@ -232,19 +233,24 @@ export function countOpenOptionsForStrategy(
 
 /**
  * Count open (buyable) options relevant to a buyer intent.
- * - protect: open PUTs
- * - speculate-up: open CALLs
- * - speculate-down: open PUTs
+ * Excludes the connected wallet's own options (can't buy your own).
+ * - protect: open PUTs (not written by wallet)
+ * - speculate-up: open CALLs (not written by wallet)
+ * - speculate-down: open PUTs (not written by wallet)
  */
 export function countBuyableOptionsForIntent(
     options: OptionData[],
     intentId: string,
+    walletHex?: string | null,
 ): number {
+    const walletLower = walletHex?.toLowerCase() ?? null;
+    const notSelf = (o: OptionData) => walletLower === null || o.writer.toLowerCase() !== walletLower;
+
     if (intentId === 'protect' || intentId === 'speculate-down') {
-        return options.filter(o => o.status === OptionStatus.OPEN && o.optionType === OptionType.PUT).length;
+        return options.filter(o => o.status === OptionStatus.OPEN && o.optionType === OptionType.PUT && notSelf(o)).length;
     }
     if (intentId === 'speculate-up') {
-        return options.filter(o => o.status === OptionStatus.OPEN && o.optionType === OptionType.CALL).length;
+        return options.filter(o => o.status === OptionStatus.OPEN && o.optionType === OptionType.CALL && notSelf(o)).length;
     }
     return 0;
 }

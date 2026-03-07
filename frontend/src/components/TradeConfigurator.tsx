@@ -98,12 +98,12 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
 
     // For buy-side strategies: find matching options to buy
     const bestPut = useMemo(
-        () => motoPillRatio && motoPillRatio > 0 ? findBestProtectivePut(options, motoPillRatio) : null,
-        [options, motoPillRatio],
+        () => motoPillRatio && motoPillRatio > 0 ? findBestProtectivePut(options, motoPillRatio, walletHex) : null,
+        [options, motoPillRatio, walletHex],
     );
     const putLiquidity = useMemo(
-        () => motoPillRatio && motoPillRatio > 0 ? countOpenOptionsForStrategy(options, 'protective-put', motoPillRatio) : 0,
-        [options, motoPillRatio],
+        () => motoPillRatio && motoPillRatio > 0 ? countOpenOptionsForStrategy(options, 'protective-put', motoPillRatio, walletHex) : 0,
+        [options, motoPillRatio, walletHex],
     );
 
     function handleStrategyExecute(outcome: StrategyOutcome) {
@@ -222,7 +222,11 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                                     x
                                 </button>
                             </div>
-                            {bestPut ? (
+                            {bestPut ? (() => {
+                                const strikeRatio = Number(bestPut.strikePrice) / 1e18 / motoPillRatio;
+                                const inStandardRange = strikeRatio >= 0.80 && strikeRatio <= 0.95;
+                                const dropPct = ((1 - strikeRatio) * 100).toFixed(1);
+                                return (
                                 <>
                                     <div className="bg-terminal-bg-primary border border-terminal-border-subtle rounded p-3 space-y-1.5">
                                         <span className="text-[10px] text-terminal-text-muted font-mono uppercase tracking-wider">
@@ -258,10 +262,18 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                                         </div>
                                         <div className="flex justify-between text-xs font-mono">
                                             <span className="text-terminal-text-muted">Drop from spot</span>
-                                            <span className="text-terminal-text-primary">
-                                                {((1 - Number(bestPut.strikePrice) / 1e18 / motoPillRatio) * 100).toFixed(1)}%
-                                            </span>
+                                            <span className="text-terminal-text-primary">{dropPct}%</span>
                                         </div>
+                                        {inStandardRange ? (
+                                            <p className="text-[10px] text-cyan-400 font-mono mt-1">
+                                                Strike is in the 80–95% range (industry standard for protective puts)
+                                            </p>
+                                        ) : (
+                                            <p className="text-[10px] text-amber-400 font-mono mt-1">
+                                                Tip: Protective puts typically use strikes at 80–95% of spot for best cost/protection balance.
+                                                Browse the Chain page for more options.
+                                            </p>
+                                        )}
                                     </div>
                                     <button
                                         type="button"
@@ -276,10 +288,11 @@ export function TradeConfigurator({ intentId, poolAddress }: TradeConfiguratorPr
                                         Buy Protection
                                     </button>
                                 </>
-                            ) : (
+                                );
+                            })() : (
                                 <p className="text-xs text-terminal-text-muted font-mono">
-                                    No PUT options available in the 80-95% strike range.
-                                    Check the Chain page for all available options.
+                                    No PUT options available to buy.
+                                    Check the Chain page or write a put to provide liquidity.
                                 </p>
                             )}
                         </div>

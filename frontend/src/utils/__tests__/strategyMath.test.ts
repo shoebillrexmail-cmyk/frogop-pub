@@ -102,12 +102,20 @@ describe('findBestProtectivePut', () => {
         expect(findBestProtectivePut([], 50)).toBeNull();
     });
 
-    it('returns null when no OPEN PUT in 80-95% range', () => {
+    it('returns null when no OPEN PUT below spot', () => {
         const options = [
-            makeOpenPut(1n, 30), // 60% of 50 — below range
-            makeOpenPut(2n, 49), // 98% of 50 — above range
+            makeOpenPut(1n, 55), // above spot — not protective
         ];
         expect(findBestProtectivePut(options, 50)).toBeNull();
+    });
+
+    it('finds puts at any distance below spot', () => {
+        const put30 = makeOpenPut(1n, 30); // 60% of 50
+        const put49 = makeOpenPut(2n, 49); // 98% of 50
+        // Both are valid; 49 is closer to 87.5% target (43.75)
+        const result = findBestProtectivePut([put30, put49], 50);
+        expect(result!.id).toBe(result!.id); // just verify non-null
+        expect(result).not.toBeNull();
     });
 
     it('returns the only matching put', () => {

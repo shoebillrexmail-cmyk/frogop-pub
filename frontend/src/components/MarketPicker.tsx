@@ -6,6 +6,7 @@
  * For buy-side intents, loads options to show liquidity indicators.
  */
 import { useMemo } from 'react';
+import { useWalletConnect } from '@btc-vision/walletconnect';
 import { useFallbackProvider } from '../hooks/useFallbackProvider.ts';
 import { useDiscoverPools } from '../hooks/useDiscoverPools.ts';
 import { useMultiPool } from '../hooks/useMultiPool.ts';
@@ -23,6 +24,8 @@ interface MarketPickerProps {
 }
 
 export function MarketPicker({ intentId, onSelect }: MarketPickerProps) {
+    const { address } = useWalletConnect();
+    const walletHex = address ? address.toString() : null;
     const readProvider = useFallbackProvider();
     const { pools, loading, error } = useDiscoverPools(readProvider);
     const needsLiquidity = intentNeedsLiquidity(intentId);
@@ -92,7 +95,7 @@ export function MarketPicker({ intentId, onSelect }: MarketPickerProps) {
                                 const poolData = needsLiquidity ? multiPoolData.get(pool.address) : null;
                                 const isLoadingOptions = poolData?.loading ?? false;
                                 const buyableCount = poolData?.options
-                                    ? countBuyableOptionsForIntent(poolData.options, intentId)
+                                    ? countBuyableOptionsForIntent(poolData.options, intentId, walletHex)
                                     : 0;
                                 const noLiquidity = needsLiquidity && !isLoadingOptions && buyableCount === 0;
 

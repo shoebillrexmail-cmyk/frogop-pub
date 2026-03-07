@@ -5,6 +5,7 @@
  * on the options chain below, highlighting relevant options.
  */
 import { useState, useMemo, useCallback } from 'react';
+import { useWalletConnect } from '@btc-vision/walletconnect';
 import { OutcomeCard } from './OutcomeCard.tsx';
 import type { P2PBadge } from './OutcomeCard.tsx';
 import { StrategyConfigurator } from './StrategyConfigurator.tsx';
@@ -41,18 +42,20 @@ export function MarketStrategyCards({
     activeFilter,
     onScrollToWrite,
 }: MarketStrategyCardsProps) {
+    const { address } = useWalletConnect();
+    const walletHex = address ? address.toString() : null;
     const pUnit = premiumDisplayUnit(premiumSymbol);
     const noPrice = spotPrice === null || spotPrice <= 0;
     const [activeCard, setActiveCard] = useState<StrategyType | null>(null);
 
     const bestPut = useMemo(
-        () => (!noPrice ? findBestProtectivePut(options, spotPrice) : null),
-        [options, spotPrice, noPrice],
+        () => (!noPrice ? findBestProtectivePut(options, spotPrice, walletHex) : null),
+        [options, spotPrice, noPrice, walletHex],
     );
 
     const putLiquidity = useMemo(
-        () => (!noPrice ? countOpenOptionsForStrategy(options, 'protective-put', spotPrice) : 0),
-        [options, spotPrice, noPrice],
+        () => (!noPrice ? countOpenOptionsForStrategy(options, 'protective-put', spotPrice, walletHex) : 0),
+        [options, spotPrice, noPrice, walletHex],
     );
     const noLiquidity = putLiquidity === 0;
 
@@ -75,8 +78,8 @@ export function MarketStrategyCards({
             onStrategyFilter({
                 type: 'protective-put',
                 optionType: OptionType.PUT,
-                strikeMin: spotPrice * 0.70,
-                strikeMax: spotPrice * 0.95,
+                strikeMin: 0,
+                strikeMax: spotPrice,
             });
         } else {
             onStrategyFilter(null);
